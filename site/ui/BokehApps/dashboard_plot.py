@@ -26,10 +26,6 @@ c = conn.cursor()
 data_labels = c.execute("pragma table_info('ui_dashboarddatarto')").fetchall()
 data_labels = [label[1] for label in data_labels]
 
-def get_string_date(date):
-    # Return date in string without 0 padding on date month and day
-    return date.strftime('%m/%d/%Y %H:%M')
-
 current_datetime = datetime.datetime.now().replace(year=2010) # Eventually the year will be removed
 delta_start = datetime.timedelta(days=2)
 delta_end = datetime.timedelta(days=1)
@@ -40,10 +36,11 @@ data_base = c.execute("select * from ui_dashboarddatarto \
     and datetime(timestamp) <= :end) \
     or datetime(timestamp) == :curr",
     {
-        'start':(current_datetime - delta_start), 
-        'end': (current_datetime + delta_end), 
-        'curr':current_datetime}
+        'start': (current_datetime - delta_start), 
+        'end': (current_datetime + delta_end),
+        'curr': current_datetime}
     ).fetchall()
+
 label_colors = {}
 for i, data_label in enumerate(data_labels[2:]):
     label_colors.update({

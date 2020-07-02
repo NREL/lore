@@ -23,20 +23,18 @@ c = conn.cursor()
 data_labels = c.execute("pragma table_info('ui_forecastsmarketdata')").fetchall()
 data_labels = [label[1] for label in data_labels]
 
-
-def get_string_date(date):
-    # Return date in string without 0 padding on date month and day
-    string_date = date.strftime('%m/%d/%Y %H:%M')
-    return string_date
-
 current_datetime = datetime.datetime.now().replace(year=2010) # Eventually the year will be removed
 delta_end = datetime.timedelta(hours=TIME_BOXES['NEXT_48_HOURS'])
 
 data_base = c.execute("select * from ui_forecastsmarketdata \
-    where datetime(timestamp) > strftime('%Y-%m-%d %H:%M:%f', :start) \
-        and datetime(timestamp) <= strftime('%Y-%m-%d %H:%M:%f', :end)",
-    {'start':current_datetime, 'end': (current_datetime + delta_end)}).fetchall()
-
+    where (datetime(timestamp) > :start \
+    and datetime(timestamp) <= :end) \
+    or datetime(timestamp) == :curr",
+    {
+        'start': current_datetime, 
+        'end': (current_datetime + delta_end),
+        'curr': current_datetime}
+    ).fetchall()
 
 def make_dataset(distribution):
     # Prepare data

@@ -22,10 +22,6 @@ data_labels_forecast_solar = c.execute("pragma table_info('ui_forecastssolardata
 data_labels_forecast_solar = list(map(lambda x: x['name'], data_labels_forecast_solar ))
 current_datetime = datetime.datetime.now().replace(year=2010)
 
-def get_string_date(date):
-    # Return date in string without 0 padding on date month and day
-    return date.strftime('%m/%d/%Y %H:%M')
-
 label_colors = {}
 lines = {}
 bands = {}
@@ -35,12 +31,14 @@ yMax = 0
 def make_dataset(range_start, range_end, distribution):
     # Prepare data
     
-
     data = c.execute("select * from ui_forecastssolardata \
         where rowid % 30 = 0 \
-        and datetime(timestamp) > datetime(:range_start) \
-        and datetime(timestamp) <= datetime(:range_end)",
-    {'range_start':range_start, 'range_end':range_end}).fetchall()
+        and datetime(timestamp) > :range_start \
+        and datetime(timestamp) <= :range_end",
+        {
+            'range_start': range_start, 
+            'range_end': range_end}
+        ).fetchall()
  
     cds = ColumnDataSource(data={
         'time': [datetime.datetime.strptime(entry['timestamp'], '%Y-%m-%d %H:%M') for entry in data]
