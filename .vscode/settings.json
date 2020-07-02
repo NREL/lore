@@ -67,5 +67,6 @@
         "codecvt": "cpp",
         "*.xpm": "cpp",
         "core": "cpp"
-    }
+    },
+    "python.pythonPath": "lore\\Scripts\\python.exe",
 }

@@ -6,7 +6,7 @@
             <span class="count_top">
                 <i class="fas fa-bolt"></i> TES Charge State [MWht]
             </span>
-            <div class="count">{{dashboard_data.e_ch_tes|avgcalc|floatformat:2}}</div>
+            <div class="count green">{{dashboard_data.e_ch_tes|avgcalc|floatformat:2}}</div>
             <span class="count_bottom">
                 <i class="green">
                     <i class="fas fa-sort-up    "></i>4%
@@ -18,7 +18,7 @@
             <span class="count_top">
                 <i class="fas fa-solar-panel"></i> Expected Solar Field Generation [MWht]
             </span>
-            <div class="count">{{dashboard_data.disp_qsfprod_expected|avgcalc|floatformat:2}}</div>
+            <div class="count green">{{dashboard_data.disp_qsfprod_expected|avgcalc|floatformat:2}}</div>
             <span class="count_bottom">
                 <i class="green">
                     <i class="fas fa-sort-up    "></i>3%
@@ -42,7 +42,7 @@
             <span class="count_top">
                 <i class="fas fa-battery-three-quarters"></i> Annual Energy [kWhe]
             </span>
-            <div class="count">{{dashboard_data.annual_energy|stringformat:".2e"}}</div>
+            <div class="count red">{{dashboard_data.annual_energy|stringformat:".2e"}}</div>
             <span class="count_bottom">
                 <i class="red">
                     <i class="fas fa-sort-down    "></i>12%
@@ -54,7 +54,7 @@
             <span class="count_top">
                 <i class="fas fa-money-bill"></i> Expected Revenue [$]
             </span>
-            <div class="count">{{dashboard_data.disp_rev_expected|avgcalc|floatformat:2}}</div>
+            <div class="count green">{{dashboard_data.disp_rev_expected|avgcalc|floatformat:2}}</div>
             <span class="count_bottom">
                 <i class="green">
                     <i class="fas fa-sort-up    "></i>34%

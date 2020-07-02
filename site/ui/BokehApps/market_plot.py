@@ -32,8 +32,11 @@ def get_string_date(date):
 current_datetime = datetime.datetime.now().replace(year=2010) # Eventually the year will be removed
 delta_end = datetime.timedelta(hours=TIME_BOXES['NEXT_48_HOURS'])
 
-data_base = c.execute("select * from ui_forecastsmarketdata where timestamp >:start and timestamp <=:end",
-    {'start':get_string_date(current_datetime), 'end': get_string_date(current_datetime + delta_end)}).fetchall()
+data_base = c.execute("select * from ui_forecastsmarketdata \
+    where datetime(timestamp) > strftime('%Y-%m-%d %H:%M:%f', :start) \
+        and datetime(timestamp) <= strftime('%Y-%m-%d %H:%M:%f', :end)",
+    {'start':current_datetime, 'end': (current_datetime + delta_end)}).fetchall()
+
 
 def make_dataset(distribution):
     # Prepare data
@@ -41,12 +44,13 @@ def make_dataset(distribution):
     # Market Forecast
     value = [entry[data_labels[2]] for entry in data_base]
     value_ar = np.array(value)
+
     # Get error percentages
     lower_ar = np.array([entry[data_labels[3]]/100 for entry in data_base])
     upper_ar = np.array([entry[data_labels[4]]/100 for entry in data_base])
    
     cds = ColumnDataSource(data=dict(
-            time = [datetime.datetime.strptime(entry['timestamp'], '%m/%d/%Y %H:%M') for entry in data_base],
+            time = [datetime.datetime.strptime(entry['timestamp'], '%Y-%m-%d %H:%M') for entry in data_base],
             value = value,
             lower = list(- np.multiply(value_ar, lower_ar) + value_ar),
             upper = list(np.multiply(value_ar, upper_ar) + value_ar)

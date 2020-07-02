@@ -158,7 +158,7 @@ def dashboard(request, context={}):
     main view for the dashboard
     """
     from bokeh.embed import server_session
-    from bokeh.util import session_id
+    from bokeh.util import token
     from django.contrib.sessions.backends.db import SessionStore
 
     if 'pysam_output' not in request.session:
@@ -166,7 +166,7 @@ def dashboard(request, context={}):
         load_pysam_data(request)
 
     bokeh_server_url = "http://127.0.0.1:5006/dashboard_plot"
-    server_script = server_session(None, session_id=session_id.generate_session_id(),
+    server_script = server_session(None, session_id=token.generate_session_id(),
                                    url=bokeh_server_url)
 
     context = {"db_name" : "Dashboard",
@@ -183,6 +183,10 @@ def outlook(request, context={}):
     from bokeh.embed import server_session
     from bokeh.util import session_id
 
+    if 'pysam_output' not in request.session:
+        print("...loading PySAM data")
+        load_pysam_data(request)
+
     bokeh_server_url = "http://127.0.0.1:5006/sliders"
     server_script = server_session(None, session_id=session_id.generate_session_id(),
                                    url=bokeh_server_url)
@@ -198,6 +202,10 @@ def forecast(request, context={}):
 
     from bokeh.embed import server_session
     from bokeh.util import session_id
+
+    if 'pysam_output' not in request.session:
+        print("...loading PySAM data")
+        load_pysam_data(request)
 
     market_url = "http://127.0.0.1:5006/market_plot"
     mkt_script = server_session(None, session_id=session_id.generate_session_id(),
@@ -235,6 +243,10 @@ def history(request, context={}):
     from bokeh.embed import server_session
     from bokeh.util import session_id
 
+    if 'pysam_output' not in request.session:
+        print("...loading PySAM data")
+        load_pysam_data(request)
+        
     hsf_url = "http://127.0.0.1:5006/historical_solar_forecast"
     hsf_server_script = server_session(None, session_id=session_id.generate_session_id(),
                                    url=hsf_url)
