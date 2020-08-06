@@ -22,10 +22,6 @@ data_labels_forecast_solar = c.execute("pragma table_info('ui_forecastssolardata
 data_labels_forecast_solar = list(map(lambda x: x['name'], data_labels_forecast_solar ))
 current_datetime = datetime.datetime.now().replace(year=2010)
 
-def get_string_date(date):
-    # Return date in string without 0 padding on date month and day
-    return date.strftime('%m/%d/%Y %H:%M')
-
 label_colors = {}
 lines = {}
 bands = {}
@@ -35,12 +31,17 @@ yMax = 0
 def make_dataset(range_start, range_end, distribution):
     # Prepare data
     
-
-    data = c.execute("select * from ui_forecastssolardata where rowid % 30 = 0 and timestamp >:range_start and timestamp <=:range_end",
-    {'range_start':get_string_date(range_start), 'range_end':get_string_date(range_end)}).fetchall()
+    data = c.execute("select * from ui_forecastssolardata \
+        where rowid % 30 = 0 \
+        and datetime(timestamp) > :range_start \
+        and datetime(timestamp) <= :range_end",
+        {
+            'range_start': range_start, 
+            'range_end': range_end}
+        ).fetchall()
  
     cds = ColumnDataSource(data={
-        'time': [datetime.datetime.strptime(entry['timestamp'], '%m/%d/%Y %H:%M') for entry in data]
+        'time': [datetime.datetime.strptime(entry['timestamp'], '%Y-%m-%d %H:%M') for entry in data]
     })
 
     for i,col_name in enumerate([label for label in data_labels_forecast_solar[2:] if re.search('_(minus|plus)', label) is None]):
@@ -209,9 +210,9 @@ plot_select.on_change('active', update_plots)
 
 # Create Date Slider
 # Get start and end date in table
-end_date = c.execute('select timestamp from ui_forecastssolardata order by id desc limit 1').fetchall()
+end_date = c.execute('select datetime(timestamp) as timestamp from ui_forecastssolardata order by datetime(timestamp) desc limit 1').fetchall()
 end_date = end_date[0]['timestamp']
-start_date = c.execute('select timestamp from ui_forecastssolardata order by id asc limit 1').fetchall()
+start_date = c.execute('select datetime(timestamp) as timestamp from ui_forecastssolardata order by datetime(timestamp) asc limit 1').fetchall()
 start_date = start_date[0]['timestamp']
 date_slider = DateSlider(title='Date', start=start_date, end=end_date, value=current_datetime, step=1, width=150)
 # date_picker = DatePicker(title='Date', min_date=start_date, max_date=end_date, value=current_datetime.date(), width=150)

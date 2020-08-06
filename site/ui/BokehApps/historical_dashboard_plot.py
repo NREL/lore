@@ -11,16 +11,15 @@ import sqlite3
 import datetime
 import re
 
+# DEBUG
+import pdb
+
 conn = sqlite3.connect('../../db.sqlite3')
 conn.row_factory = sqlite3.Row
 c = conn.cursor()
 data_labels = c.execute("pragma table_info('ui_dashboarddatarto')").fetchall()
 data_labels = list(map(lambda x: x['name'], data_labels ))
 current_datetime = datetime.datetime.now().replace(year=2010)
-
-def get_string_date(date):
-    # Return date in string without 0 padding on date month and day
-    return date.strftime('%m/%d/%Y %H:%M')
 
 label_colors = {}
 for i, data_label in enumerate(data_labels[2:]):
@@ -31,25 +30,29 @@ lines = {}
 
 def make_dataset(range_start, range_end):
     # Prepare data
-
+    pbd.set_trace()
     data = c.execute("select * from ui_dashboarddatarto \
         where ((rowid % 30 = 0) or (rowid > (select max(rowid) from ui_dashboarddatarto) -30)) \
-        and timestamp >:range_start and timestamp <=:range_end",
-        {'range_start':get_string_date(range_start), 'range_end':get_string_date(range_end)}).fetchall()
+        and datetime(timestamp) > :range_start \
+        and datetime(timestamp) <= :range_end",
+        {
+            'range_start':range_start, 
+            'range_end':range_end}
+        ).fetchall()
 
     cds = ColumnDataSource(data={
-            'time': [datetime.datetime.strptime(entry['timestamp'], '%m/%d/%Y %H:%M') for entry in data]
+            'time': [datetime.datetime.strptime(entry['timestamp'], '%Y-%m-%d %H:%M') for entry in data]
         })
 
     current_cds = ColumnDataSource(data={
-            'time': [datetime.datetime.strptime(entry['timestamp'], '%m/%d/%Y %H:%M') for entry in data\
-                if datetime.datetime.strptime(entry['timestamp'], '%m/%d/%Y %H:%M') <= current_datetime]
+            'time': [datetime.datetime.strptime(entry['timestamp'], '%Y-%m-%d %H:%M') for entry in data\
+                if datetime.datetime.strptime(entry['timestamp'], '%Y-%m-%d %H:%M') <= current_datetime]
         })
     
     for i, plot_name in enumerate(data_labels[2:]):
         if re.match('(actual|field.*)', plot_name) is not None:
             current_cds.data.update({ 
-                plot_name: [entry[plot_name] for entry in data if datetime.datetime.strptime(entry['timestamp'], '%m/%d/%Y %H:%M') <= current_datetime]
+                plot_name: [entry[plot_name] for entry in data if datetime.datetime.strptime(entry['timestamp'], '%Y-%m-%d %H:%M') <= current_datetime]
             })
         else:
             cds.data.update({ 

@@ -26,16 +26,20 @@ c = conn.cursor()
 data_labels = c.execute("pragma table_info('ui_forecastssolardata')").fetchall()
 data_labels = [label[1] for label in data_labels]
 
-def get_string_date(date):
-
-    string_date = date.strftime('%m/%d/%Y %H:%M')
-    return string_date
-
 current_datetime = datetime.datetime.now().replace(year=2010) # Eventually the year will be removed
 delta_end = datetime.timedelta(hours=TIME_BOXES['NEXT_48_HOURS'])
 
-data_base = c.execute("select * from ui_forecastssolardata where rowid % 30 = 0 and timestamp >:start and timestamp <=:end",
-    {'start':get_string_date(current_datetime), 'end': get_string_date(current_datetime + delta_end)}).fetchall()
+data_base = c.execute("select * from ui_forecastssolardata \
+    where rowid % 30 = 0 \
+    and (datetime(timestamp) > :start \
+    and datetime(timestamp) <= :end) \
+    or datetime(timestamp) == :curr",
+    {
+        'start': current_datetime, 
+        'end': (current_datetime + delta_end),
+        'curr': current_datetime}
+    ).fetchall()
+
 label_colors = {}
 lines = {}
 bands = {}
@@ -44,7 +48,7 @@ def make_dataset(distribution):
     # Prepare data
  
     cds = ColumnDataSource(data={
-        'time': [datetime.datetime.strptime(entry['timestamp'], '%m/%d/%Y %H:%M') for entry in data_base]
+        'time': [datetime.datetime.strptime(entry['timestamp'], '%Y-%m-%d %H:%M') for entry in data_base]
     })
 
     for i,col_name in enumerate([label for label in data_labels[2:] if re.search('_(minus|plus)', label) is None]):
@@ -237,11 +241,10 @@ widgets = column(
     row(
         title,
         Spacer(width_policy='max'),
+        plot_select),
+    row(
         window,
         distribution_select),
-    row(
-        Spacer(width_policy='max'),
-        plot_select),
     width_policy='max'
     
 )
