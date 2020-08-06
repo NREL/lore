@@ -1,10 +1,9 @@
-# DAO-Tk PySAM Package
+# PySAM-DAO-Tk Package
 
-https://github.com/NREL/dao-tk
+https://github.com/NREL/lore/tree/develop/pysam
 
 * Provides a wrapper around the DAO-Tk SAM library that groups together the C API functions by technology or financial model into modules.
 * Includes error-checking, explicit input and output definition, and conversion between Python data types.
-* DAO-Tk PySAM modules are compatible with PySSC, which is included as a subpackage. PySSC is the original wrapper used by SAM's code generator.
 * Automatically assign default values to input parameters from SAM's default value database.
 * Built-in documentation of models and parameters.
 
@@ -33,4 +32,4 @@ May not be compatible with different builds of the CPython reference interpreter
 
 ## Citing this package
 
-DAO-Tk PySAM Version 1.0.0. National Renewable Energy Laboratory. Golden, CO. Accessed May 27, 2020. https://github.com/NREL/dao-tk
+PySAM-DAO-Tk Version 1.0.1. National Renewable Energy Laboratory. Golden, CO. Accessed August 3, 2020. https://github.com/nrel/lore

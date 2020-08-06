@@ -20,17 +20,9 @@ pip install nrel-pysam-dao-tk
 pip install nrel-pysam-dao-tk-stubs
 ```
 
-4. Uninstall nrel-pysam-stubs (shouldn't need to do this, but currently having to)
-```
-pip uninstall nrel-pysam-stubs
-```
-
-
 ## Testing the DAO-Tk Version of PySAM in VS Code
 
-1. Set configuration in VS Code
- 
- open launch.json and add under 'console'
+1. Set configuration in VS Code by opening launch.json and adding the following under 'console'
 	```
 	"env": {
 		"pysam_daotk": "1",
@@ -49,80 +41,127 @@ pip uninstall nrel-pysam-stubs
 conda activate pysam_daotk
 ```
 
-4. Test with mspt.py
+4. Open and run/step-through mspt.py
 
 
-## Creating a DAO-Tk Version of PySAM
+## Creating a DAO-Tk Version of PySAM: Windows and Linux Builds
 
-### First time setup
+### First time only setup
 
-1. Clone the [PySAM repository](https://github.com/NREL/pysam) into ...\sam_dev\pysam
+1. Clone the [PySAM repository](https://github.com/NREL/pysam) into `...\sam_dev\pysam`
 2. Set the environment variable for pysam:
    <table>
    <tr><td>PYSAMDIR</td><td>...\sam_dev\pysam</td></tr>
    </table>
+3. Register at [PyPI.org](https://pypi.org/)
+
+*Windows*
+
+4. Add the location of devenv.exe to the system environment variables PATH, e.g.:
+	```
+	C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\Common7\IDE\
+	```
+5. Create new Python environments for versions 3.5 to the present (e.g., 3.8) by opening an Anaconda prompt and running:
+	```
+	conda create --name pysam_build_3.5 python=3.5 -y
+	conda create --name pysam_build_3.6 python=3.6 -y
+	conda create --name pysam_build_3.7 python=3.7 -y
+	conda create --name pysam_build_3.8 python=3.8 -y
+	```
+
+*Linux*	
+
+6. Install Docker
+7. Start Docker Desktop, switching to Linux containers if needed
+8. Pull the manylinux1 container by opening a command prompt and running:
+	```
+	docker pull quay.io/pypa/manylinux1_x86_64
+	```
    
 ### First time and after
-   
-3. Checkout the DAO-Tk repo/branch(es)
-4. Delete the contents of the .../sam_dev/build directory if it exists
-5. Run CMake
 
-     * Windows
-
-         When running the CMake command to generate the visual studio solution ([step 7.4](https://github.com/NREL/SAM/wiki/Windows-Build-Instructions#7-run-cmake-to-generate-sam-vs-2019-project-files)), omit the setting that disables the API, as shown in the command below:
-          ```
-          cmake -G "Visual Studio 16 2019" -DCMAKE_CONFIGURATION_TYPES="Release" -DCMAKE_SYSTEM_VERSION=10.0 .. 
-          ```
-         Continue with the build in step 8. Doing an entire build including exporting the API takes upwards of 45 minutes, so please be patient.
-
-     * Linux
-
-         At the [install-lk-wex-ssc-then-sam](https://github.com/NREL/SAM/wiki/Linux-Build-Instructions#5-install-lk-wex-ssc-then-sam) step, change the `cmake` instruction to:
-
-          ```
-          cmake .. -DCMAKE_BUILD_TYPE=<Debug;Release> -Dskip_api=0 -DSAMAPI_EXPORT=1
-          ```
-
-     * Mac
-    
-         Modify the `cmake_setup_clean.sh` in the [Build SAM](https://github.com/NREL/SAM/wiki/Mac-Build-Instructions#build-sam) instructrions to enable `SAM_api` and to add `SAMAPI_EXPORT=1` by changing the last two lines:
-          ```
-          rm -rf $SSCDIR/build && mkdir $SSCDIR/build && cd $SSCDIR/build && cmake .. -DCMAKE_BUILD_TYPE=Release -Dskip_tests=1 -DSAMAPI_EXPORT=1 && cmake --build . -j8 --target ssc
-          rm -rf $SAMNTDIR/build && mkdir $SAMNTDIR/build && cd $SAMNTDIR/build && cmake .. -DCMAKE_BUILD_TYPE=Release -Dskip_api=0 -DSAMAPI_EXPORT=1 && make -j8 
-          ```
-Once the build is finished, you should have the SAM and ssc libraries relevant to your system (`libssc.so` and `libSAM_api.so` on Unix and `ssc.dll, ssc.lib` and `SAM_api.dll, SAM_api.lib` on Windows) in the folder `pysam/files`
-
-6. Open the solution file in .../sam_dev/build/ssc/
-7. Unload the following projects:
+9. Checkout and pull the DAO-Tk repo/branch(es)
+10. Update PySAM via a pull
+11. Delete the `.../sam_dev/pysam/build` directory if it exists
+12. Delete the contents of `.../sam_dev/pysam/dist/`
+13. Copy config.h to `.../sam-dev/ssc/nlopt` if the file does not exist
+14. Remove `.../sam_dev/build/` and run CMake to create the DAO-Tk solution ([step 7.4](https://github.com/NREL/SAM/wiki/Windows-Build-Instructions#7-run-cmake-to-generate-sam-vs-2019-project-files)). Omit the setting that disables the API, as shown in the command below:
+	```
+	cmake -G "Visual Studio 16 2019" -DCMAKE_CONFIGURATION_TYPES="Release" -DCMAKE_SYSTEM_VERSION=10.0 .. 
+	```
+15. Continue with the batch-build in step 8, but just for Release and first unloading:
 	* TCSConsole
-	* wex
 	* SDKtool
-	* lk
-8. Batch build all
-	* (There may be an error from build-time-make-directory)
-9. Edit the version.py file
-	* Increment the version (major.minor.patch)
-	* Version must not equal any previous versions or PyPI will not let it on the repo
-10. Edit RELEASE.md, adding the most recent changes
-11. Copy version.py, README.md and RELEASE.md to .../pysam/files/, .../pysam/ and .../pysam/, respectively, overriding the existing files
-12. Edit the arguments to setup() at the bottom of .../pysam/setup.py and ...pysam/stubs/setup.py. See corresponding files in this repo for examples.
+		
+	Doing an entire build including exporting the API can take 45 minutes, so please be patient. Once the build is finished, you should have the SAM and ssc libraries (`ssc.dll, ssc.lib` and `SAM_api.dll, SAM_api.lib`) in the folder `.../sam_dev/pysam/files/`
+16. In `.../lore/pysam/files/`
+	1. Edit the `/files/version.py` and `/stubs/files/version.py`
+		* Increment the version (major.minor.patch)
+		* Version must not equal any previous versions or PyPI will not let it on the repo
+	2. Edit RELEASE.md, adding the most recent changes
+	3. Edit the arguments to setup() at the bottom of setup.py and /stubs/setup.py. Example:
+		```
+		name='NREL-PySAM-DAO-Tk'  [append '-stubs' for /stubs/setup.py]
+		...
+		url='https://github.com/NREL/dao-tk'
+		description="National Renewable Energy Laboratory's DAO-Tk Python Wrapper"		[append ', stub files' for /stubs/setup.py]
+		...
+		author="Matthew-Boyd"
+		author_email="matthew.boyd@nrel.gov"
+		...
+		packages=['PySAM-DAO-Tk'],  [append '-stubs' for /stubs/setup.py]
+		package_dir={'PySAM-DAO-Tk': 'files'},     [change to: {'PySAM-DAO-Tk-stubs': 'stubs/stubs'} for stubs file]
+		...
+		install_requires=['NREL-PySAM-DAO-Tk-stubs'],
+		```
+17. Copy the entire contents of `.../lore/pysam/files` to `.../sam_dev/pysam/`, overriding all the respective files
+
+*Windows*
+
+18. Run build_win.bat to build pysam, install the nrel-pysam-dao-tk package for the different Python versions locally and to create the corresponding wheel (.whl) files. There may be a couple test errors. If you recently built pysam, you can comment out the following lines (REM) in build_win.bat to save time:
 	```
-	name='NREL-PySAM-DAO-Tk'  [append '-stubs' for /stubs/setup.py]
-	url='https://github.com/NREL/dao-tk'
-	description="National Renewable Energy Laboratory's DAO-Tk Python Wrapper"		[append ', stub files' for /stubs/setup.py]
-	author="Matthew-Boyd"
-	author_email="matthew.boyd@nrel.gov"
+	mkdir %SSCDIR%\..\build_pysam
+	cd %SSCDIR%\..\build_pysam
+
+	cmake -G "Visual Studio 16 2019" -DCMAKE_CONFIGURATION_TYPES="Release" -DCMAKE_SYSTEM_VERSION=10.0 -Dskip_tools=1 -Dskip_tests=1 ..
+	devenv /build Release system_advisor_model.sln
 	```
-13. Create a /files/ directory in .../pysam/stubs/ and copy the version file to there
-14. Activate a python virtual environment specific to this nrel-pysam-daotk version
-15. Run build_win_daotk.bat to install the nrel-pysam-dao-tk package locally and create the wheel (.whl) files.
-	* (There may be a couple test errors)
-16. Upload package to PyPI
-	1. Change directory to .../sam_dev/pysam/
-	2. Create an account on [PyPi](https://pypi.org/) if you do not already have one
-	2. Run:
+
+*Linux*
+
+19. Start Docker Desktop for Linux containers if it is not running
+20. In a command prompt, cd to .../sam_dev/
+21. To run confidently:
+	```
+	docker run --rm -v %cd%:/io quay.io/pypa/manylinux1_x86_64 /io/pysam/build_manylinux.sh
+	```
+22. To debug:
+	1. Build manylinux image by running:
+		```
+		docker run --rm -dit -v %cd%:/io quay.io/pypa/manylinux1_x86_64 /sbin/init
+		```
+	2. Run/start a manylinux container based on the built image by running the following command, replacing <id> with the output from the above command.
+		```
+		docker exec -it <id> bash -l
+		```
+	3. Copy commands from build_manylinux.sh to the bash window (right-clicking pastes) to step-through the script
+23. The three resulting Linux wheels are put in /sam-dev/pysam/dist/
+24. Ctrl-D to exit shell prompt
+
+*Windows and Linux*
+
+25. Open an Anaconda prompt and cd to %PYSAMDIR%\dist 
+26. Rename the new Linux wheels so PyPI accepts their upload:
+	```
+	rename *-linux_x86_64* *-manylinux1_x86_64*
+	```
+27. Upload the Python wheels to PyPI, first ensuring you are not connected to a proxy (e.g., NREL Pulse Secure)
 	```
 	pip install twine
-	twine upload dist/*
+	twine upload %PYSAMDIR%\dist\*.whl
+	```
+28. Clear your local changes to the official PySAM package by running the following in Git:
+	```
+	git checkout -- .
+	git clean -fd
 	```

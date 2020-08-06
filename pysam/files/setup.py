@@ -138,11 +138,11 @@ class PostProcess(Command):
 
     def run(self):
         assert os.getcwd() == self.cwd, 'Must be in package root: %s' % self.cwd
-        name = "NREL_PySAM-" + latest_version + "-" + "cp37-cp37m-macosx_10_14_x86_64.whl"
-        newname = "NREL_PySAM-" + latest_version + "-" + "cp37-cp37m-macosx_10_12_x86_64.whl"
+        name = "NREL_PySAM-DAO-Tk" + latest_version + "-" + "cp37-cp37m-macosx_10_14_x86_64.whl"
+        newname = "NREL_PySAM-DAO-Tk" + latest_version + "-" + "cp37-cp37m-macosx_10_12_x86_64.whl"
         os.system('mv ./dist/' + name + ' ./dist/' + newname)
 
-    ###################################################################################################
+###################################################################################################
 #
 # setup script
 #
@@ -152,19 +152,19 @@ class PostProcess(Command):
 setup(
     name='NREL-PySAM-DAO-Tk',
     version=latest_version,
-    url='https://github.com/NREL/dao-tk',
-    description="National Renewable Energy Laboratory's DAO-Tk Python Wrapper",
+    url='https://github.com/NREL/lore/tree/develop/pysam',
+    description="National Renewable Energy Laboratory's System Advisor Model DAO-Tk Python Wrapper",
     long_description=long_description,
     long_description_content_type='text/markdown',
     license='BSD 3-Clause',
     author="Matthew-Boyd",
     author_email="matthew.boyd@nrel.gov",
     include_package_data=True,
-    packages=['PySAM'],
-    package_dir={'PySAM': 'files'},
+    packages=['PySAM-DAO-Tk'],
+    package_dir={'PySAM-DAO-Tk': 'files'},
     package_data={
         '': libfiles},
-    install_requires=['NREL-PySAM-stubs'],
+    install_requires=['NREL-PySAM-DAO-Tk-stubs'],
     setup_requires=["pytest-runner"],
     tests_require=["pytest"],
     cmdclass={

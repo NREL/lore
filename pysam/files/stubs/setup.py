@@ -2,11 +2,11 @@ from setuptools import setup
 import os
 import shutil
 from files.version import __version__
+from os import path, listdir
 
 latest_version = __version__
 
 # prepare package description
-from os import path, listdir
 pysamdir = os.environ['PYSAMDIR']
 os.chdir(pysamdir)
 with open(path.join(pysamdir, 'RELEASE.md'), encoding='utf-8') as f:
@@ -24,18 +24,17 @@ for filename in listdir(path.join(pysamdir, 'stubs', 'stubs')):
 setup(
     name='NREL-PySAM-DAO-Tk-stubs',
     version=latest_version,
-    url='https://github.com/NREL/dao-tk',
-    description="National Renewable Energy Laboratory's DAO-Tk Python Wrapper, stub files",
+    url='https://github.com/NREL/lore/tree/develop/pysam',
+    description="National Renewable Energy Laboratory's System Advisor Model DAO-Tk Python Wrapper, stub files",
     long_description=long_description,
     long_description_content_type='text/markdown',
     license='BSD 3-Clause',
     author="Matthew-Boyd",
     author_email="matthew.boyd@nrel.gov",
     include_package_data=True,
-    packages=['PySAM-stubs'],
-    package_dir={'PySAM-stubs': 'stubs/stubs'},
+    packages=['PySAM-DAO-Tk-stubs'],
+    package_dir={'PySAM-DAO-Tk-stubs': 'stubs/stubs'},
     package_data={
         '': libfiles},
     zip_safe=False
 )
-
