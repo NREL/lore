@@ -1,7 +1,7 @@
 import PySAM_DAOTk.TcsmoltenSalt as t
 #import PySAM_DAOTk.Grid as g              # new to 2020.2.29, PySAM still based on 2018.11.11
 import PySAM_DAOTk.Singleowner as s
-weather_file = "C:/SAM/2018.11.11/solar_resource/daggett_ca_34.865371_-116.783023_psmv3_60_tmy.csv"
+weather_file = "../site/data/daggett_ca_34.865371_-116.783023_psmv3_60_tmy.csv"
 model_name = "MSPTSingleOwner"
 
 tech_model = t.default(model_name)
