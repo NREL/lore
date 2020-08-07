@@ -10,13 +10,14 @@ ln -s /opt/python/cp37-cp37m/bin/cmake /usr/bin/cmake
 mkdir -p /io/build_linux_ssc
 cd /io/build_linux_ssc
 rm -rf *
-cmake ${SSCDIR} -DCMAKE_BUILD_TYPE=Export -Dskip_tools=1 -DSAMAPI_EXPORT=0 -Dskip_tests=1 ../ssc/
+cmake ${SSCDIR} -DCMAKE_BUILD_TYPE=Export -Dskip_tools=1 -DSAMAPI_EXPORT=1 -Dskip_tests=1 ../ssc/
 make -j 6
 
 mkdir -p /io/build_linux_sam
 cd /io/build_linux_sam
 # rm -rf *
-cmake ${SAMNTDIR}/api -DCMAKE_BUILD_TYPE=Export -DSAMAPI_EXPORT=0 -Dskip_autogen=1 ../sam/api
+# It is okay if the following gives "The dependency target "export_config" of target "SAM_api" does not exist."
+cmake ${SAMNTDIR}/api -DCMAKE_BUILD_TYPE=Export -DSAMAPI_EXPORT=1 -Dskip_autogen=1 ../sam/api
 make -j 6
 
 cd $PYSAMDIR

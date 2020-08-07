@@ -102,7 +102,7 @@ for filename in os.listdir(defaults_df_dir):
     libfiles.append('defaults/' + os.path.splitext(filename)[0] + '.df')
 
 # make list of all extension modules
-extension_modules = [Extension('PySAM.AdjustmentFactors',
+extension_modules = [Extension('PySAM_DAOTk.AdjustmentFactors',
                      ['src/AdjustmentFactors.c'],
                     define_macros=defines,
                     include_dirs=[srcpath, includepath, this_directory + "/src"],
@@ -113,7 +113,7 @@ extension_modules = [Extension('PySAM.AdjustmentFactors',
                     )]
 
 for filename in os.listdir(this_directory + "/modules"):
-    extension_modules.append(Extension('PySAM.' + os.path.splitext(filename)[0],
+    extension_modules.append(Extension('PySAM_DAOTk.' + os.path.splitext(filename)[0],
                              ['modules/' + filename],
                             define_macros=defines,
                             include_dirs=[srcpath, includepath, this_directory + "/src"],
@@ -160,8 +160,8 @@ setup(
     author="Matthew-Boyd",
     author_email="matthew.boyd@nrel.gov",
     include_package_data=True,
-    packages=['PySAM-DAO-Tk'],
-    package_dir={'PySAM-DAO-Tk': 'files'},
+    packages=['PySAM_DAOTk'],
+    package_dir={'PySAM_DAOTk': 'files'},
     package_data={
         '': libfiles},
     install_requires=['NREL-PySAM-DAO-Tk-stubs'],

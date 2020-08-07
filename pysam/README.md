@@ -17,31 +17,26 @@ conda activate pysam_daotk
 3. Install dao-tk and dao-tk stubs
 ```
 pip install nrel-pysam-dao-tk
-pip install nrel-pysam-dao-tk-stubs
 ```
+nrel-pysam-dao-tk-stubs will be installed automatically as a dependency
 
 ## Testing the DAO-Tk Version of PySAM in VS Code
 
-1. Set configuration in VS Code by opening launch.json and adding the following under 'console'
-	```
-	"env": {
-		"pysam_daotk": "1",
-	}
-	```
-	
+1. Open `/lore/pysam/mspt.py` in VSCode
+
 2. Select interpreter in VS Code
-	1. Ctrl-Shift-P  ->  Python: Select Interpreter
-	2. Enter Interpreter Path, example:
+	1. In the blue status bar at the bottom of the window, click on the text of the current Python interpreter.
+	2. In the new drop-down at the top of VSCode, select the interpreter specific to the Python environment you just created, e.g.:
 	```
-	C:\Users\mboyd\AppData\Local\Continuum\miniconda3\envs\pysam_daotk\python.exe
+	Python 3.7.8 64-bit ('pysam_daotk': conda)
 	```
 
-3. Select environment in terminal
+3. Select environment in terminal, if not automatically activated:
 ```
 conda activate pysam_daotk
 ```
 
-4. Open and run/step-through mspt.py
+4. Run mspt.py
 
 
 ## Creating a DAO-Tk Version of PySAM: Windows and Linux Builds
@@ -72,7 +67,11 @@ conda activate pysam_daotk
 *Linux*	
 
 6. Install Docker
-7. Start Docker Desktop, switching to Linux containers if needed
+7. Start Docker Desktop, switching to Linux containers if not already set to that.
+
+	*NOTE:* If Docker does not have enough memory to start Linux containers:
+	1. Download [RAMMap](https://docs.microsoft.com/en-us/sysinternals/downloads/rammap) from the Microsoft Sysinternals tool set
+	2. In RAMMap, select: `Empty -> Empty Working Sets` then `File -> Refresh`
 8. Pull the manylinux1 container by opening a command prompt and running:
 	```
 	docker pull quay.io/pypa/manylinux1_x86_64

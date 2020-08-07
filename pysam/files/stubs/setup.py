@@ -32,8 +32,8 @@ setup(
     author="Matthew-Boyd",
     author_email="matthew.boyd@nrel.gov",
     include_package_data=True,
-    packages=['PySAM-DAO-Tk-stubs'],
-    package_dir={'PySAM-DAO-Tk-stubs': 'stubs/stubs'},
+    packages=['PySAM_DAOTk_stubs'],
+    package_dir={'PySAM_DAOTk_stubs': 'stubs/stubs'},
     package_data={
         '': libfiles},
     zip_safe=False

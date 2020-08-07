@@ -14,7 +14,7 @@ FOR %%i IN (pysam_build_3.5, pysam_build_3.6 pysam_build_3.7, pysam_build_3.8) D
     call deactivate
     call activate %%i
     echo y | pip install -r tests\requirements.txt
-    echo y | pip uninstall NREL-PySAM-DAO-Tk NREL-PySAM-DAO-Tk-stubs
+    echo y | pip uninstall nrel-pysam-dao-tk nrel-pysam-dao-tk-stubs
     python setup.py install
     python .\stubs\setup.py install
     pytest -s tests
