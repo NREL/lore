@@ -37,10 +37,10 @@ def _temp_populate_database():
     DashboardSummaryItem.objects.all().delete()
     data = []
                 # name                      #units              #icon           #varname                #group      #max        #actual     #model
-    data.append(["Daily production total",  "MWh<sub>e</sub>",  "flash.png",    "daily_production",     "summary",  110*14*.75, 110*14*.25, 110*14*.31   ])
-    data.append(["Net power",               "MW<sub>e</sub>",   "tower.png",    "net_power",            "summary",  110,        95,         80          ])
-    data.append(["Gross power",             "MW<sub>e</sub>",   "turbine.png",  "gross_power",          "summary",  120,        100,      111.9       ])
-    data.append(["Thermal storage charge",  "MWh<sub>t</sub>",  "tank.png",     "tes_charge",           "summary",  110*12/.4,  110*6/.4,   110*7/.4    ])
+    data.append(["Daily production total",  "MWh>sub>e>/sub>",  "flash.png",    "daily_production",     "summary",  110*14*.75, 110*14*.25, 110*14*.31   ])
+    data.append(["Net power",               "MW>sub>e>/sub>",   "tower.png",    "net_power",            "summary",  110,        95,         80          ])
+    data.append(["Gross power",             "MW>sub>e>/sub>",   "turbine.png",  "gross_power",          "summary",  120,        100,      111.9       ])
+    data.append(["Thermal storage charge",  "MWh>sub>t>/sub>",  "tank.png",     "tes_charge",           "summary",  110*12/.4,  110*6/.4,   110*7/.4    ])
     data.append(["Daily revenue",           "$",                "notes.png",    "daily_revenue",        "summary",  ] + [ d * 90 for d in data[0][-3:]])
     
 
@@ -99,7 +99,7 @@ def _temp_populate_database():
     #-- end hourly data
 
     return
-#<<<<<<<<< end temporary code
+#>>>>>>>>> end temporary code
 
 #-------------------------------------------------------------
 def dashboard_view(request, *args, **kwargs):
@@ -118,9 +118,49 @@ def dashboard_view(request, *args, **kwargs):
     server_script = server_session(None, session_id=token.generate_session_id(),
                                    url=bokeh_server_url)
 
+    prev_tes_charge_avg = 0
+    prev_expected_solar_avg = 0
+    prev_net_power_out_avg = 0
+    prev_expected_revenue_avg = 0
+
+    ## Live Data
+    live_data = request.session['pysam_output']
+
+    # tes charge
+    tes_charge_avg = sum(live_data["e_ch_tes"])/len(live_data["e_ch_tes"])
+    tes_charge_change = tes_charge_avg > prev_tes_charge_avg
+
+    # expected solar
+    expected_solar_avg = sum(live_data["disp_qsfprod_expected"])/len(live_data["disp_qsfprod_expected"])
+    expected_solar_change = expected_solar_avg > prev_expected_solar_avg
+
+    # net power out
+    net_power_out_avg = sum(live_data["P_out_net"])/len(live_data["P_out_net"])
+    net_power_out_change = net_power_out_avg > prev_net_power_out_avg
+
+    # annual energy
+    annual_energy = live_data["annual_energy"]
+
+    # expected Revenue
+    expected_revenue_avg = sum(live_data["disp_rev_expected"])/len(live_data["disp_rev_expected"])
+    expected_revenue_change = expected_revenue_avg > prev_expected_revenue_avg
+
+    live_data = {
+
+        "tes" : tes_charge_avg,
+        "tes_change" : tes_charge_change,
+        "expected_solar" : expected_solar_avg,
+        "expected_solar_change" : expected_solar_change,
+        "net_power_out" : net_power_out_avg,
+        "net_power_out_change" : net_power_out_change,
+        "annual_energy" : annual_energy,
+        "expected_revenue" : expected_revenue_avg,
+        "expected_revenue_change" : expected_revenue_change
+    }
+
     context = {"db_name" : "Dashboard",
                "db_script" : server_script,
-               "dashboard_data": request.session['pysam_output'],
+               "live_data" : live_data,
                **(getLiveStatusData())
               }
 
