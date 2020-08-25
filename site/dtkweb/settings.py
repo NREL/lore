@@ -126,6 +126,7 @@ USE_TZ = False
 
 STATIC_URL = '/static/'
 
+# for gaining access to the css, js, and img files
 STATICFILES_DIRS = [
     os.path.join(BASE_DIR, "static")
 ]
