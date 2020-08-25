@@ -1,3 +1,2 @@
 *.profile
-venv/
 *.sqlite3
