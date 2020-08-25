@@ -73,7 +73,8 @@
         }
     </script>
     <title>{% block title %}{% endblock %}</title>
-    {% block head %}{% endblock %}
+    {% block head %}
+    {% endblock %}
 </head>
 
 <body>
@@ -82,7 +83,8 @@
     {% include "snippets/live_status.html" %}
 
     <div class="content">
-        {% block content %}{% endblock %}
+        {% block content %}
+        {% endblock %}
     </div>
     
     <script type="text/javascript" src="{% static "js/jquery-3.4.1.slim.min.js" %}"></script>

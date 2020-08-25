@@ -23,63 +23,12 @@ def load_pysam_data(request):
     request.session['pysam_output'] = mspt.get_pysam_data()
     print(request.session.keys())
 
-def index(request, path=None):
-
-    context = {
-        'connection_status' : True,
-        'model_status' : False,
-        'last_refresh' : datetime.now(),
-    }
-
-    if not path:
-        return HttpResponseRedirect("dashboard")
-    #handle URL based on path
-    pvals = path.split('/')
-
-    if 'configure' in pvals[0]:
-        if len(pvals) != 2:
-            return Http404(request)
-        
-        if 'event_log' in pvals[1]:
-            return configure_event_log(request, context)
-        elif 'logging' in pvals[1]:
-            return configure_logging(request, context)
-        elif 'model_settings' in pvals[1]:
-            return configure_model_settings(request, context)
-        elif 'sources' in pvals[1]:
-            return configure_sources(request, context)
-        elif 'ui_settings' in pvals[1]:
-            return configure_ui_settings(request, context)
-        else:
-            return Http404(request)
-
-    elif 'whatif' in pvals[0]:
-        if len(pvals) != 2:
-            return Http404(request)
-        
-        if 'interruptions' in pvals[1]:
-            return whatif_interruptions(request, context)
-        elif 'resources' in pvals[1]:
-            return whatif_resources(request, context)
-        elif 'weather' in pvals[1]:
-            return whatif_weather(request, context)
-        else:
-            return Http404(request)
-    else:
-        if 'dashboard' in pvals[0]:
-            return dashboard(request, context)
-        elif 'forecast' in pvals[0]:
-            return forecast(request, context)
-        elif 'history' in pvals[0]:
-            return history(request, context)
-        elif 'maintenance' in pvals[0]:
-            return maintenance(request, context)
-        elif 'settings' in pvals[0]:
-            return settings(request, context)
-        else:
-            return Http404(request)
-
-    return 
+def getLiveStatusData():
+    return {
+            'connection_status' : True,
+            'model_status' : False,
+            'last_refresh' : datetime.now(),
+            }
 
 #>>>>> temporary code to create necessary database objects
 def _temp_populate_database():
@@ -153,7 +102,7 @@ def _temp_populate_database():
 #<<<<<<<<< end temporary code
 
 #-------------------------------------------------------------
-def dashboard(request, context={}):
+def dashboard_view(request, *args, **kwargs):
     """
     main view for the dashboard
     """
@@ -171,15 +120,14 @@ def dashboard(request, context={}):
 
     context = {"db_name" : "Dashboard",
                "db_script" : server_script,
-               "last_refresh": datetime.now(),
-               "connection_status": True,
-               "dashboard_data": request.session['pysam_output']
+               "dashboard_data": request.session['pysam_output'],
+               **(getLiveStatusData())
               }
 
     return render(request, "dashboard.html", context)
 
 #-------------------------------------------------------------
-def outlook(request, context={}):
+def outlook_view(request, *args, **kwargs):
     from bokeh.embed import server_session
     from bokeh.util import session_id
 
@@ -198,7 +146,7 @@ def outlook(request, context={}):
     return render(request, "outlook.html", context)
 
 #-------------------------------------------------------------
-def forecast(request, context={}):
+def forecast_view(request, *args, **kwargs):
 
     from bokeh.embed import server_session
     from bokeh.util import session_id
@@ -223,8 +171,7 @@ def forecast(request, context={}):
     estimates_table_script = server_session(None, session_id=session_id.generate_session_id(),
                                     url=estimates_table_url)
     
-    context = {"last_refresh": datetime.now(),
-               "connection_status": True,
+    context = {**(getLiveStatusData()),
                "mkt_script" : "Market Forecast",
                "mkt_script" : mkt_script,
                "solar_plot": "Solar Forecast",
@@ -238,7 +185,7 @@ def forecast(request, context={}):
     return render(request, "forecast.html", context)
 
 #-------------------------------------------------------------
-def history(request, context={}):
+def history_view(request, *args, **kwargs):
 
     from bokeh.embed import server_session
     from bokeh.util import session_id
@@ -254,8 +201,7 @@ def history(request, context={}):
     hdbp_server_script = server_session(None, session_id=session_id.generate_session_id(),
                                    url=hdbp_url)
 
-    context = {"last_refresh": datetime.now(),
-               "connection_status": True,
+    context = {**(getLiveStatusData()),
                "hsf_plot_name": "Historical Solar Forecast Data",
                "hsf_script": hsf_server_script,
                "hdbp_plot_name": "Historical Dashboard Data",
@@ -265,47 +211,9 @@ def history(request, context={}):
     return render(request, "history.html", context)
 
 #-------------------------------------------------------------
-def maintenance(request, context={}):
+def maintenance_view(request, *args, **kwargs):
     return render(request, "maintenance.html", context)
 
 #-------------------------------------------------------------
-def settings(request, context={}):
+def settings_view(request, *args, **kwargs):
     return render(request, "settings.html", context)
-
-#-------------------------------------------------------------
-def planning(request, context={}):
-    return render(request, "planning.html", context)
-
-#-------------------------------------------------------------
-def system(request, context={}):
-    return render(request, "system.html", context)
-
-#-------------------------------------------------------------
-#-------------------------------------------------------------
-
-def configure_sources(request, context={}):
-    return render(request, "configure/sources.html", context)    
-
-def configure_logging(request, context={}):
-    return render(request, "configure/logging.html", context)    
-
-def configure_model_settings(request, context={}):
-    return render(request, "configure/model_settings.html", context)    
-
-def configure_ui_settings(request, context={}):
-    return render(request, "configure/ui_settings.html", context)    
-
-def configure_event_log(request, context={}):
-    return render(request, "configure/event_log.html", context)    
-
-#-------------------------------------------------------------
-#-------------------------------------------------------------
-
-def whatif_interruptions(request, context={}):
-    return render(request, "whatif/interruptions.html", context)
-
-def whatif_resources(request, context={}):
-    return render(request, "whatif/resources.html", context)
-
-def whatif_weather(request, context={}):
-    return render(request, "whatif/weather.html", context)
