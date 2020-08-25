@@ -6,6 +6,7 @@ import sys
 
 usage = 'import_data.py Usage: import_data data_file_path\n'
 num_args = len(sys.argv)
+curr_dir = os.path.dirname(os.path.abspath(__file__))
 
 # Check to ensure the correct number of arguments are provided
 if(num_args != 2):
@@ -29,7 +30,7 @@ else:
 file_match = re.compile(r'ui-.*-min\.csv')
 
 # Set up connection
-con = sqlite3.connect("../db.sqlite3") # change to 'sqlite:///your_filename.db'
+con = sqlite3.connect(os.path.join(curr_dir, "../db.sqlite3")) # change to 'sqlite:///your_filename.db'
 cur = con.cursor()
 
 # Change to users file directory
