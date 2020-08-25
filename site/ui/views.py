@@ -212,8 +212,10 @@ def history_view(request, *args, **kwargs):
 
 #-------------------------------------------------------------
 def maintenance_view(request, *args, **kwargs):
+    context = {**(getLiveStatusData())}
     return render(request, "maintenance.html", context)
 
 #-------------------------------------------------------------
 def settings_view(request, *args, **kwargs):
+    context = {**(getLiveStatusData())}
     return render(request, "settings.html", context)
