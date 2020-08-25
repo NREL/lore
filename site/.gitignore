@@ -1,6 +1,4 @@
 *.profile
-Lib/
-Scripts/
-pyvenv.cfg
+venv/
 *.sqlite3
 */migrations/

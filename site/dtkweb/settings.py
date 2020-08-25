@@ -15,12 +15,11 @@ import os
 # Note Bokeh_SECRET_KEY must also be used/set when starting up Bokeh daemon
 # Obtain your own key by typing "bokeh secret" in a terminal
 # the key goes below, and in the bokehserver.service file
-print(os.environ["BOKEH_SECRET_KEY"])
+os.environ["BOKEH_SECRET_KEY"] = "EjjWMPEawukdfV0gf5Mk0vvcEMCUflFjx8X3T8RviD65"
 os.environ["BOKEH_SIGN_SESSIONS"] = "False"
 
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-# print("BASE " + BASE_DIR)
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/2.2/howto/deployment/checklist/
@@ -50,7 +49,6 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
-
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
@@ -128,11 +126,6 @@ USE_TZ = False
 
 STATIC_URL = '/static/'
 
-STATICFILES_DIRS = [
-    os.path.join(BASE_DIR, "static")
-]
-
-MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 MEDIA_URL = '/media/'
 
 # SESSION_ENGINE = "django.contrib.sessions.backends.cached_db"
