@@ -1,5 +1,7 @@
-<!-- This will need to be updated based on whatever metrics you are hoping to capture in the live data.-->
-<!-- Django templates provides filters to modify how things look, and I've provided some examples here. -->
+<!-- NOTE: This will need to be updated based on whatever metrics you are hoping to capture in the live data.
+           The Django templates language provides filters to modify how things look, and I've provided some 
+           examples here. -->
+
 <div class="live-data">
     <div class="tile_count row">
 
@@ -11,6 +13,7 @@
             
             {% include "snippets/value_change.html" with data=live_data.tes changeup=live_data.tes_change %}
         </div>
+
         <!-- Expected Solar Field Generation -->
         <div class="col-md col-sm-4  tile_stats_count">
             <span class="count_top">
@@ -18,6 +21,7 @@
             </span>
             {% include "snippets/value_change.html" with data=live_data.expected_solar changeup=live_data.expected_solar_change %}
         </div>
+
         <!-- Net Power Out -->
         <div class="col-md col-sm-4  tile_stats_count">
             <span class="count_top">
@@ -25,6 +29,7 @@
             </span>
             {% include "snippets/value_change.html" with data=live_data.net_power_out changeup=live_data.net_power_out_change %}
         </div>
+
         <!-- Annual Energy -->
         <div class="col-md col-sm-4  tile_stats_count">
             <span class="count_top">
@@ -32,6 +37,7 @@
             </span>
             <div class="count yellowgreen">{{live_data.annual_energy|stringformat:".2e"}}</div>
         </div>
+        
         <!-- Expected Revenue -->
         <div class="col-md col-sm-4  tile_stats_count">
             <span class="count_top">

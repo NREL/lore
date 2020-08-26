@@ -6,14 +6,18 @@ History
 
 {% block content %}
 <div class="data data-forcast">
+
     <!-- Daily Statistics -->
     {% include "snippets/live_data.html" %}
     <br/>
+
     <!-- Data Cards -->
     <div class='data'>
         <div class="row row-cols-2 plots">
+
             <!-- Historical Dashboard Data -->
             {% include "snippets/card.html" with plot_script=hdbp_script %}
+            
             <!-- Historical Solar Data -->
             {% include "snippets/card.html" with plot_script=hsf_script %}
         </div>
