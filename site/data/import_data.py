@@ -3,7 +3,7 @@ import re
 import csv
 import sqlite3
 import sys
-import inquirer
+from PyInquirer import prompt
 
 #DEBUG
 import pdb
@@ -42,12 +42,13 @@ available_databases = [filename for filename in os.listdir() if db_match.match(f
 # Get database selection
 
 questions = [
-  inquirer.List('database',
-                message="Which SQLite3 database should we import from?",
-                choices=available_databases,
-            ),
+  { 'type':'list',
+    'name':'database',
+    'message':"Select which SQLite3 database to import to:",
+    'choices': available_databases,
+            }
 ]
-answers = inquirer.prompt(questions)
+answers = prompt(questions)
 
 # Make database connection
 conn = sqlite3.connect(os.path.join(db_dir, answers['database']))
