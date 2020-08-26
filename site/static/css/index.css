@@ -18,6 +18,14 @@ svg {
   margin-right: 10px;
 }
 
+svg.fa-sort-up {
+  margin-right: 0px;
+}
+
+svg.fa-sort-down {
+  margin-right: 0px;
+}
+
 .content {
   padding: 10px;
   margin-left: 75px;

@@ -7,8 +7,7 @@ $MENU_TOGGLE.on("click", function(){
 })
 
 $(".sidebar-navigation li > a").each(function() {
-    //console.log($(this).attr('href'));
-    if ((window.location.pathname.indexOf($(this).attr('href'))) > -1) {
+    if ((window.location.pathname == $(this).attr('href'))) {
         $(this).parent().addClass('active');
     }
 });

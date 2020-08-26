@@ -30,6 +30,49 @@ def getLiveStatusData():
             'last_refresh' : datetime.now(),
             }
 
+def getLiveBarData(request):
+    prev_tes_charge_avg = 0
+    prev_expected_solar_avg = 0
+    prev_net_power_out_avg = 0
+    prev_expected_revenue_avg = 0
+
+    ## Live Data
+    live_data = request.session['pysam_output']
+
+    # tes charge
+    tes_charge_avg = sum(live_data["e_ch_tes"])/len(live_data["e_ch_tes"])
+    tes_charge_change = tes_charge_avg > prev_tes_charge_avg
+
+    # expected solar
+    expected_solar_avg = sum(live_data["disp_qsfprod_expected"])/len(live_data["disp_qsfprod_expected"])
+    expected_solar_change = expected_solar_avg > prev_expected_solar_avg
+
+    # net power out
+    net_power_out_avg = sum(live_data["P_out_net"])/len(live_data["P_out_net"])
+    net_power_out_change = net_power_out_avg > prev_net_power_out_avg
+
+    # annual energy
+    annual_energy = live_data["annual_energy"]
+
+    # expected Revenue
+    expected_revenue_avg = sum(live_data["disp_rev_expected"])/len(live_data["disp_rev_expected"])
+    expected_revenue_change = expected_revenue_avg > prev_expected_revenue_avg
+
+    live_data = {
+
+        "tes" : tes_charge_avg,
+        "tes_change" : tes_charge_change,
+        "expected_solar" : expected_solar_avg,
+        "expected_solar_change" : expected_solar_change,
+        "net_power_out" : net_power_out_avg,
+        "net_power_out_change" : net_power_out_change,
+        "annual_energy" : annual_energy,
+        "expected_revenue" : expected_revenue_avg,
+        "expected_revenue_change" : expected_revenue_change
+    }
+
+    return live_data
+
 #>>>>> temporary code to create necessary database objects
 def _temp_populate_database():
 
@@ -118,49 +161,9 @@ def dashboard_view(request, *args, **kwargs):
     server_script = server_session(None, session_id=token.generate_session_id(),
                                    url=bokeh_server_url)
 
-    prev_tes_charge_avg = 0
-    prev_expected_solar_avg = 0
-    prev_net_power_out_avg = 0
-    prev_expected_revenue_avg = 0
-
-    ## Live Data
-    live_data = request.session['pysam_output']
-
-    # tes charge
-    tes_charge_avg = sum(live_data["e_ch_tes"])/len(live_data["e_ch_tes"])
-    tes_charge_change = tes_charge_avg > prev_tes_charge_avg
-
-    # expected solar
-    expected_solar_avg = sum(live_data["disp_qsfprod_expected"])/len(live_data["disp_qsfprod_expected"])
-    expected_solar_change = expected_solar_avg > prev_expected_solar_avg
-
-    # net power out
-    net_power_out_avg = sum(live_data["P_out_net"])/len(live_data["P_out_net"])
-    net_power_out_change = net_power_out_avg > prev_net_power_out_avg
-
-    # annual energy
-    annual_energy = live_data["annual_energy"]
-
-    # expected Revenue
-    expected_revenue_avg = sum(live_data["disp_rev_expected"])/len(live_data["disp_rev_expected"])
-    expected_revenue_change = expected_revenue_avg > prev_expected_revenue_avg
-
-    live_data = {
-
-        "tes" : tes_charge_avg,
-        "tes_change" : tes_charge_change,
-        "expected_solar" : expected_solar_avg,
-        "expected_solar_change" : expected_solar_change,
-        "net_power_out" : net_power_out_avg,
-        "net_power_out_change" : net_power_out_change,
-        "annual_energy" : annual_energy,
-        "expected_revenue" : expected_revenue_avg,
-        "expected_revenue_change" : expected_revenue_change
-    }
-
     context = {"db_name" : "Dashboard",
                "db_script" : server_script,
-               "live_data" : live_data,
+               "live_data" : getLiveBarData(request),
                **(getLiveStatusData())
               }
 
@@ -179,8 +182,7 @@ def outlook_view(request, *args, **kwargs):
     server_script = server_session(None, session_id=session_id.generate_session_id(),
                                    url=bokeh_server_url)
     context = {"graphname" : "Sliders",
-               "server_script" : server_script,
-               "dashboard_data": request.session['pysam_output']
+               "server_script" : server_script
               }
 
     return render(request, "outlook.html", context)
@@ -216,7 +218,7 @@ def forecast_view(request, *args, **kwargs):
                "mkt_script" : mkt_script,
                "solar_plot": "Solar Forecast",
                "solar_script": solar_script,
-               "dashboard_data": request.session['pysam_output'],
+               "live_data": getLiveBarData(request),
                "probability_table_script": probability_table_script,
                "estimates_table_script": estimates_table_script,
 
@@ -246,7 +248,7 @@ def history_view(request, *args, **kwargs):
                "hsf_script": hsf_server_script,
                "hdbp_plot_name": "Historical Dashboard Data",
                "hdbp_script": hdbp_server_script,
-               "dashboard_data": request.session['pysam_output']
+               "live_data": getLiveBarData(request)
               }
     return render(request, "history.html", context)
 
