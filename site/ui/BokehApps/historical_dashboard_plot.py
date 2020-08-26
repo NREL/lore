@@ -11,9 +11,6 @@ import sqlite3
 import datetime
 import re
 
-# DEBUG
-import pdb
-
 conn = sqlite3.connect('../../db.sqlite3')
 conn.row_factory = sqlite3.Row
 c = conn.cursor()
@@ -30,7 +27,6 @@ lines = {}
 
 def make_dataset(range_start, range_end):
     # Prepare data
-    pbd.set_trace()
     data = c.execute("select * from ui_dashboarddatarto \
         where ((rowid % 30 = 0) or (rowid > (select max(rowid) from ui_dashboarddatarto) -30)) \
         and datetime(timestamp) > :range_start \
