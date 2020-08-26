@@ -5,12 +5,12 @@
             <td style="width: 5%;"></td>
             <td>Connection status</td>
             <td>
-                <div class="circle {% if connection_status %}ok{% else %}warn{% endif %}"></div>
+                <div class="circle {{connection_status|yesno:"ok,warn"}}"></div>
             </td>
             <td style="width: 5%;"></td>
             <td>Model status</td>
             <td>
-                <div class="circle {% if model_status %}ok{% else %}warn{% endif %}"></div>
+                <div class="circle {{model_status|yesno:"ok,warn"}}"></div>
             </td>
         </tr>
     </table>

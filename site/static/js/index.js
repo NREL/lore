@@ -1,11 +1,4 @@
-var $MENU_TOGGLE = $('.menu-toggle');
-var $NAV_BAR = $('.sidebar-navigation');
-var $MENU_TOGGLE_ICON = $('.menu-toggle > i')
-$MENU_TOGGLE.on("click", function(){
-    $NAV_BAR.toggleClass("nav-min nav-full");
-    $MENU_TOGGLE_ICON.toggleClass("fa-angle-right fa-angle-left")
-})
-
+// Specify which menu button gets highlighted based on path
 $(".sidebar-navigation li > a").each(function() {
     if ((window.location.pathname == $(this).attr('href'))) {
         $(this).parent().addClass('active');
