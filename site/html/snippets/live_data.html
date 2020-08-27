@@ -11,15 +11,15 @@
                 <i class="fas fa-bolt"></i> TES Charge State [MWht]
             </span>
             
-            {% include "snippets/value_change.html" with data=live_data.tes changeup=live_data.tes_change %}
+            {% include "snippets/value_change.html" with data=live_data.tes change=live_data.tes_change %}
         </div>
 
         <!-- Expected Solar Field Generation -->
         <div class="col-md col-sm-4  tile_stats_count">
             <span class="count_top">
-                <i class="fas fa-solar-panel"></i> Expected Solar Field Generation [MWht]
+                <i class="fas fa-solar-panel"></i> Expected SF Generation [MWht]
             </span>
-            {% include "snippets/value_change.html" with data=live_data.expected_solar changeup=live_data.expected_solar_change %}
+            {% include "snippets/value_change.html" with data=live_data.expected_solar change=live_data.expected_solar_change %}
         </div>
 
         <!-- Net Power Out -->
@@ -27,7 +27,7 @@
             <span class="count_top">
                 <i class="fas fa-fan"></i> Net Power Out [MWe]
             </span>
-            {% include "snippets/value_change.html" with data=live_data.net_power_out changeup=live_data.net_power_out_change %}
+            {% include "snippets/value_change.html" with data=live_data.net_power_out change=live_data.net_power_out_change %}
         </div>
 
         <!-- Annual Energy -->
@@ -43,7 +43,7 @@
             <span class="count_top">
                 <i class="fas fa-money-bill"></i> Expected Revenue [$]
             </span>
-            {% include "snippets/value_change.html" with data=live_data.expected_revenue changeup=live_data.expected_revenue_change %}
+            {% include "snippets/value_change.html" with data=live_data.expected_revenue change=live_data.expected_revenue_change %}
         </div>
     </div>
 </div>

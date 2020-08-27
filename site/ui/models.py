@@ -5,6 +5,10 @@ import datetime
 # Load PySam Data at server load instead of session load
 from ui import mspt
 pysam_output = mspt.get_pysam_data()
+pysam_output['time'] = list(pysam_output['time_hr'])
+pysam_output['time'] = [datetime.timedelta(hours=int(x)) for x in pysam_output['time']]
+pysam_output['time'] = list(map(lambda hr: hr + datetime.datetime(2010, 1, 1), pysam_output['time']))
+
 
 # New plot tables:
 #--------------Dashboard Data------------------------------

@@ -1,8 +1,18 @@
 <!-- Updates the color and arrow direction of appropriate parts of live data bar -->
-<div class="count {{changeup|yesno:"green,red"}}">{{data|floatformat:2}}</div>
+{% load custom_filters %}
+{% load custom_tags %}
+
+{% if change > 0 %}
+{% set_value "green" as color %}
+{% elif change < 0 %}
+{% set_value "red" as color %}
+{% else %}
+{% set_value "" as color %}
+{% endif %}
+<div class="count {{color}}">{{data|floatformat:2}}</div>
 <span class="count_bottom">
-    <i class={{changeup|yesno:"green,red"}}>
-        <i class="fas fa-sort-{{changeup|yesno:"up,down"}}"></i>4%
+    <i class={{color}}>
+        {% if change != 0 %}<i class="fas fa-sort-{% if change > 0 %}up{% else %}down{% endif %}"></i>{% endif %}{{change|abs|floatformat:2}}%
     </i>
-    From last Week
+    From Yesterday
 </span>
