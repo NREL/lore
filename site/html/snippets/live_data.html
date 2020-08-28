@@ -14,12 +14,20 @@
             {% include "snippets/value_change.html" with data=live_data.tes change=live_data.tes_change %}
         </div>
 
-        <!-- Expected Solar Field Generation -->
+        <!-- Receiver Thermal Efficiency -->
         <div class="col-md col-sm-4  tile_stats_count">
             <span class="count_top">
-                <i class="fas fa-solar-panel"></i> Expected SF Generation [MWht]
+                <i class="fas fa-satellite-dish"></i> Receiver Thermal Efficiency [%]
             </span>
-            {% include "snippets/value_change.html" with data=live_data.expected_solar change=live_data.expected_solar_change %}
+            {% include "snippets/value_change.html" with data=live_data.receiver_therm_eff change=live_data.receiver_therm_eff_change %}
+        </div>
+       
+        <!-- Field Optical Efficiency -->
+        <div class="col-md col-sm-4  tile_stats_count">
+            <span class="count_top">
+                <i class="fas fa-solar-panel"></i> Field Optical Efficiency [%]
+            </span>
+            {% include "snippets/value_change.html" with data=live_data.field_optical_eff change=live_data.field_optical_eff_change %}
         </div>
 
         <!-- Net Power Out -->
@@ -30,20 +38,12 @@
             {% include "snippets/value_change.html" with data=live_data.net_power_out change=live_data.net_power_out_change %}
         </div>
 
-        <!-- Annual Energy -->
+        <!-- Dispatch Expected Power Generation -->
         <div class="col-md col-sm-4  tile_stats_count">
             <span class="count_top">
-                <i class="fas fa-battery-three-quarters"></i> Annual Energy [kWhe]
+                <i class="fas fa-battery-three-quarters"></i> Electric Power To Grid [MWe]
             </span>
-            <div class="count yellowgreen">{{live_data.annual_energy|stringformat:".2e"}}</div>
-        </div>
-        
-        <!-- Expected Revenue -->
-        <div class="col-md col-sm-4  tile_stats_count">
-            <span class="count_top">
-                <i class="fas fa-money-bill"></i> Expected Revenue [$]
-            </span>
-            {% include "snippets/value_change.html" with data=live_data.expected_revenue change=live_data.expected_revenue_change %}
+            {% include "snippets/value_change.html" with data=live_data.elec_power_to_grid change=live_data.elec_power_to_grid_change %}
         </div>
     </div>
 </div>

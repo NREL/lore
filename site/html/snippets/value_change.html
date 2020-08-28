@@ -12,7 +12,9 @@
 <div class="count {{color}}">{{data|floatformat:2}}</div>
 <span class="count_bottom">
     <i class={{color}}>
-        {% if change != 0 %}<i class="fas fa-sort-{% if change > 0 %}up{% else %}down{% endif %}"></i>{% endif %}{{change|abs|floatformat:2}}%
-    </i>
-    From Yesterday
+        {% if change == 0 and data == 0 %}
+            <i>NaN</i></i>
+        {% else  %}
+            <i class="fas fa-sort-{% if change > 0 %}up{% else %}down{% endif %}"></i>{{change|abs|floatformat:2}}%</i>
+        {% endif %}
 </span>

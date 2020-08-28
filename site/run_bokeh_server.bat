@@ -4,15 +4,15 @@ setlocal enabledelayedexpansion
 
 set websocket=10.10.10.10
 set address=127.0.0.1
-set bokeh_files=
+set bokeh_dirs=
 
 cd ui\BokehApps
 
-for %%f in (*.py) do (
-    if .!bokeh_files!==. (
-        set bokeh_files=%%f 
+for /d %%g in (.) do (
+    if .!bokeh_dirs!==. (
+        set bokeh_dirs=%%g 
     ) else (
-        set bokeh_files=!bokeh_files! %%f
+        set bokeh_dirs=!bokeh_dirs! %%g
     )
 )
 

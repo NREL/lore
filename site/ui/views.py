@@ -3,7 +3,7 @@ from django.shortcuts import render
 from django.http import HttpResponse, Http404, HttpResponseRedirect
 from django.db import transaction
 # Model imports
-from ui.models import pysam_output
+from ui.apps import pysam_output
 # Other package imports
 from datetime import datetime, timedelta
 import matplotlib.pyplot as plt, mpld3
@@ -11,6 +11,11 @@ from io import StringIO
 import pandas
 #plot files imports
 from fig import timeseries
+
+# bokeh server interations
+from bokeh.embed import server_session
+from bokeh.util import token
+
 #global variables
 PROGRESS_BAR_WIDTH = 160
 
@@ -27,74 +32,94 @@ def getLiveStatusData():
 
 def getLiveBarData():
 
+    ## Collects the data from the pysam_output stored on the server (as of now).
+    ## This will update the bar on the hour (the frequency of the data entries in the weather file).
+
+    # get current date and hour as well as yesterdays datetime at 2300
     current_time = datetime.today().replace(year=2010, minute=0, second=0, microsecond=0)
     prev_eod_time = current_time.replace(hour=23) - timedelta(days=1)
 
     live_data_index = {
         "time": 0,
         "e_ch_tes": 1, 
-        "disp_qsfprod_expected": 2, 
-        "P_out_net": 3,
-        "disp_rev_expected": 4}
+        "eta_therm": 2,
+        "gen": 3, 
+        "P_out_net": 4,
+        "eta_field": 5}
 
     ## Live Data
+    # Zip desired live data, and place into a list format
     live_data = list(zip(
         pysam_output["time"],
         pysam_output["e_ch_tes"],
-        pysam_output["disp_qsfprod_expected"],
+        pysam_output["eta_therm"],
+        pysam_output["gen"],
         pysam_output["P_out_net"],
-        pysam_output["disp_rev_expected"]
+        pysam_output["eta_field"]
     ))
 
+    # Get data from both the previous day and current date and hour
     prev_eod_data = list(filter(lambda t: t[0] == prev_eod_time, live_data))[0]
     curr_live_data = list(filter(lambda t: t[0] == current_time, live_data))[0]
 
     # tes charge
     tes_charge = curr_live_data[live_data_index['e_ch_tes']]
     prev_tes_charge = prev_eod_data[live_data_index['e_ch_tes']]
+    # Get % change
     if prev_tes_charge != 0:
         tes_charge_pct_change = ((tes_charge - prev_tes_charge) / prev_tes_charge) * 100
     else:
         tes_charge_pct_change = ((tes_charge - prev_tes_charge) / 1) * 100
 
-    # expected solar
-    expected_solar = curr_live_data[live_data_index['disp_qsfprod_expected']]
-    prev_expected_solar = prev_eod_data[live_data_index['disp_qsfprod_expected']]
-    if prev_expected_solar != 0:
-        expected_solar_pct_change = ((expected_solar - prev_expected_solar) / prev_expected_solar) * 100
+    # receiver thermal efficiency
+    receiver_therm_eff = curr_live_data[live_data_index['eta_therm']] * 100
+    prev_receiver_therm_eff = prev_eod_data[live_data_index['eta_therm']] * 100
+    # Get % change
+    if prev_receiver_therm_eff != 0:
+        receiver_therm_eff_pct_change = ((receiver_therm_eff - prev_receiver_therm_eff) / prev_receiver_therm_eff) * 100
     else:
-        expected_solar_pct_change = ((expected_solar - prev_expected_solar) / 1) * 100
+        receiver_therm_eff_pct_change = ((receiver_therm_eff - prev_receiver_therm_eff) / 1) * 100
 
     # net power out
     net_power_out = curr_live_data[live_data_index['P_out_net']]
     prev_net_power_out = prev_eod_data[live_data_index['P_out_net']]
+    # Get % change
     if prev_net_power_out != 0:
         net_power_out_pct_change = ((net_power_out - prev_net_power_out) / prev_net_power_out) * 100
     else:
         net_power_out_pct_change = ((net_power_out - prev_net_power_out) / 1) * 100
 
-    # annual energy
-    annual_energy = pysam_output["annual_energy"]
-
-    # expected Revenue
-    expected_revenue = curr_live_data[live_data_index['disp_rev_expected']]
-    prev_expected_revenue = prev_eod_data[live_data_index['disp_rev_expected']]
-    if prev_expected_revenue != 0:
-        expected_revenue_pct_change = ((expected_revenue - prev_expected_revenue) / prev_expected_revenue) * 100
+    # total electric power to grid 
+    elec_power_to_grid = curr_live_data[live_data_index['gen']] / 1000
+    prev_elec_power_to_grid = prev_eod_data[live_data_index['gen']] / 1000
+    # Get % change
+    if prev_elec_power_to_grid != 0:
+        elec_power_to_grid_pct_change = ((elec_power_to_grid - prev_elec_power_to_grid) / prev_elec_power_to_grid) * 100
     else:
-        expected_revenue_pct_change = ((expected_revenue - prev_expected_revenue) / 1) * 100
+        elec_power_to_grid_pct_change = ((elec_power_to_grid - prev_elec_power_to_grid) / 1) * 100
 
+    # field optical efficiency
+    field_optical_eff = curr_live_data[live_data_index['eta_field']]
+    prev_field_optical_eff = prev_eod_data[live_data_index['eta_field']]
+    # Get % change
+    if prev_field_optical_eff != 0:
+        field_optical_eff_pct_change = ((field_optical_eff - prev_field_optical_eff) / prev_field_optical_eff) * 100
+    else:
+        field_optical_eff_pct_change = ((field_optical_eff - prev_field_optical_eff) / 1) * 100
+
+    # Export live data such that it can be used with the django template
     live_data = {
 
         "tes" : tes_charge,
         "tes_change" : tes_charge_pct_change,
-        "expected_solar" : expected_solar,
-        "expected_solar_change" : expected_solar_pct_change,
+        "receiver_therm_eff" : receiver_therm_eff,
+        "receiver_therm_eff_change" : receiver_therm_eff_pct_change,
         "net_power_out" : net_power_out,
         "net_power_out_change" : net_power_out_pct_change,
-        "annual_energy" : annual_energy,
-        "expected_revenue" : expected_revenue,
-        "expected_revenue_change" : expected_revenue_pct_change
+        "elec_power_to_grid" : elec_power_to_grid,
+        "elec_power_to_grid_change" : elec_power_to_grid_pct_change,
+        "field_optical_eff" : field_optical_eff,
+        "field_optical_eff_change" : field_optical_eff_pct_change
     }
 
     return live_data
@@ -104,8 +129,6 @@ def dashboard_view(request, *args, **kwargs):
     """
     main view for the dashboard
     """
-    from bokeh.embed import server_session
-    from bokeh.util import token
 
     bokeh_server_url = "http://127.0.0.1:5006/dashboard_plot"
     server_script = server_session(None, session_id=token.generate_session_id(),
@@ -121,12 +144,10 @@ def dashboard_view(request, *args, **kwargs):
 
 #-------------------------------------------------------------
 def outlook_view(request, *args, **kwargs):
-    from bokeh.embed import server_session
-    from bokeh.util import session_id
 
 
     bokeh_server_url = "http://127.0.0.1:5006/sliders"
-    server_script = server_session(None, session_id=session_id.generate_session_id(),
+    server_script = server_session(None, session_id=token.generate_session_id(),
                                    url=bokeh_server_url)
     context = {"graphname" : "Sliders",
                "server_script" : server_script
@@ -141,19 +162,19 @@ def forecast_view(request, *args, **kwargs):
     from bokeh.util import session_id
 
     market_url = "http://127.0.0.1:5006/market_plot"
-    mkt_script = server_session(None, session_id=session_id.generate_session_id(),
+    mkt_script = server_session(None, session_id=token.generate_session_id(),
                                     url=market_url)
 
     solar_url = "http://127.0.0.1:5006/solar_plot"
-    solar_script = server_session(None, session_id=session_id.generate_session_id(),
+    solar_script = server_session(None, session_id=token.generate_session_id(),
                                     url=solar_url)
 
     probability_table_url = "http://127.0.0.1:5006/probability_table"
-    probability_table_script = server_session(None, session_id=session_id.generate_session_id(),
+    probability_table_script = server_session(None, session_id=token.generate_session_id(),
                                     url=probability_table_url)
     
     estimates_table_url = "http://127.0.0.1:5006/estimates_table"
-    estimates_table_script = server_session(None, session_id=session_id.generate_session_id(),
+    estimates_table_script = server_session(None, session_id=token.generate_session_id(),
                                     url=estimates_table_url)
     
     context = {**(getLiveStatusData()),
@@ -171,15 +192,12 @@ def forecast_view(request, *args, **kwargs):
 
 #-------------------------------------------------------------
 def history_view(request, *args, **kwargs):
-
-    from bokeh.embed import server_session
-    from bokeh.util import session_id
         
     hsf_url = "http://127.0.0.1:5006/historical_solar_forecast"
-    hsf_server_script = server_session(None, session_id=session_id.generate_session_id(),
+    hsf_server_script = server_session(None, session_id=token.generate_session_id(),
                                    url=hsf_url)
     hdbp_url = "http://127.0.0.1:5006/historical_dashboard_plot"
-    hdbp_server_script = server_session(None, session_id=session_id.generate_session_id(),
+    hdbp_server_script = server_session(None, session_id=token.generate_session_id(),
                                    url=hdbp_url)
 
     context = {**(getLiveStatusData()),
