@@ -41,9 +41,9 @@
         <!-- Dispatch Expected Power Generation -->
         <div class="col-md col-sm-4  tile_stats_count">
             <span class="count_top">
-                <i class="fas fa-battery-three-quarters"></i> Electric Power To Grid [MWe]
+                <i class="fas fa-hourglass-half"></i> SCSP Time of Use Value
             </span>
-            {% include "snippets/value_change.html" with data=live_data.elec_power_to_grid change=live_data.elec_power_to_grid_change %}
+            <div class="count">{{live_data.tou_value|floatformat:2}}</div>
         </div>
     </div>
 </div>

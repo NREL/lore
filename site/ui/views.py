@@ -2,19 +2,19 @@
 from django.shortcuts import render
 from django.http import HttpResponse, Http404, HttpResponseRedirect
 from django.db import transaction
-# Model imports
-from ui.apps import pysam_output
+
 # Other package imports
 from datetime import datetime, timedelta
 import matplotlib.pyplot as plt, mpld3
 from io import StringIO
 import pandas
-#plot files imports
-from fig import timeseries
 
-# bokeh server interations
+# bokeh server interactions
 from bokeh.embed import server_session
 from bokeh.util import token
+
+# pysam script
+from ui import mspt
 
 #global variables
 PROGRESS_BAR_WIDTH = 160
@@ -30,20 +30,29 @@ def getLiveStatusData():
             'last_refresh' : datetime.now(),
             }
 
+# def collectPysamData(request):
+# Collect data from PySAM run
+pysam_output = mspt.get_pysam_data()
+pysam_output['time'] = list(pysam_output['time_hr'])
+pysam_output['time'] = [timedelta(hours=int(x)) for x in pysam_output['time']]
+pysam_output['time'] = list(map(lambda hr: hr + datetime(2010, 1, 1), pysam_output['time'])) # Jan 1, 2010 used because that is the start of our solar data
+
 def getLiveBarData():
+
+    global pysam_output
 
     ## Collects the data from the pysam_output stored on the server (as of now).
     ## This will update the bar on the hour (the frequency of the data entries in the weather file).
 
-    # get current date and hour as well as yesterdays datetime at 2300
+    # get current date and hour as well as yesterdays datetime 24 hours from the current
     current_time = datetime.today().replace(year=2010, minute=0, second=0, microsecond=0)
-    prev_eod_time = current_time.replace(hour=23) - timedelta(days=1)
+    prev_day = current_time - timedelta(days=1)
 
     live_data_index = {
         "time": 0,
         "e_ch_tes": 1, 
         "eta_therm": 2,
-        "gen": 3, 
+        "tou_value": 3, 
         "P_out_net": 4,
         "eta_field": 5}
 
@@ -53,18 +62,18 @@ def getLiveBarData():
         pysam_output["time"],
         pysam_output["e_ch_tes"],
         pysam_output["eta_therm"],
-        pysam_output["gen"],
+        pysam_output["tou_value"],
         pysam_output["P_out_net"],
         pysam_output["eta_field"]
     ))
-
+    
     # Get data from both the previous day and current date and hour
-    prev_eod_data = list(filter(lambda t: t[0] == prev_eod_time, live_data))[0]
+    prev_days_data = list(filter(lambda t: t[0] == prev_day, live_data))[0]
     curr_live_data = list(filter(lambda t: t[0] == current_time, live_data))[0]
 
     # tes charge
     tes_charge = curr_live_data[live_data_index['e_ch_tes']]
-    prev_tes_charge = prev_eod_data[live_data_index['e_ch_tes']]
+    prev_tes_charge = prev_days_data[live_data_index['e_ch_tes']]
     # Get % change
     if prev_tes_charge != 0:
         tes_charge_pct_change = ((tes_charge - prev_tes_charge) / prev_tes_charge) * 100
@@ -73,7 +82,7 @@ def getLiveBarData():
 
     # receiver thermal efficiency
     receiver_therm_eff = curr_live_data[live_data_index['eta_therm']] * 100
-    prev_receiver_therm_eff = prev_eod_data[live_data_index['eta_therm']] * 100
+    prev_receiver_therm_eff = prev_days_data[live_data_index['eta_therm']] * 100
     # Get % change
     if prev_receiver_therm_eff != 0:
         receiver_therm_eff_pct_change = ((receiver_therm_eff - prev_receiver_therm_eff) / prev_receiver_therm_eff) * 100
@@ -82,25 +91,19 @@ def getLiveBarData():
 
     # net power out
     net_power_out = curr_live_data[live_data_index['P_out_net']]
-    prev_net_power_out = prev_eod_data[live_data_index['P_out_net']]
+    prev_net_power_out = prev_days_data[live_data_index['P_out_net']]
     # Get % change
     if prev_net_power_out != 0:
         net_power_out_pct_change = ((net_power_out - prev_net_power_out) / prev_net_power_out) * 100
     else:
         net_power_out_pct_change = ((net_power_out - prev_net_power_out) / 1) * 100
 
-    # total electric power to grid 
-    elec_power_to_grid = curr_live_data[live_data_index['gen']] / 1000
-    prev_elec_power_to_grid = prev_eod_data[live_data_index['gen']] / 1000
-    # Get % change
-    if prev_elec_power_to_grid != 0:
-        elec_power_to_grid_pct_change = ((elec_power_to_grid - prev_elec_power_to_grid) / prev_elec_power_to_grid) * 100
-    else:
-        elec_power_to_grid_pct_change = ((elec_power_to_grid - prev_elec_power_to_grid) / 1) * 100
+    # CSP time of use value
+    tou_value = curr_live_data[live_data_index['tou_value']]
 
     # field optical efficiency
     field_optical_eff = curr_live_data[live_data_index['eta_field']]
-    prev_field_optical_eff = prev_eod_data[live_data_index['eta_field']]
+    prev_field_optical_eff = prev_days_data[live_data_index['eta_field']]
     # Get % change
     if prev_field_optical_eff != 0:
         field_optical_eff_pct_change = ((field_optical_eff - prev_field_optical_eff) / prev_field_optical_eff) * 100
@@ -116,8 +119,7 @@ def getLiveBarData():
         "receiver_therm_eff_change" : receiver_therm_eff_pct_change,
         "net_power_out" : net_power_out,
         "net_power_out_change" : net_power_out_pct_change,
-        "elec_power_to_grid" : elec_power_to_grid,
-        "elec_power_to_grid_change" : elec_power_to_grid_pct_change,
+        "tou_value" : tou_value,
         "field_optical_eff" : field_optical_eff,
         "field_optical_eff_change" : field_optical_eff_pct_change
     }
