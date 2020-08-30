@@ -189,14 +189,14 @@ def title_to_col(title):
     col_name = title.lower().replace(' ','_')
     return col_name
 
-def update(attr, old, new):
-    # Update plots when widgets change
-
-    # Update visible plots
+def update_lines(attr, old, new):
+    # Update visible lines
     for label in lines.keys():
         label_name = col_to_title(label)
         lines[label].visible = label_name in [plot_select.labels[i] for i in plot_select.active]
 
+
+def update_points(attr, old, new):
     # Get updated time block information
     time_box = list(TIME_BOXES.keys())[radio_button_group.active]
 
@@ -211,7 +211,7 @@ radio_button_group = RadioButtonGroup(
     labels=["Today", "Last 6 Hours", "Last 12 Hours", "Last 24 Hours", "Last 48 Hours"], 
     active=0,
     width_policy='min')
-radio_button_group.on_change('active', update)
+radio_button_group.on_change('active', update_points)
 
 # Create Checkbox Select Group Widget
 labels_list = [col_to_title(label) for label in data_labels[2:]]
@@ -221,7 +221,7 @@ plot_select = CheckboxButtonGroup(
     width_policy='min'
 )
 
-plot_select.on_change('active', update)
+plot_select.on_change('active', update_lines)
 
 # Set initial plot information
 initial_plots = [title_to_col(plot_select.labels[i]) for i in plot_select.active]
