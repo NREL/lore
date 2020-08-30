@@ -41,7 +41,6 @@ for i, data_label in enumerate(data_labels[2:]):
 lines = {}
 
 def getDashboardData(_range, _values_list, queue):
-    pdb.set_trace()
     queryset = dd.objects.filter(timestamp__range=_range).values_list(*_values_list)
     df = pd.DataFrame.from_records(queryset)
     df.columns=_values_list
@@ -80,7 +79,6 @@ def make_dataset(time_box):
     predictive_data_df = q.get()
     predictive_cds = ColumnDataSource(predictive_data_df)
 
-    pdb.set_trace()
     return predictive_cds, current_cds
 
 # Styling for a plot
@@ -102,14 +100,10 @@ def style(p):
 
     return p
 
-def make_plot(src, current_src): # Takes in a ColumnDataSource
-    # Create the plot
+def make_plot(pred_src, curr_src): # (Predictive, Current)
+    ## Create the plot
 
-    # start_datetime = current_datetime.replace(hour=0, minute=0)
-
-    # initialTimeRange = DataRange1d(start=start_datetime, end = start_datetime + datetime.timedelta(days=1))
-
-    time = src.data['timestamp']
+    time = pred_src.data['timestamp']
     plot = figure(
         tools="", # this gives us our tools
         x_axis_type="datetime",
@@ -118,23 +112,24 @@ def make_plot(src, current_src): # Takes in a ColumnDataSource
         toolbar_location = None,
         x_axis_label = None,
         y_axis_label = "Power (MWe)",
-        # x_range=initialTimeRange,
         output_backend='webgl'
         )
 
+    plot.x_range.range_padding=0.02
+    plot.x_range.range_padding_units="percent"
     plot.extra_y_ranges = {"mwt": DataRange1d()}
     plot.add_layout(LinearAxis(y_range_name="mwt", axis_label="Power (MWt)"), 'right')
     legend = Legend(orientation='horizontal', location='top_center', spacing=10)
     
     # Add current time vertical line
-    current_line = Span(
+    current_time_line = Span(
         location=current_datetime,
         dimension='height',
         line_color='white',
         line_dash='dashed',
         line_width=2
     )
-    plot.add_layout(current_line)
+    plot.add_layout(current_time_line)
 
     for label in data_labels[2:]:
         legend_label = col_to_title(label)
@@ -148,7 +143,7 @@ def make_plot(src, current_src): # Takes in a ColumnDataSource
                 hover_alpha = 1.0,
                 y_range_name='mwt',
                 level='underlay',
-                source = current_src,
+                source = curr_src,
                 line_width=2,
                 visible=label in [title_to_col(plot_select.labels[i]) for i in plot_select.active],
                 )
@@ -165,7 +160,7 @@ def make_plot(src, current_src): # Takes in a ColumnDataSource
                 line_alpha = 0.7, 
                 hover_line_color = label_colors[label],
                 hover_alpha = 1.0,
-                source= current_src if label == 'actual' else src,
+                source= curr_src if label == 'actual' else pred_src,
                 level='glyph' if label == 'actual' else 'underlay',
                 line_width=3 if label == 'actual' else 2,
                 visible=label in [title_to_col(plot_select.labels[i]) for i in plot_select.active],
@@ -173,7 +168,6 @@ def make_plot(src, current_src): # Takes in a ColumnDataSource
 
             legend_item = LegendItem(label=legend_label + " [MWe]", renderers=[lines[label]])
             legend.items.append(legend_item)
-            plot.y_range.renderers.append(lines[label])
     
     # styling
     plot = style(plot)
@@ -206,15 +200,12 @@ def update(attr, old, new):
     # Get updated time block information
     time_box = list(TIME_BOXES.keys())[radio_button_group.active]
 
-    # Update ranges
-    if time_box == 'TODAY':
-        plot.x_range.start = current_datetime.replace(hour=0, minute=0)
-        plot.x_range.end = current_datetime.replace(hour=0, minute=0) + datetime.timedelta(days=1)
-    else:   
-        plot.x_range.start = current_datetime - datetime.timedelta(hours=TIME_BOXES[time_box])
-        plot.x_range.end = current_datetime
+    # Update data
+    [new_pred_src, new_curr_src] = make_dataset(time_box)
+    pred_src.data = dict(new_pred_src.data)
+    curr_src.data = dict(new_curr_src.data)
 
-# Create widget layout
+## Create widget layout
 # Create radio button group widget
 radio_button_group = RadioButtonGroup(
     labels=["Today", "Last 6 Hours", "Last 12 Hours", "Last 24 Hours", "Last 48 Hours"], 
@@ -235,9 +226,8 @@ plot_select.on_change('active', update)
 # Set initial plot information
 initial_plots = [title_to_col(plot_select.labels[i]) for i in plot_select.active]
 
-pdb.set_trace()
-[src, current_src] = make_dataset('TODAY')
-plot = make_plot(src, current_src)
+[pred_src, curr_src] = make_dataset('TODAY')
+plot = make_plot(pred_src, curr_src)
 
 widgets = row(
     radio_button_group,
