@@ -11,6 +11,12 @@ import sqlite3
 import datetime
 import re
 
+from ui.models import DashboardDataRTO as dd
+from asgiref.sync import sync_to_async, async_to_sync
+import asyncio
+from threading import Thread
+import queue
+
 # DEBUG
 import pdb
 
@@ -20,26 +26,12 @@ TIME_BOXES = {'TODAY': 1,
               'LAST_24_HOURS': 24,
               'LAST_48_HOURS': 48
               }
-conn = sqlite3.connect('../../db.sqlite3')
-conn.row_factory = sqlite3.Row
-c = conn.cursor()
-data_labels = c.execute("pragma table_info('ui_dashboarddatarto')").fetchall()
-data_labels = [label[1] for label in data_labels]
 
-current_datetime = datetime.datetime.now().replace(year=2010) # Eventually the year will be removed
+data_labels = list(map(lambda col: col.name, dd._meta.get_fields()))
+
+current_datetime = datetime.datetime.now().replace(year=2010) # Eventually the year will be removed once live data is added
 delta_start = datetime.timedelta(days=2)
 delta_end = datetime.timedelta(days=1)
-
-data_base = c.execute("select * from ui_dashboarddatarto \
-    where ((rowid % 20 = 0) or (rowid > (select max(rowid) from ui_dashboarddatarto) - 20)) \
-    and (datetime(timestamp) > :start \
-    and datetime(timestamp) <= :end) \
-    or datetime(timestamp) == :curr",
-    {
-        'start': (current_datetime - delta_start), 
-        'end': (current_datetime + delta_end),
-        'curr': current_datetime}
-    ).fetchall()
 
 label_colors = {}
 for i, data_label in enumerate(data_labels[2:]):
@@ -48,29 +40,48 @@ for i, data_label in enumerate(data_labels[2:]):
     })
 lines = {}
 
+def getDashboardData(_range, _values_list, queue):
+    pdb.set_trace()
+    queryset = dd.objects.filter(timestamp__range=_range).values_list(*_values_list)
+    df = pd.DataFrame.from_records(queryset)
+    df.columns=_values_list
+    queue.put(df)
+
 def make_dataset(time_box):
     # Prepare data
-    
-    cds = ColumnDataSource(data={
-            'time': [datetime.datetime.strptime(entry['timestamp'], '%Y-%m-%d %H:%M') for entry in data_base]
-        })
-    current_cds = ColumnDataSource(data={
-            'time': [datetime.datetime.strptime(entry['timestamp'], '%Y-%m-%d %H:%M') for entry in data_base\
-                if datetime.datetime.strptime(entry['timestamp'], '%Y-%m-%d %H:%M') <= current_datetime]
-        })
-    
-    for i, plot_name in enumerate(data_labels[2:]):
-        if re.match('(actual|field.*)', plot_name) is not None:
-            current_cds.data.update({ 
-                plot_name: [entry[plot_name] for entry in data_base \
-                    if datetime.datetime.strptime(entry['timestamp'], '%Y-%m-%d %H:%M') <= current_datetime]
-            })
-        else:
-            cds.data.update({ 
-                plot_name: [entry[plot_name] for entry in data_base]
-            })
+    start_date = current_datetime.date()
+    end_date = current_datetime
+    pred_end_date = current_datetime.date() + datetime.timedelta(days=1)
 
-    return cds, current_cds
+    if time_box != 'TODAY':
+        start_date = current_datetime - datetime.timedelta(hours=TIME_BOXES[time_box])
+        end_date = current_datetime
+        pred_end_date = current_datetime
+
+    q = queue.Queue()
+
+    # Current Data
+    thread = Thread(target=getDashboardData, 
+        args=((start_date, end_date), 
+        ['timestamp', 'actual', 'field_operation_generated', 'field_operation_available'], 
+        q))
+    thread.start()
+    thread.join()
+    current_data_df = q.get()
+    current_cds = ColumnDataSource(current_data_df)
+
+    # Future Data
+    thread = Thread(target=getDashboardData, 
+        args=((start_date, pred_end_date), 
+        ['timestamp', 'optimal', 'scheduled'], 
+        q))
+    thread.start()
+    thread.join()
+    predictive_data_df = q.get()
+    predictive_cds = ColumnDataSource(predictive_data_df)
+
+    pdb.set_trace()
+    return predictive_cds, current_cds
 
 # Styling for a plot
 def style(p):
@@ -94,11 +105,11 @@ def style(p):
 def make_plot(src, current_src): # Takes in a ColumnDataSource
     # Create the plot
 
-    start_datetime = current_datetime.replace(hour=0, minute=0)
+    # start_datetime = current_datetime.replace(hour=0, minute=0)
 
-    initialTimeRange = DataRange1d(start=start_datetime, end = start_datetime + datetime.timedelta(days=1))
+    # initialTimeRange = DataRange1d(start=start_datetime, end = start_datetime + datetime.timedelta(days=1))
 
-    time = src.data['time']
+    time = src.data['timestamp']
     plot = figure(
         tools="", # this gives us our tools
         x_axis_type="datetime",
@@ -107,7 +118,7 @@ def make_plot(src, current_src): # Takes in a ColumnDataSource
         toolbar_location = None,
         x_axis_label = None,
         y_axis_label = "Power (MWe)",
-        x_range=initialTimeRange,
+        # x_range=initialTimeRange,
         output_backend='webgl'
         )
 
@@ -129,7 +140,7 @@ def make_plot(src, current_src): # Takes in a ColumnDataSource
         legend_label = col_to_title(label)
         if 'field' in label:
             lines[label] = plot.line( 
-                x='time',
+                x='timestamp',
                 y=label,
                 line_color = label_colors[label], 
                 line_alpha = 0.7, 
@@ -148,7 +159,7 @@ def make_plot(src, current_src): # Takes in a ColumnDataSource
 
         else:
             lines[label] = plot.line( 
-                x='time',
+                x='timestamp',
                 y=label,
                 line_color = label_colors[label], 
                 line_alpha = 0.7, 
@@ -224,6 +235,7 @@ plot_select.on_change('active', update)
 # Set initial plot information
 initial_plots = [title_to_col(plot_select.labels[i]) for i in plot_select.active]
 
+pdb.set_trace()
 [src, current_src] = make_dataset('TODAY')
 plot = make_plot(src, current_src)
 
@@ -233,16 +245,6 @@ widgets = row(
     plot_select)
 
 layout = column(widgets, plot, max_height=525, height_policy='max', width_policy='max')
-
-p = figure(
-     tools="", # this gives us our tools
-    x_axis_type="datetime",
-    width_policy='max',
-    height_policy='max',
-    toolbar_location = None,
-    x_axis_label = None,
-    y_axis_label = "Power (MWe)",
-)
 
 curdoc().add_root(layout)
 curdoc().theme = 'dark_minimal'

@@ -66,7 +66,7 @@ def getLiveBarData():
         pysam_output["P_out_net"],
         pysam_output["eta_field"]
     ))
-    
+
     # Get data from both the previous day and current date and hour
     prev_days_data = list(filter(lambda t: t[0] == prev_day, live_data))[0]
     curr_live_data = list(filter(lambda t: t[0] == current_time, live_data))[0]
@@ -102,8 +102,8 @@ def getLiveBarData():
     tou_value = curr_live_data[live_data_index['tou_value']]
 
     # field optical efficiency
-    field_optical_eff = curr_live_data[live_data_index['eta_field']]
-    prev_field_optical_eff = prev_days_data[live_data_index['eta_field']]
+    field_optical_eff = curr_live_data[live_data_index['eta_field']] * 100
+    prev_field_optical_eff = prev_days_data[live_data_index['eta_field']] * 100
     # Get % change
     if prev_field_optical_eff != 0:
         field_optical_eff_pct_change = ((field_optical_eff - prev_field_optical_eff) / prev_field_optical_eff) * 100
