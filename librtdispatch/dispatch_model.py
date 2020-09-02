@@ -94,12 +94,12 @@ class RealTimeDispatchModel(object):
         self.model.ucsu0 = pe.Param(mutable=True, initialize=params["ucsu0"]) #Initial cycle start-up energy inventory  [kWh\sst]
         self.model.ursu0 = pe.Param(mutable=True, initialize=params["ursu0"]) #Initial receiver start-up energy inventory [kWh\sst]
         self.model.wdot0 = pe.Param(mutable=True, initialize=params["wdot0"]) #Initial power cycle electricity generation [kW\sse]
-        self.model.yr0 = pe.Param(mutable=True, initialize=params["yr0"])  #1 if receiver is generating ``usable'' thermal power initially = pe.Param(mutable=True, initialize=0) 0 otherwise  [az] this is new.
-        self.model.yrsb0 = pe.Param(mutable=True, initialize=params["yrsb0"])  #1 if receiver is in standby mode initially = pe.Param(mutable=True, initialize=0) 0 otherwise  [az] this is new.
-        self.model.yrsu0 = pe.Param(mutable=True, initialize=params["yrsu0"])  #1 if receiver is in starting up initially = pe.Param(mutable=True, initialize=0) 0 otherwise    [az] this is new.
-        self.model.y0 = pe.Param(mutable=True, initialize=params["y0"])  #1 if cycle is generating electric power initially = pe.Param(mutable=True, initialize=0) 0 otherwise
-        self.model.ycsb0 = pe.Param(mutable=True, initialize=params["ycsb0"])  #1 if cycle is in standby mode initially = pe.Param(mutable=True, initialize=0) 0 otherwise
-        self.model.ycsu0 = pe.Param(mutable=True, initialize=params["ycsu0"])  #1 if cycle is in starting up initially = pe.Param(mutable=True, initialize=0) 0 otherwise    [az] this is new.
+        self.model.yr0 = pe.Param(mutable=True, initialize=params["yr0"])  #1 if receiver is generating ``usable'' thermal power initially, 0 otherwise  [az] this is new.
+        self.model.yrsb0 = pe.Param(mutable=True, initialize=params["yrsb0"])  #1 if receiver is in standby mode initially, 0 otherwise [az] this is new.
+        self.model.yrsu0 = pe.Param(mutable=True, initialize=params["yrsu0"])  #1 if receiver is in starting up initially, 0 otherwise    [az] this is new.
+        self.model.y0 = pe.Param(mutable=True, initialize=params["y0"])  #1 if cycle is generating electric power initially, 0 otherwise
+        self.model.ycsb0 = pe.Param(mutable=True, initialize=params["ycsb0"])  #1 if cycle is in standby mode initially, 0 otherwise
+        self.model.ycsu0 = pe.Param(mutable=True, initialize=params["ycsu0"])  #1 if cycle is in starting up initially, 0 otherwise    [az] this is new.
         self.model.Yu0 = pe.Param(mutable=True, initialize=params["Yu0"])  # duration that cycle has been generating electric power [h]
         self.model.Yd0 = pe.Param(mutable=True, initialize=params["Yd0"])  # duration that cycle has not been generating power (i.e., shut down or in standby mode) [h]
         self.model.Yu.pprint()
@@ -149,8 +149,6 @@ class RealTimeDispatchModel(object):
             self.model.beta_p = pe.Param(mutable=True, initialize=params["beta_p"])     #Bi-directional converter slope parameter
             self.model.beta_n = pe.Param(mutable=True, initialize=params["beta_n"])	  #Bi-directional converter slope parameter
             self.model.C_B = pe.Param(mutable=True, initialize=params["C_B"])
-            self.model.C_p = pe.Param(mutable=True, initialize=params["C_p"])
-            self.model.C_n = pe.Param(mutable=True, initialize=params["C_n"])
             self.model.I_upper_p = pe.Param(mutable=True, initialize=params["I_upper_p"])
             self.model.I_upper_n = pe.Param(mutable=True, initialize=params["I_upper_n"])  #Battery discharge current max
             self.model.S_B_lower = pe.Param(mutable=True, initialize=params["S_B_lower"])
