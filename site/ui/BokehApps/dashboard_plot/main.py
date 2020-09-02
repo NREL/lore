@@ -1,24 +1,22 @@
+# Bokeh
 from bokeh.plotting import figure
-from bokeh.models import ColumnDataSource, LinearAxis, DataRange1d, Legend, LegendItem, Span
+from bokeh.models import Span, ColumnDataSource, LinearAxis, DataRange1d, Legend, LegendItem, PanTool, WheelZoomTool, HoverTool, CustomJS
 from bokeh.models.widgets import Button, CheckboxButtonGroup, RadioButtonGroup
 from bokeh.palettes import Category20
 from bokeh.layouts import column, row, WidgetBox, Spacer
 from bokeh.themes import built_in_themes
-
-import pandas as pd
 from bokeh.io import curdoc
-import sqlite3
+from bokeh.events import DoubleTap
+
+# Data manipulation
+import pandas as pd
 import datetime
 import re
 
+# Asyncronous access to Django DB
 from ui.models import DashboardDataRTO as dd
-from asgiref.sync import sync_to_async, async_to_sync
-import asyncio
 from threading import Thread
 import queue
-
-# DEBUG
-import pdb
 
 TIME_BOXES = {'TODAY': 1,
               'LAST_6_HOURS': 6,
@@ -28,10 +26,7 @@ TIME_BOXES = {'TODAY': 1,
               }
 
 data_labels = list(map(lambda col: col.name, dd._meta.get_fields()))
-
 current_datetime = datetime.datetime.now().replace(year=2010) # Eventually the year will be removed once live data is added
-delta_start = datetime.timedelta(days=2)
-delta_end = datetime.timedelta(days=1)
 
 label_colors = {}
 for i, data_label in enumerate(data_labels[2:]):
@@ -54,7 +49,6 @@ def make_dataset(time_box):
 
     if time_box != 'TODAY':
         start_date = current_datetime - datetime.timedelta(hours=TIME_BOXES[time_box])
-        end_date = current_datetime
         pred_end_date = current_datetime
 
     q = queue.Queue()
@@ -62,8 +56,8 @@ def make_dataset(time_box):
     # Current Data
     thread = Thread(target=getDashboardData, 
         args=((start_date, end_date), 
-        ['timestamp', 'actual', 'field_operation_generated', 'field_operation_available'], 
-        q))
+            ['timestamp', 'actual', 'field_operation_generated', 'field_operation_available'], 
+            q))
     thread.start()
     thread.join()
     current_data_df = q.get()
@@ -103,9 +97,23 @@ def style(p):
 def make_plot(pred_src, curr_src): # (Predictive, Current)
     ## Create the plot
 
-    time = pred_src.data['timestamp']
+    # Setup plot tools
+    wheel_zoom_tool = WheelZoomTool(maintain_focus=False)
+    pan_tool = PanTool()
+    hover_tool = HoverTool(
+        tooltips=[
+            ('Data', '$name'),
+            ('Date', '$x{%a %b, %Y}'),
+            ('Time', '$x{%R}'),
+            ('Value', '$y'),
+        ],
+        formatters={
+            '$x':'datetime'
+        }
+    )
+
     plot = figure(
-        tools="", # this gives us our tools
+        tools=[wheel_zoom_tool, pan_tool, hover_tool], # this gives us our tools
         x_axis_type="datetime",
         width_policy='max',
         height_policy='max',
@@ -115,10 +123,20 @@ def make_plot(pred_src, curr_src): # (Predictive, Current)
         output_backend='webgl'
         )
 
+    # Set action to reset plot
+    plot.js_on_event(DoubleTap, CustomJS(args=dict(p=plot), code="""
+        p.reset.emit()
+    """))
+
+    plot.toolbar.active_drag = pan_tool
+    plot.toolbar.active_scroll = wheel_zoom_tool   
+
     plot.x_range.range_padding=0.02
     plot.x_range.range_padding_units="percent"
+
     plot.extra_y_ranges = {"mwt": DataRange1d()}
     plot.add_layout(LinearAxis(y_range_name="mwt", axis_label="Power (MWt)"), 'right')
+    
     legend = Legend(orientation='horizontal', location='top_center', spacing=10)
     
     # Add current time vertical line
@@ -146,6 +164,7 @@ def make_plot(pred_src, curr_src): # (Predictive, Current)
                 source = curr_src,
                 line_width=2,
                 visible=label in [title_to_col(plot_select.labels[i]) for i in plot_select.active],
+                name=legend_label
                 )
 
             legend_item = LegendItem(label=legend_label + " [MWt]", renderers=[lines[label]])
@@ -164,11 +183,13 @@ def make_plot(pred_src, curr_src): # (Predictive, Current)
                 level='glyph' if label == 'actual' else 'underlay',
                 line_width=3 if label == 'actual' else 2,
                 visible=label in [title_to_col(plot_select.labels[i]) for i in plot_select.active],
+                name=legend_label,
                 )
 
             legend_item = LegendItem(label=legend_label + " [MWe]", renderers=[lines[label]])
             legend.items.append(legend_item)
-    
+            plot.y_range.renderers.append(lines[label])
+
     # styling
     plot = style(plot)
 
@@ -191,27 +212,29 @@ def title_to_col(title):
 
 def update_lines(attr, old, new):
     # Update visible lines
+    selected_labels = [plot_select.labels[i] for i in plot_select.active]
+
     for label in lines.keys():
         label_name = col_to_title(label)
-        lines[label].visible = label_name in [plot_select.labels[i] for i in plot_select.active]
+        lines[label].visible = label_name in selected_labels
 
 
 def update_points(attr, old, new):
     # Get updated time block information
-    time_box = list(TIME_BOXES.keys())[radio_button_group.active]
+    time_box = list(TIME_BOXES.keys())[time_window.active]
 
     # Update data
     [new_pred_src, new_curr_src] = make_dataset(time_box)
-    pred_src.data = dict(new_pred_src.data)
-    curr_src.data = dict(new_curr_src.data)
+    pred_src.data.update(new_pred_src.data)
+    curr_src.data.update(new_curr_src.data)
 
 ## Create widget layout
 # Create radio button group widget
-radio_button_group = RadioButtonGroup(
+time_window = RadioButtonGroup(
     labels=["Today", "Last 6 Hours", "Last 12 Hours", "Last 24 Hours", "Last 48 Hours"], 
     active=0,
     width_policy='min')
-radio_button_group.on_change('active', update_points)
+time_window.on_change('active', update_points)
 
 # Create Checkbox Select Group Widget
 labels_list = [col_to_title(label) for label in data_labels[2:]]
@@ -230,7 +253,7 @@ initial_plots = [title_to_col(plot_select.labels[i]) for i in plot_select.active
 plot = make_plot(pred_src, curr_src)
 
 widgets = row(
-    radio_button_group,
+    time_window,
     Spacer(width_policy='max'),
     plot_select)
 

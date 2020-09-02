@@ -1,76 +1,76 @@
+# Bokeh
 from bokeh.plotting import figure
-from bokeh.models import ColumnDataSource, LinearAxis, DataRange1d, Legend, LegendItem, Band, Range1d
+from bokeh.models import ColumnDataSource, LinearAxis, DataRange1d, Legend, LegendItem, Band, Range1d, CustomJS, HoverTool, WheelZoomTool, PanTool
 from bokeh.models.widgets import CheckboxButtonGroup, RadioButtonGroup, Div, DateSlider, Slider, Button, Select, DatePicker
 from bokeh.palettes import Category20
 from bokeh.layouts import column, row, WidgetBox, Spacer
 from bokeh.themes import built_in_themes
-
-import pandas as pd
+from bokeh.events import DoubleTap
 from bokeh.io import curdoc
-import sqlite3
+
+# Data manipulation
+import pandas as pd
 import datetime
 import numpy as np
 import re
-import operator
 from scipy.signal import savgol_filter
-from functools import reduce
 
-conn = sqlite3.connect('../../db.sqlite3')
-conn.row_factory = sqlite3.Row
-c = conn.cursor()
-data_labels_forecast_solar = c.execute("pragma table_info('ui_forecastssolardata')").fetchall()
-data_labels_forecast_solar = list(map(lambda x: x['name'], data_labels_forecast_solar ))
+# Asyncronous Access to Django DB
+from ui.models import ForecastsSolarData as fsd
+from threading import Thread
+import queue
+
+data_labels_forecast_solar = list(map(lambda col: col.name, fsd._meta.get_fields()))
 current_datetime = datetime.datetime.now().replace(year=2010)
 
-label_colors = {}
+plus_minus_regx = re.compile('.*(?<!_minus)(?<!_plus)$')
+base_data_labels = list(filter(plus_minus_regx.search, data_labels_forecast_solar))
+num_colors = len(base_data_labels[2:])
+label_colors = {col+'_color': i*2 for i,col in enumerate(base_data_labels[2:])}
 lines = {}
 bands = {}
 
-yMax = 0
+def getForecastSolarData(_range, queue):
+    queryset = fsd.objects.filter(timestamp__range=_range).values_list(*(data_labels_forecast_solar[1:]))
+    df = pd.DataFrame.from_records(queryset)
+    df.columns = data_labels_forecast_solar[1:]
+    queue.put(df)
 
-def make_dataset(range_start, range_end, distribution):
+def getTimeRange(queue):
+    times = fsd.objects.values_list('timestamp')
+    
+    start_date = times.order_by('timestamp').first()[0]
+    end_date = current_datetime
+    queue.put((start_date, end_date))
+
+def make_dataset(start_date, end_date, distribution):
     # Prepare data
     
-    data = c.execute("select * from ui_forecastssolardata \
-        where rowid % 30 = 0 \
-        and datetime(timestamp) > :range_start \
-        and datetime(timestamp) <= :range_end",
-        {
-            'range_start': range_start, 
-            'range_end': range_end}
-        ).fetchall()
- 
-    cds = ColumnDataSource(data={
-        'time': [datetime.datetime.strptime(entry['timestamp'], '%Y-%m-%d %H:%M') for entry in data]
-    })
+    q = queue.Queue()
 
-    for i,col_name in enumerate([label for label in data_labels_forecast_solar[2:] if re.search('_(minus|plus)', label) is None]):
-        cds.data.update({
-            col_name: [entry[col_name] for entry in data]
-        })
-        
-        label_colors.update({
-            col_name+'_color': i*2
-        })
+    # Get raw data
+    thread = Thread(target=getForecastSolarData,
+        args=((start_date, end_date),
+        q))
+    thread.start()
+    thread.join()
+    data_df = q.get()
+    cds = ColumnDataSource(data_df)
 
-        r = re.compile(col_name+'_(minus|plus)')
+    # Create Columns for lower and upper error bounds
 
-        if len(list(filter(r.search, data_labels_forecast_solar))) == 2:
+    for col_name in base_data_labels[3:]:
+        val_arr = np.array(cds.data[col_name])
+        val_minus_arr = np.array(cds.data[col_name+'_minus'])/100
+        val_plus_arr = np.array(cds.data[col_name+'_plus'])/100
+        cds.data[col_name+'_lower'] = list(\
+            val_arr - np.multiply(val_arr, val_minus_arr))
+        cds.data[col_name+'_upper'] = list(\
+            val_arr + np.multiply(val_arr, val_plus_arr))
 
-            value_arr = np.array(cds.data[col_name])
-            value_minus_arr = np.array(
-                [entry[col_name+'_minus']/100 for entry in data]) # Divide by 100 for percentage (%)
-            value_plus_arr = np.array(
-                [entry[col_name+'_plus']/100 for entry in data]) # Divide by 100 for percentage (%)
-
-            cds.data[col_name+'_lower'] = list(\
-                value_arr - np.multiply(value_arr, value_minus_arr))
-            cds.data[col_name+'_upper'] = list(\
-                value_arr + np.multiply(value_arr, value_plus_arr))
-    y_max = int(max(reduce(lambda entry_a, entry_b: entry_a + entry_b, list(cds.data.values())[1:])))
     if distribution == "Smoothed":
-        window, order = 5, 3
-        for label in filter(lambda x: x != 'clear_sky', cds.column_names[1:]):
+        window, order = 51, 3
+        for label in cds.column_names[2:]:
             cds.data[label] = savgol_filter(cds.data[label], window, order)
     
     return cds
@@ -95,53 +95,90 @@ def style(p):
     return p
 
 def make_plot(src): # Takes in a ColumnDataSource
-    # Create the plot
-    time = src.data['time']
-    y_max = int(max(reduce(lambda entry_a, entry_b: entry_a + entry_b, list(src.data.values())[1:])))
+    ## Create the plot
     
+    # Setup plot tools
+    wheel_zoom_tool = WheelZoomTool(maintain_focus=False)
+    pan_tool = PanTool()
+    hover_tool = HoverTool(
+        tooltips=[
+            ('Data','$name'),
+            ('Date', '$x{%a %b, %Y}'),
+            ('Time', '$x{%R}'),
+            ('Value', '$y')
+        ],
+        formatters={
+            '$x':'datetime'
+        }
+    )
+
     plot = figure(
-        tools="", # this gives us our tools
+        tools=[wheel_zoom_tool, pan_tool, hover_tool], # this gives us our tools
         x_axis_type="datetime",
         toolbar_location = None,
         x_axis_label = None,
         y_axis_label = "Power (W/m^2)",
         width_policy='max',
         height_policy='max',
-        y_range=(0,y_max),
         output_backend='webgl'
         )
+
+    # Set action to reset plot
+    plot.js_on_event(DoubleTap, CustomJS(args=dict(p=plot), code="""
+        p.reset.emit()
+    """))
+
+    plot.toolbar.active_drag = pan_tool
+    plot.toolbar.active_scroll = wheel_zoom_tool
+
+    plot.x_range.range_padding=0.02
+    plot.x_range.range_padding_units="percent"
+
     legend = Legend(orientation='horizontal', location='top_center', spacing=10)
-    for label in [label for label in src.column_names[1:]]:
+    
+    for label in base_data_labels[2:]:
 
         legend_label = col_to_title_upper(label)
-
-        if not re.search('(_lower|_upper)', label) is None:
-            value_name = re.split('(_lower|_upper)', label)[0]
-            bands[value_name] = Band(
-                base='time',
-                lower= value_name + '_lower',
-                upper= value_name + '_upper',
+        lower_upper_regex = re.compile(label+'(_plus|_minus)')
+        if len(list(filter(lower_upper_regex.search, data_labels_forecast_solar))):
+            bands[label] = Band(
+                base='timestamp',
+                lower= label + '_lower',
+                upper= label + '_upper',
                 source=src,
                 level = 'underlay',
-                fill_alpha=1.0,
-                fill_color=Category20[20][label_colors[value_name+'_color']+1],
+                fill_alpha=0.4,
+                fill_color=Category20[20][label_colors[label+'_color']+1],
                 line_width=1, 
                 line_color='black',
                 visible = label in [title_to_col(plot_select.labels[i]) for i in plot_select.active],
                 name = label,
                 )
-            plot.add_layout(bands[value_name])
+            plot.add_layout(bands[label])
+            lines[label] = plot.line( 
+                x='timestamp',
+                y=label,
+                line_color = Category20[20][label_colors[label+'_color']], 
+                line_alpha = 1.0,
+                line_width=3,
+                source=src,
+                visible = label in [title_to_col(plot_select.labels[i]) for i in plot_select.active],
+                name = legend_label,
+               
+                )
+            legend_item = LegendItem(label=legend_label, renderers=[lines[label]])
+            legend.items.append(legend_item)
         else:
             color = Category20[20][label_colors[label+'_color']]
             lines[label] = plot.line( 
-                x='time',
+                x='timestamp',
                 y=label,
                 line_color = color, 
                 line_alpha = 1.0,
                 line_width=3,
                 source=src,
                 visible = label in [title_to_col(plot_select.labels[i]) for i in plot_select.active],
-                name = label,
+                name = legend_label,
                
                 )
             legend_item = LegendItem(label=legend_label, renderers=[lines[label]])
@@ -167,10 +204,10 @@ def title_to_col(title):
     col_name = title.lower().replace(' ','_')
     return col_name
 
-def update():
+def update_points(attr, old, new):
     # Update range when sliders move and update button is clicked
     delta = datetime.timedelta(hours=date_span_slider.value)
-    selected_date = datetime.datetime.combine(date_slider.value_as_datetime, datetime.datetime.min.time())
+    selected_date =date_slider.value_as_datetime
     range_start = range_end = selected_date
     if( datetime.timedelta(0) > delta):
         range_start += delta
@@ -181,54 +218,62 @@ def update():
     src.data.update(new_src.data)
 
 
-def update_plots(attr, old, new):
-    # Update plots when widgets change
- 
+def update_lines(attr, old, new):
+    # Update visible lines 
     selected_labels = [plot_select.labels[i] for i in plot_select.active]
 
-    yMax = 0
-
-    # Update visible plots
     for label in lines.keys():
         label_name = col_to_title_upper(label)
         lines[label].visible = label_name in selected_labels
-        if lines[label].visible and yMax < max(lines[label].data_source.data[label]):
-            yMax = max(lines[label].data_source.data[label])
+        if label in bands.keys():
+            bands[label].visible = lines[label].visible
+        
 
 
 
-# Create widgets
-# Create Checkbox Select Group Widget
-labels_list = [col_to_title_upper(label) for label in data_labels_forecast_solar[2:] if re.search('_(minus|plus)', label) is None]
+## Create widgets
+# Select for plots to show
 plot_select = CheckboxButtonGroup(
-    labels = labels_list,
+    labels = list(map(col_to_title_upper, base_data_labels[2:])),
     active = [0],
     width_policy='min',
     css_classes=['bokeh_buttons']
 )
-plot_select.on_change('active', update_plots)
+plot_select.on_change('active', update_lines)
 
 # Create Date Slider
 # Get start and end date in table
-end_date = c.execute('select datetime(timestamp) as timestamp from ui_forecastssolardata order by datetime(timestamp) desc limit 1').fetchall()
-end_date = end_date[0]['timestamp']
-start_date = c.execute('select datetime(timestamp) as timestamp from ui_forecastssolardata order by datetime(timestamp) asc limit 1').fetchall()
-start_date = start_date[0]['timestamp']
-date_slider = DateSlider(title='Date', start=start_date, end=end_date, value=current_datetime, step=1, width=150)
-# date_picker = DatePicker(title='Date', min_date=start_date, max_date=end_date, value=current_datetime.date(), width=150)
+q = queue.Queue()
+thread = Thread(target=getTimeRange, args=(q,))
+thread.start()
+thread.join()
+(start_date, end_date) = q.get()
+
+date_slider = DateSlider(
+    title='Date',
+    start=start_date.date(), 
+    end=end_date, 
+    value=end_date,
+    step=1, 
+    width=150)
+date_slider.on_change('value_throttled', update_points)
 
 # Create Date Range Slider
-date_span_slider = Slider(title='Time Span (Hours)', start=-240, end=240, value=24, step=4, width=150)
-
-# Create Update Button
-update_range_button = Button(label='Update', button_type='primary', width=100)
-update_range_button.on_click(update)
+date_span_slider = Slider(
+    title='Time Span (Hours)', 
+    start=-240, 
+    end=240, 
+    value=-24,
+    step=4, 
+    width=150)
+date_span_slider.on_change('value_throttled', update_points)
 
 distribution_init = 'Discrete'
 distribution_select = Select(
     value=distribution_init,
     options=['Discrete', 'Smoothed'],
     width=125)
+distribution_select.on_change('value', update_points)
 
 title = Div(text="""<h3>Solar</h3>""")
 
@@ -236,29 +281,26 @@ title = Div(text="""<h3>Solar</h3>""")
 initial_plots = [title_to_col(plot_select.labels[i]) for i in plot_select.active]
 
 delta_init = datetime.timedelta(hours=24)
-src = make_dataset(current_datetime.date(), current_datetime.date() + delta_init, distribution_init)
+src = make_dataset(current_datetime - delta_init, current_datetime, distribution_init)
 
 plot = make_plot(src)
 
 # Setup Widget Layouts
-widgets = row(
-    column(
+layout = column(
+    row(
+        title,
+        Spacer(width_policy='max'),
+        distribution_select,
         date_slider,
         date_span_slider),
-    Spacer(width_policy='max'),
-    column(
-        Spacer(height_policy='max'),
-        plot_select,
-        row(
-            Spacer(width_policy='max'),
-            distribution_select,
-            update_range_button
-        )
-    ),
-    width_policy='max'
-)
-
-layout = column(title, widgets, plot, max_height=525, height_policy='max', width_policy='max')
+    row(
+        Spacer(width_policy='max'),
+        plot_select
+    ), 
+    plot, 
+    max_height=525,
+    height_policy='max', 
+    width_policy='max')
 
 # Show to current document/page
 curdoc().add_root(layout)

@@ -17,6 +17,7 @@ import os
 # the key goes below, and in the bokehserver.service file
 os.environ["BOKEH_SECRET_KEY"] = "EjjWMPEawukdfV0gf5Mk0vvcEMCUflFjx8X3T8RviD65"
 os.environ["BOKEH_SIGN_SESSIONS"] = "False"
+os.environ["BOKEH_RESOURCES"] = "cdn"
 
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

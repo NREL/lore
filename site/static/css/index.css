@@ -246,12 +246,13 @@ svg.fa-sort-down {
 }
 
 .row{
-  margin: auto 0 !important;
+  margin: 0 0 !important;
 }
 
 .plots.row, .tables.row{
   margin-bottom: 20px !important;
   padding: 20px auto;
+  display: flex;
 }
 .data-forecast .plots.row{
   justify-content: space-between;

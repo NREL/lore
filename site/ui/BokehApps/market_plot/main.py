@@ -1,63 +1,75 @@
+# Bokeh
 from bokeh.plotting import figure
-from bokeh.models import ColumnDataSource, LinearAxis, DataRange1d, Legend, LegendItem, Band
+from bokeh.models import ColumnDataSource, LinearAxis, DataRange1d, Legend, LegendItem, Band, HoverTool, PanTool, WheelZoomTool, CustomJS, NumeralTickFormatter
 from bokeh.models.widgets import Button, CheckboxGroup, RadioButtonGroup, Div, Select
 from bokeh.palettes import Category20
 from bokeh.layouts import column, row, WidgetBox, Spacer
 from bokeh.themes import built_in_themes
-
-import pandas as pd
+from bokeh.events import DoubleTap
 from bokeh.io import curdoc
-import sqlite3
+
+# Data manipulation
+import pandas as pd
 import datetime
 import numpy as np
 from scipy.signal import savgol_filter
+import re
+
+# Asyncronous Access to Django DB
+from ui.models import ForecastsMarketData as fmd
+from threading import Thread
+import queue
 
 TIME_BOXES = {'NEXT_6_HOURS': 6,
               'NEXT_12_HOURS': 12,
               'NEXT_24_HOURS': 24,
               'NEXT_48_HOURS': 48
               }
-conn = sqlite3.connect('../../db.sqlite3')
-conn.row_factory = sqlite3.Row
-c = conn.cursor()
-data_labels = c.execute("pragma table_info('ui_forecastsmarketdata')").fetchall()
-data_labels = [label[1] for label in data_labels]
 
-current_datetime = datetime.datetime.now().replace(year=2010) # Eventually the year will be removed
-delta_end = datetime.timedelta(hours=TIME_BOXES['NEXT_48_HOURS'])
+data_labels = list(map(lambda col: col.name, fmd._meta.get_fields()))
+current_datetime = datetime.datetime.now().replace(year=2010) # Eventually the year will be removed once live data is added
 
-data_base = c.execute("select * from ui_forecastsmarketdata \
-    where (datetime(timestamp) > :start \
-    and datetime(timestamp) <= :end) \
-    or datetime(timestamp) == :curr",
-    {
-        'start': current_datetime, 
-        'end': (current_datetime + delta_end),
-        'curr': current_datetime}
-    ).fetchall()
+plus_minus_regx = re.compile('.*(?<!_minus)(?<!_plus)$')
+base_data_labels = list(filter(plus_minus_regx.search, data_labels))
+label_colors = {}
+for i, data_label in enumerate(data_labels[2:]):
+    label_colors.update({
+        data_label: Category20[12][i]
+    })
+lines = {}
 
-def make_dataset(distribution):
+def getForecastMarketData(_range, queue):
+    queryset = fmd.objects.filter(timestamp__range=_range).values_list(*(data_labels[1:]))
+    df = pd.DataFrame.from_records(queryset)
+    df.columns = data_labels[1:]
+    queue.put(df)
+
+def make_dataset(time_box):
     # Prepare data
+    start_date = current_datetime
+    end_date = current_datetime + datetime.timedelta(hours=TIME_BOXES[time_box])
 
-    # Market Forecast
-    value = [entry[data_labels[2]] for entry in data_base]
-    value_ar = np.array(value)
+    q = queue.Queue()
 
-    # Get error percentages
-    lower_ar = np.array([entry[data_labels[3]]/100 for entry in data_base])
-    upper_ar = np.array([entry[data_labels[4]]/100 for entry in data_base])
-   
-    cds = ColumnDataSource(data=dict(
-            time = [datetime.datetime.strptime(entry['timestamp'], '%Y-%m-%d %H:%M') for entry in data_base],
-            value = value,
-            lower = list(- np.multiply(value_ar, lower_ar) + value_ar),
-            upper = list(np.multiply(value_ar, upper_ar) + value_ar)
-        ))
+    # Get raw data
+    thread = Thread(target=getForecastMarketData,
+        args=((start_date, end_date),
+        q))
+    thread.start()
+    thread.join()
+    data_df = q.get()
+    cds = ColumnDataSource(data_df)
 
-    if distribution == "Smoothed":
-        window, order = 51, 3
-        for label in ['lower','upper']:
-            cds.data[label] = savgol_filter(cds.data[label], window, order)
+    # Create Columns for lower and upper error bounds
+
+
+    val_arr = np.array(cds.data['market_forecast'])
+    val_minus_arr = np.array(cds.data['ci_minus'])/100
+    val_plus_arr = np.array(cds.data['ci_plus'])/100
+    cds.data['market_forecast_lower'] = list(\
+        val_arr - np.multiply(val_arr, val_minus_arr))
+    cds.data['market_forecast_upper'] = list(\
+        val_arr + np.multiply(val_arr, val_plus_arr))
 
     return cds
 
@@ -81,44 +93,68 @@ def style(p):
     return p
 
 def make_plot(src): # Takes in a ColumnDataSource
-    # Create the plot
+    ## Create the plot
+
+    # Add tools to plot
+    wheel_zoom_tool = WheelZoomTool(maintain_focus=False)
+    pan_tool = PanTool()
+    hover_tool = HoverTool(
+        tooltips=[
+            ('Data', '$name'),
+            ('Date', '$x{%a %b, %Y}'),
+            ('Time', '$x{%R}'),
+            ('Value', '$y')
+        ],
+        formatters={
+            '$x':'datetime'
+        }
+    )
 
     plot = figure(
-        tools="", # this gives us our tools
+        tools=[wheel_zoom_tool, pan_tool, hover_tool], # this gives us our tools
         x_axis_type="datetime",
-        sizing_mode = 'scale_both',
-        width_policy='max',
-        plot_height=250,
         toolbar_location = None,
         x_axis_label = None,
-        y_axis_label = "Forecast ($)",
-        x_range=(current_datetime, 
-            current_datetime + datetime.timedelta(
-                hours=TIME_BOXES['NEXT_24_HOURS'])),
-        y_range=(-0.2, max(src.data['upper']) + 0.2),
-        output_backend='webgl'
+        y_axis_label = "Market Forecast",
+        output_backend='webgl',
+        sizing_mode='scale_width',
+        aspect_ratio=2
         )
 
+    # Set action to reset plot
+    plot.js_on_event(DoubleTap, CustomJS(args=dict(p=plot), code="""
+        p.reset.emit()
+    """))
+
+    plot.toolbar.active_drag = pan_tool
+    plot.toolbar.active_scroll = wheel_zoom_tool
+
+    plot.x_range.range_padding=0.02
+    plot.x_range.range_padding_units="percent"
+
+    # Set tick format to percentage
+    plot.yaxis[0].formatter = NumeralTickFormatter(format='0.00%')
+
     plot.line( 
-        x='time',
-        y='value',
+        x='timestamp',
+        y='market_forecast',
         line_color = 'green', 
-        line_alpha = 0.7, 
-        hover_line_color = 'green',
-        hover_alpha = 1.0,
+        line_alpha = 1.0, 
         line_width=3,
         source=src,
+        name='Market Forectast'
         )
 
     band = Band(
-        base='time',
-        lower='lower',
-        upper='upper',
+        base='timestamp',
+        lower='market_forecast_lower',
+        upper='market_forecast_upper',
         source=src,
         level = 'underlay',
-        fill_alpha=1.0, 
+        fill_color = 'green',
+        fill_alpha=0.4,
         line_width=1, 
-        line_color='black',
+        line_alpha=0.0,
         )
 
     plot.add_layout(band)
@@ -127,44 +163,47 @@ def make_plot(src): # Takes in a ColumnDataSource
 
     return plot
 
-def update(attr, old, new):
-    active_time_window = window.options.index(window.value)
+def update_points(attr, old, new):
+    # Update plots when widgets change
+
+    # Get updated time block information
+    active_time_window = time_window.options.index(time_window.value)
     time_box = list(TIME_BOXES.keys())[active_time_window]
-    plot.x_range.end = current_datetime \
-        + datetime.timedelta(hours=TIME_BOXES[time_box])
-    new_src = make_dataset(distribution_select.value)
+
+    # Update data
+    new_src = make_dataset(time_box)
     src.data.update(new_src.data)
     
 
 
 # Create widget layout
 
-distribution = 'Discrete'
-distribution_select = Select(
-    value=distribution, 
-    options=['Discrete', 'Smoothed'],
-    width=150)
-distribution_select.on_change('value', update)
-
-time_window = "Next 24 Hours"
-window = Select(
+time_window_init = "Next 24 Hours"
+time_window = Select(
     options=["Next 6 Hours", "Next 12 Hours", "Next 24 Hours", "Next 48 Hours"], 
-    value=time_window,
+    value=time_window_init,
     width=150)
-window.on_change('value', update)
+time_window.on_change('value', update_points)
 
-src = make_dataset(distribution)
+src = make_dataset('NEXT_24_HOURS')
 
 plot = make_plot(src)
 
 widgets = row(
-    window,
-    distribution_select,
-    width_policy='min')
+    Spacer(width_policy='max'),
+    time_window
+    )
 
-title = Div(text="""<h3>Market</h3>""")
+title = Div(text="""<h3>Market Forecast</h3>""")
 
-layout = column(title, widgets, plot, width_policy='max')
+layout = column(
+    row(
+        title,
+        widgets,
+        width_policy='max'),
+    plot,
+    sizing_mode='stretch_both'
+)
 
 curdoc().add_root(layout)
 curdoc().theme = 'dark_minimal'

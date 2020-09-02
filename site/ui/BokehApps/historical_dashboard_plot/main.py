@@ -1,61 +1,79 @@
+# Bokeh
 from bokeh.plotting import figure
-from bokeh.models import ColumnDataSource, LinearAxis, DataRange1d, Legend, LegendItem, Span
+from bokeh.models import ColumnDataSource, LinearAxis, DataRange1d, Legend, LegendItem, PanTool, WheelZoomTool, HoverTool, CustomJS, Span
 from bokeh.models.widgets import CheckboxButtonGroup, RadioButtonGroup, Div, DateSlider, Slider, Button, DatePicker
 from bokeh.palettes import Category20
 from bokeh.layouts import column, row, WidgetBox, Spacer
 from bokeh.themes import built_in_themes
-
-import pandas as pd
+from bokeh.events import DoubleTap
 from bokeh.io import curdoc
+
+# Data manipulation
+import pandas as pd
 import sqlite3
 import datetime
 import re
 
-conn = sqlite3.connect('../../db.sqlite3')
-conn.row_factory = sqlite3.Row
-c = conn.cursor()
-data_labels = c.execute("pragma table_info('ui_dashboarddatarto')").fetchall()
-data_labels = list(map(lambda x: x['name'], data_labels ))
+# Asyncronous Access to Django DB
+from ui.models import DashboardDataRTO as dd
+from threading import Thread
+import queue
+
+data_labels = list(map(lambda col: col.name, dd._meta.get_fields()))
 current_datetime = datetime.datetime.now().replace(year=2010)
 
-label_colors = {}
+label_colors = {col+'_color': i*2 for i,col in enumerate(data_labels[2:])}
+
 for i, data_label in enumerate(data_labels[2:]):
     label_colors.update({
         data_label: Category20[12][i]
     })
 lines = {}
 
-def make_dataset(range_start, range_end):
-    # Prepare data
-    data = c.execute("select * from ui_dashboarddatarto \
-        where ((rowid % 30 = 0) or (rowid > (select max(rowid) from ui_dashboarddatarto) -30)) \
-        and datetime(timestamp) > :range_start \
-        and datetime(timestamp) <= :range_end",
-        {
-            'range_start':range_start, 
-            'range_end':range_end}
-        ).fetchall()
-
-    cds = ColumnDataSource(data={
-            'time': [datetime.datetime.strptime(entry['timestamp'], '%Y-%m-%d %H:%M') for entry in data]
-        })
-
-    current_cds = ColumnDataSource(data={
-            'time': [datetime.datetime.strptime(entry['timestamp'], '%Y-%m-%d %H:%M') for entry in data\
-                if datetime.datetime.strptime(entry['timestamp'], '%Y-%m-%d %H:%M') <= current_datetime]
-        })
+def getDashboardData(_range, _values_list, queue):
     
-    for i, plot_name in enumerate(data_labels[2:]):
-        if re.match('(actual|field.*)', plot_name) is not None:
-            current_cds.data.update({ 
-                plot_name: [entry[plot_name] for entry in data if datetime.datetime.strptime(entry['timestamp'], '%Y-%m-%d %H:%M') <= current_datetime]
-            })
-        else:
-            cds.data.update({ 
-                plot_name: [entry[plot_name] for entry in data]
-            })
+    queryset = dd.objects.filter(timestamp__range=_range).values_list(*_values_list)
+    df = pd.DataFrame.from_records(queryset)
+    
+    df.columns = _values_list
+    queue.put(df)
 
-    return cds, current_cds
+def getTimeRange(queue):
+    times = dd.objects.values_list('timestamp')
+    start_date = times.order_by('timestamp').first()[0]
+    end_date = current_datetime
+    queue.put((start_date, end_date))
+
+def make_dataset(start_date, end_date):
+    # Prepare data
+    start_date = start_date
+    end_datetime = datetime.datetime.combine(end_date, datetime.datetime.min.time())
+    end_date = current_datetime if current_datetime <= end_datetime else end_date 
+    pred_end_date = end_date
+
+    q = queue.Queue()
+
+    # Get Current Data
+    thread = Thread(target=getDashboardData,
+        args=((start_date, end_date),
+            ['timestamp', 'actual', 'field_operation_generated', 'field_operation_available'],
+            q))
+    thread.start()
+    thread.join()
+    current_data_df = q.get()
+    current_cds = ColumnDataSource(current_data_df)
+
+    # Get Future Data
+    thread = Thread(target=getDashboardData, 
+        args=((start_date, pred_end_date), 
+        ['timestamp', 'optimal', 'scheduled'], 
+        q))
+    thread.start()
+    thread.join()
+    predictive_data_df = q.get()
+    predictive_cds = ColumnDataSource(predictive_data_df)
+
+    return predictive_cds, current_cds
 
 # Styling for a plot
 def style(p):
@@ -76,12 +94,26 @@ def style(p):
 
     return p
 
-def make_plot(src, current_src): # Takes in a ColumnDataSource
-    # Create the plot
+def make_plot(pred_src, curr_src): # (Predictive, Current)
+    ## Create the plot
 
-    time = src.data['time']
+    # Setup plot tools
+    wheel_zoom_tool = WheelZoomTool(maintain_focus=False)
+    pan_tool = PanTool()
+    hover_tool = HoverTool(
+        tooltips=[
+            ('Data','$name'),
+            ('Date', '$x{%a %b, %Y}'),
+            ('Time', '$x{%R}'),
+            ('Value', '$y')
+        ],
+        formatters={
+            '$x':'datetime'
+        }
+    )
+
     plot = figure(
-        tools="", # this gives us our tools
+        tools=[hover_tool, wheel_zoom_tool, pan_tool], # this gives us our tools
         x_axis_type="datetime",
         width_policy='max',
         height_policy='max',
@@ -90,9 +122,20 @@ def make_plot(src, current_src): # Takes in a ColumnDataSource
         y_axis_label = "Power (MWe)",
         output_backend='webgl'
         )
+    # Set action to reset plot
+    plot.js_on_event(DoubleTap, CustomJS(args=dict(p=plot), code="""
+        p.reset.emit()
+    """))
+
+    plot.toolbar.active_drag = pan_tool
+    plot.toolbar.active_scroll = wheel_zoom_tool
+
+    plot.x_range.range_padding=0.02
+    plot.x_range.range_padding_units="percent"
 
     plot.extra_y_ranges = {"mwt": DataRange1d()}
     plot.add_layout(LinearAxis(y_range_name="mwt", axis_label="Power (MWt)"), 'right')
+    
     legend = Legend(orientation='horizontal', location='top_center', spacing=10)
     
     # Add current time vertical line
@@ -109,7 +152,7 @@ def make_plot(src, current_src): # Takes in a ColumnDataSource
         legend_label = col_to_title(label)
         if 'field' in label:
             lines[label] = plot.line( 
-                x='time',
+                x='timestamp',
                 y=label,
                 line_color = label_colors[label], 
                 line_alpha = 0.7, 
@@ -117,27 +160,30 @@ def make_plot(src, current_src): # Takes in a ColumnDataSource
                 hover_alpha = 1.0,
                 y_range_name='mwt',
                 level='underlay',
-                source = current_src,
+                source = curr_src,
                 line_width=3,
                 visible=label in [title_to_col(plot_select.labels[i]) for i in plot_select.active],
+                name=legend_label
                 )
 
             legend_item = LegendItem(label=legend_label.replace('Operation', 'Op.') + " [MWt]", renderers=[lines[label]])
             legend.items.append(legend_item)
+
             plot.extra_y_ranges['mwt'].renderers.append(lines[label])
 
         else:
             lines[label] = plot.line( 
-                x='time',
+                x='timestamp',
                 y=label,
                 line_color = label_colors[label], 
                 line_alpha = 0.7, 
                 hover_line_color = label_colors[label],
                 hover_alpha = 1.0,
-                source= current_src if label == 'actual' else src,
+                source= curr_src if label == 'actual' else pred_src,
                 level='glyph' if label == 'actual' else 'underlay',
                 line_width=3 if label == 'actual' else 2,
                 visible=label in [title_to_col(plot_select.labels[i]) for i in plot_select.active],
+                name=legend_label
                 )
 
             legend_item = LegendItem(label=legend_label + " [MWe]", renderers=[lines[label]])
@@ -156,7 +202,7 @@ def col_to_title(label):
     # Convert column name to title
 
     legend_label = ' '.join([word.title() for word in label.split('_')])
-
+    legend_label = legend_label.replace('Operation', 'Op.')
     return legend_label
 
 def title_to_col(title):
@@ -165,9 +211,15 @@ def title_to_col(title):
     col_name = title.lower().replace(' ','_')
     return col_name
 
-yMax = 0
-def updateRange():
-    global yMax
+def update_lines(attr, old, new):
+    # Update visible lines
+    selected_labels = [plot_select.labels[i] for i in plot_select.active]
+    
+    for label in lines.keys():
+        label_name = col_to_title(label)
+        lines[label].visible = label_name in selected_labels
+
+def update_points(attr, old, new):
     # Update range when sliders move and update button is clicked
     delta = datetime.timedelta(hours=date_span_slider.value)
     selected_date = datetime.datetime.combine(date_slider.value_as_datetime, datetime.datetime.min.time())
@@ -176,26 +228,9 @@ def updateRange():
         range_start += delta
     else:
         range_end += delta
-    [new_src, new_current_src] = make_dataset(range_start, range_end)
-    src.data.update(new_src.data)
-    current_src.data.update(new_current_src.data)
-
-    for label in lines.keys():
-        if lines[label].visible and yMax < max(lines[label].data_source.data[label]):
-            yMax = max(lines[label].data_source.data[label])
-            plot.y_range.end = yMax*1.33 if yMax*1.33 > 500  else 500
-
-
-def update(attr, old, new):
-    global yMax
-    # Update plots when widgets change
-
-    # Update visible plots
-    for label in lines.keys():
-        label_name = col_to_title(label)
-        plot_select_labels = list(map(lambda label: label.replace('Op.', 'Operation'), plot_select.labels))
-        lines[label].visible = label_name in [plot_select_labels[i] for i in plot_select.active]
-
+    [new_pred_src, new_curr_src] = make_dataset(range_start, range_end)
+    pred_src.data.update(new_pred_src.data)
+    curr_src.data.update(new_curr_src.data)
 
 # Create widget layout
 # Create Checkbox Select Group Widget
@@ -209,24 +244,34 @@ plot_select = CheckboxButtonGroup(
     background='#15191c'
 
 )
-plot_select.on_change('active', update)
+plot_select.on_change('active', update_lines)
 
 # Create Date Slider
 # Get start and end date in table
-end_date = c.execute('select timestamp from ui_dashboarddatarto order by id desc limit 1').fetchall()
-end_date = end_date[0]['timestamp']
-start_date = c.execute('select timestamp from ui_dashboarddatarto order by id asc limit 1').fetchall()
-start_date = start_date[0]['timestamp']
-date_slider = DateSlider(title='Date', start=start_date, end=end_date, value=current_datetime, step=1, width=150)
-# date_picker = DatePicker(title='Date', min_date=start_date, max_date=end_date, value=current_datetime.date(), width=150)
+q = queue.Queue()
+thread = Thread(target=getTimeRange, args=(q,))
+thread.start()
+thread.join()
+(start_date, end_date) = q.get()
+
+date_slider = DateSlider(
+    title='Date',
+    start=start_date.date(), 
+    end=end_date.date(), 
+    value=current_datetime.date(),
+    step=1, 
+    width=150)
+date_slider.on_change('value_throttled', update_points)
 
 # Create Date Range Slider
-date_span_slider = Slider(title='Time Span (Hours)', start=-240, end=240, value=24, step=4, width=150)
-
-
-# Create Update Button
-update_range_button = Button(label='Update', button_type='primary', width=100)
-update_range_button.on_click(updateRange)
+date_span_slider = Slider(
+    title='Time Span (Hours)', 
+    start=-240, 
+    end=240, 
+    value=-24, 
+    step=4, 
+    width=150)
+date_span_slider.on_change('value_throttled', update_points)
 
 title = Div(text="""<h3>Dashboard Data</h3>""")
 
@@ -234,30 +279,26 @@ title = Div(text="""<h3>Dashboard Data</h3>""")
 initial_plots = [title_to_col(plot_select.labels[i]) for i in plot_select.active]
 
 delta_init = datetime.timedelta(hours=24)
-src, current_src = make_dataset(current_datetime.date(), current_datetime.date() + delta_init)
-
-plot = make_plot(src, current_src)
+[pred_src, curr_src] = make_dataset(current_datetime - delta_init, current_datetime)
+plot = make_plot(pred_src, curr_src)
 
 # Setup Widget Layouts
 
-widgets = column(
+layout = column(
     row(
+        title,
         Spacer(width_policy='max'),
-        plot_select,
-        Spacer(width_policy='max'),
-        width_policy='max'          
+        date_slider,
+        date_span_slider
     ),
     row(
-        date_slider,
         Spacer(width_policy='max'),
-        date_span_slider,
-        Spacer(width_policy='max'),
-        update_range_button,
-        width_policy='max'), 
-    width_policy='max'
-    )
-
-layout = column(title, widgets, plot, max_height=525, height_policy='max', width_policy='max')
+        plot_select
+    ), 
+    plot, 
+    max_height=525, 
+    height_policy='max', 
+    width_policy='max')
 
 curdoc().add_root(layout)
 curdoc().theme = 'dark_minimal'
