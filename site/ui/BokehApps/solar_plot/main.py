@@ -107,7 +107,7 @@ def make_plot(src): # Takes in a ColumnDataSource
             ('Data','$name'),
             ('Date', '$x{%a %b, %Y}'),
             ('Time', '$x{%R}'),
-            ('Value', '$y')
+            ('Value', '$y W/m^2')
         ],
         formatters={
             '$x':'datetime'
@@ -150,7 +150,7 @@ def make_plot(src): # Takes in a ColumnDataSource
                 upper= label + '_upper',
                 source=src,
                 level = 'underlay',
-                fill_alpha=0.4,
+                fill_alpha=0.2,
                 fill_color=Category20[20][label_colors[label+'_color']+1],
                 line_width=1, 
                 line_alpha=0.0,

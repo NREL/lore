@@ -1,15 +1,3 @@
-.tile_count .tile_stats_count:before {
-    content: "";
-    position: absolute;
-    left: 0;
-    height: 80px;
-    border-left: 1px solid #ADB2B5;
-}
-
-.tile_count .tile_stats_count:first-child:before {
-    border-left: 0;
-}
-
 .tile_count .tile_stats_count span {
     font-size: 13px;
 }
@@ -39,8 +27,4 @@
 
 .red {
     color: #E74C3C;
-}
-
-.yellowgreen{
-    color: yellowgreen;
 }

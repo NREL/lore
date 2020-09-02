@@ -1,6 +1,6 @@
 # Bokeh
 from bokeh.plotting import figure
-from bokeh.models import ColumnDataSource, LinearAxis, DataRange1d, Legend, LegendItem, Band, Range1d, CustomJS, HoverTool, WheelZoomTool, PanTool
+from bokeh.models import ColumnDataSource, LinearAxis, DataRange1d, Legend, LegendItem, Band, Range1d, CustomJS, HoverTool, WheelZoomTool, PanTool, Span
 from bokeh.models.widgets import CheckboxButtonGroup, RadioButtonGroup, Div, DateSlider, Slider, Button, Select, DatePicker
 from bokeh.palettes import Category20
 from bokeh.layouts import column, row, WidgetBox, Spacer
@@ -45,6 +45,8 @@ def getTimeRange(queue):
 
 def make_dataset(start_date, end_date, distribution):
     # Prepare data
+    if end_date > current_datetime:
+        return src
     
     q = queue.Queue()
 
@@ -136,6 +138,16 @@ def make_plot(src): # Takes in a ColumnDataSource
 
     legend = Legend(orientation='horizontal', location='top_center', spacing=10)
     
+    # Add current time vertical line
+    current_line = Span(
+        location=current_datetime,
+        dimension='height',
+        line_color='white',
+        line_dash='dashed',
+        line_width=2
+    )
+    plot.add_layout(current_line)
+
     for label in base_data_labels[2:]:
 
         legend_label = col_to_title_upper(label)
@@ -290,11 +302,11 @@ layout = column(
     row(
         title,
         Spacer(width_policy='max'),
-        distribution_select,
         date_slider,
         date_span_slider),
     row(
         Spacer(width_policy='max'),
+        distribution_select,
         plot_select
     ), 
     plot, 

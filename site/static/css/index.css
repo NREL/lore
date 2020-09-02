@@ -187,7 +187,7 @@ svg.fa-sort-down {
 .livestatus {
   color: white;
   float: right;
-  padding: 14px 16px;
+  padding: 0 15px 0 0;
   position: absolute;
   top: 0;
   right: 0;
@@ -219,7 +219,7 @@ svg.fa-sort-down {
   display: flex;
   flex-wrap: wrap;
   justify-content:center;
-  margin-top: 60px;
+  margin-top: 30px;
 }
 
 .sidebar-navigation .csp-logo {
@@ -236,9 +236,13 @@ svg.fa-sort-down {
   margin-top: 10px;
 }
 
-.col .card{
+.col .card, .tile_stats_count .card{
   border: none;
   background-color: #15191c;
+}
+
+.tile_stats_count .card{
+  height: 100%;
 }
 
 .row:has( .card.h-100){

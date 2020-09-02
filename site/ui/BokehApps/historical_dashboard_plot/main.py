@@ -47,33 +47,22 @@ def getTimeRange(queue):
 def make_dataset(start_date, end_date):
     # Prepare data
     start_date = start_date
-    end_datetime = datetime.datetime.combine(end_date, datetime.datetime.min.time())
-    end_date = current_datetime if current_datetime <= end_datetime else end_date 
-    pred_end_date = end_date
+    if end_date > current_datetime:
+        return src
 
     q = queue.Queue()
 
     # Get Current Data
     thread = Thread(target=getDashboardData,
         args=((start_date, end_date),
-            ['timestamp', 'actual', 'field_operation_generated', 'field_operation_available'],
+            ['timestamp', 'actual', 'optimal', 'scheduled', 'field_operation_generated', 'field_operation_available'],
             q))
     thread.start()
     thread.join()
     current_data_df = q.get()
-    current_cds = ColumnDataSource(current_data_df)
+    cds = ColumnDataSource(current_data_df)
 
-    # Get Future Data
-    thread = Thread(target=getDashboardData, 
-        args=((start_date, pred_end_date), 
-        ['timestamp', 'optimal', 'scheduled'], 
-        q))
-    thread.start()
-    thread.join()
-    predictive_data_df = q.get()
-    predictive_cds = ColumnDataSource(predictive_data_df)
-
-    return predictive_cds, current_cds
+    return cds
 
 # Styling for a plot
 def style(p):
@@ -94,7 +83,7 @@ def style(p):
 
     return p
 
-def make_plot(pred_src, curr_src): # (Predictive, Current)
+def make_plot(src): # (Source Data)
     ## Create the plot
 
     # Setup plot tools
@@ -155,12 +144,11 @@ def make_plot(pred_src, curr_src): # (Predictive, Current)
                 x='timestamp',
                 y=label,
                 line_color = label_colors[label], 
-                line_alpha = 0.7, 
+                line_alpha = 1.0, 
                 hover_line_color = label_colors[label],
-                hover_alpha = 1.0,
                 y_range_name='mwt',
                 level='underlay',
-                source = curr_src,
+                source = src,
                 line_width=3,
                 visible=label in [title_to_col(plot_select.labels[i]) for i in plot_select.active],
                 name=legend_label
@@ -176,12 +164,11 @@ def make_plot(pred_src, curr_src): # (Predictive, Current)
                 x='timestamp',
                 y=label,
                 line_color = label_colors[label], 
-                line_alpha = 0.7, 
+                line_alpha = 1.0, 
                 hover_line_color = label_colors[label],
-                hover_alpha = 1.0,
-                source= curr_src if label == 'actual' else pred_src,
+                source= src,
                 level='glyph' if label == 'actual' else 'underlay',
-                line_width=3 if label == 'actual' else 2,
+                line_width=3,
                 visible=label in [title_to_col(plot_select.labels[i]) for i in plot_select.active],
                 name=legend_label
                 )
@@ -228,9 +215,8 @@ def update_points(attr, old, new):
         range_start += delta
     else:
         range_end += delta
-    [new_pred_src, new_curr_src] = make_dataset(range_start, range_end)
-    pred_src.data.update(new_pred_src.data)
-    curr_src.data.update(new_curr_src.data)
+    new_src = make_dataset(range_start, range_end)
+    src.data.update(new_src.data)
 
 # Create widget layout
 # Create Checkbox Select Group Widget
@@ -279,8 +265,8 @@ title = Div(text="""<h3>Dashboard Data</h3>""")
 initial_plots = [title_to_col(plot_select.labels[i]) for i in plot_select.active]
 
 delta_init = datetime.timedelta(hours=24)
-[pred_src, curr_src] = make_dataset(current_datetime - delta_init, current_datetime)
-plot = make_plot(pred_src, curr_src)
+src = make_dataset(current_datetime - delta_init, current_datetime)
+plot = make_plot(src)
 
 # Setup Widget Layouts
 
