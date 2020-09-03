@@ -233,8 +233,9 @@ def update_points(attr, old, new):
 @gen.coroutine
 def live_update():
     ## Do a live update on the minute
+    global current_datetime
 
-    new_current_datetime = datetime.datetime.now().replace(year=2010, second=0) # Until live data is being used
+    new_current_datetime = datetime.datetime.now().replace(year=2010, second=0, microsecond=0) # Until live data is being used
 
     q = queue.Queue()
 
@@ -266,6 +267,8 @@ def live_update():
     pred_src.stream(predictive_data_df)
     df_temp = pred_src.to_df().drop([0]).drop('index', 1)
     pred_src.data.update(ColumnDataSource(df_temp).data)
+
+    current_datetime = new_current_datetime
 
 
 ## Create widget layout
@@ -301,5 +304,4 @@ layout = column(widgets, plot, max_height=525, height_policy='max', width_policy
 
 curdoc().add_root(layout)
 curdoc().add_periodic_callback(live_update, 60000)
-curdoc().theme = 'dark_minimal'
 curdoc().title = "Dashboard"

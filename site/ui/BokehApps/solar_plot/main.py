@@ -1,6 +1,6 @@
 # Bokeh
 from bokeh.plotting import figure
-from bokeh.models import ColumnDataSource, LinearAxis, DataRange1d, Legend, LegendItem, Band, HoverTool, WheelZoomTool, PanTool, CustomJS
+from bokeh.models import ColumnDataSource, LinearAxis, DataRange1d, Legend, LegendItem, Band, HoverTool, WheelZoomTool, PanTool, CustomJS, Span
 from bokeh.models.widgets import RadioButtonGroup, CheckboxButtonGroup, Div, Select
 from bokeh.palettes import Category20
 from bokeh.layouts import column, row, WidgetBox, Spacer
@@ -239,6 +239,7 @@ def update_points(attr, old, new):
 @gen.coroutine
 def live_update():
     ## Do a live update on the minute
+    global current_datetime
 
     new_current_datetime = datetime.datetime.now().replace(year=2010, second=0) # Until live data is being used
 
@@ -273,6 +274,8 @@ def live_update():
     src.stream(current_data_df)
     df_temp = src.to_df().drop([0]).drop('index', axis=1)
     src.data.update(ColumnDataSource(df_temp).data)
+
+    current_datetime = new_current_datetime
 
 # Create widgets
 # Create Radio Button Group Widget
@@ -337,5 +340,4 @@ layout = column(
 # Show to current document/page
 curdoc().add_root(layout)
 curdoc().add_periodic_callback(live_update, 60000)
-curdoc().theme = 'dark_minimal'
 curdoc().title = "Solar Forecast Plot"

@@ -222,6 +222,7 @@ def update_points(attr, old, new):
 @gen.coroutine
 def live_update():
     ## Do a live update on the minute
+    global current_datetime
 
     new_current_datetime = datetime.datetime.now().replace(year=2010, second=0) # Until live data is being used
 
@@ -242,6 +243,8 @@ def live_update():
     src.stream(current_data_df)
     df_temp = src.to_df().drop([0]).drop('index', axis=1)
     src.data.update(ColumnDataSource(df_temp).data)
+
+    current_datetime = new_current_datetime
 
 
 # Create widget layout
@@ -314,5 +317,4 @@ layout = column(
 
 curdoc().add_root(layout)
 curdoc().add_periodic_callback(live_update, 60000)
-curdoc().theme = 'dark_minimal'
 curdoc().title = "Historical Dashboard Plot"
