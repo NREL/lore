@@ -7,6 +7,7 @@ from bokeh.layouts import column, row, WidgetBox, Spacer
 from bokeh.themes import built_in_themes
 from bokeh.io import curdoc
 from bokeh.events import DoubleTap
+from tornado import gen
 
 # Data manipulation
 import pandas as pd
@@ -26,7 +27,7 @@ TIME_BOXES = {'TODAY': 1,
               }
 
 data_labels = list(map(lambda col: col.name, dd._meta.get_fields()))
-current_datetime = datetime.datetime.now().replace(year=2010) # Eventually the year will be removed once live data is added
+current_datetime = datetime.datetime.now().replace(year=2010, second=0) # Eventually the year will be removed once live data is added
 
 label_colors = {}
 for i, data_label in enumerate(data_labels[2:]):
@@ -124,14 +125,15 @@ def make_plot(pred_src, curr_src): # (Predictive, Current)
         )
 
     # Set action to reset plot
-    plot.js_on_event(DoubleTap, CustomJS(args=dict(p=plot), code="""
+    plot.js_on_event(DoubleTap, CustomJS(args=dict(p=plot), 
+    code="""
         p.reset.emit()
     """))
 
     plot.toolbar.active_drag = pan_tool
     plot.toolbar.active_scroll = wheel_zoom_tool   
 
-    plot.x_range.range_padding=0.02
+    plot.x_range.range_padding=0.005
     plot.x_range.range_padding_units="percent"
 
     plot.extra_y_ranges = {"mwt": DataRange1d()}
@@ -228,6 +230,44 @@ def update_points(attr, old, new):
     pred_src.data.update(new_pred_src.data)
     curr_src.data.update(new_curr_src.data)
 
+@gen.coroutine
+def live_update():
+    ## Do a live update on the minute
+
+    new_current_datetime = datetime.datetime.now().replace(year=2010, second=0) # Until live data is being used
+
+    q = queue.Queue()
+
+    # Update timeline for current time
+    getattr(plot, 'center')[2].location = new_current_datetime
+
+    # Current Data
+    thread = Thread(target=getDashboardData, 
+        args=((current_datetime, new_current_datetime), 
+            ['timestamp', 'actual', 'field_operation_generated', 'field_operation_available'], 
+            q))
+    thread.start()
+    thread.join()
+    current_data_df = q.get()
+
+    curr_src.stream(current_data_df)
+    df_temp = curr_src.to_df().drop([0]).drop('index', axis=1)
+    curr_src.data.update(ColumnDataSource(df_temp).data)
+
+    # Future Data
+    thread = Thread(target=getDashboardData, 
+        args=((current_datetime, new_current_datetime), 
+        ['timestamp', 'optimal', 'scheduled'],
+        q))
+    thread.start()
+    thread.join()
+    predictive_data_df = q.get()
+    
+    pred_src.stream(predictive_data_df)
+    df_temp = pred_src.to_df().drop([0]).drop('index', 1)
+    pred_src.data.update(ColumnDataSource(df_temp).data)
+
+
 ## Create widget layout
 # Create radio button group widget
 time_window = RadioButtonGroup(
@@ -260,5 +300,6 @@ widgets = row(
 layout = column(widgets, plot, max_height=525, height_policy='max', width_policy='max')
 
 curdoc().add_root(layout)
+curdoc().add_periodic_callback(live_update, 60000)
 curdoc().theme = 'dark_minimal'
 curdoc().title = "Dashboard"

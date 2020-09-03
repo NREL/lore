@@ -7,6 +7,7 @@ from bokeh.layouts import column, row, WidgetBox, Spacer
 from bokeh.themes import built_in_themes
 from bokeh.events import DoubleTap
 from bokeh.io import curdoc
+from tornado import gen
 
 # Data manipulation
 import pandas as pd
@@ -27,7 +28,7 @@ TIME_BOXES = {'NEXT_6_HOURS': 6,
               }
 
 data_labels = list(map(lambda col: col.name, fsd._meta.get_fields()))
-current_datetime = datetime.datetime.now().replace(year=2010) # Eventually the year will be removed once live data is added
+current_datetime = datetime.datetime.now().replace(year=2010, second=0) # Eventually the year will be removed once live data is added
 
 plus_minus_regx = re.compile('.*(?<!_minus)(?<!_plus)$')
 base_data_labels = list(filter(plus_minus_regx.search, data_labels))
@@ -133,11 +134,21 @@ def make_plot(src): # Takes in a ColumnDataSource
     plot.toolbar.active_drag = pan_tool
     plot.toolbar.active_scroll = wheel_zoom_tool
 
-    plot.x_range.range_padding=0.02
+    plot.x_range.range_padding=0.005
     plot.x_range.range_padding_units="percent"
 
     legend = Legend(orientation='vertical', location='top_left', spacing=10)
     
+    # Add current time vertical line
+    current_line = Span(
+        location=current_datetime,
+        dimension='height',
+        line_color='white',
+        line_dash='dashed',
+        line_width=2
+    )
+    plot.add_layout(current_line)
+
     for label in base_data_labels[2:]:
 
         legend_label = col_to_title_upper(label)
@@ -225,6 +236,44 @@ def update_points(attr, old, new):
     new_src = make_dataset(time_box, distribution_select.value)
     src.data.update(new_src.data)
 
+@gen.coroutine
+def live_update():
+    ## Do a live update on the minute
+
+    new_current_datetime = datetime.datetime.now().replace(year=2010, second=0) # Until live data is being used
+
+    # Change location of timeline
+    getattr(plot, 'center')[2].location = new_current_datetime
+
+    q = queue.Queue()
+    
+    # Get updated time block information
+    active_time_window = time_window.options.index(time_window.value)
+    time_box = list(TIME_BOXES.keys())[active_time_window]
+    time_delta = datetime.timedelta(hours=TIME_BOXES[time_box])
+
+    # Current Data
+    thread = Thread(target=getForecastSolarData, 
+        args=((current_datetime + time_delta, new_current_datetime + time_delta), 
+            q))
+    thread.start()
+    thread.join()
+    current_data_df = q.get()
+
+    # Add _lower and _upper columns for plotting
+    for col_name in base_data_labels[3:]:
+        val_arr = np.array(current_data_df[col_name])
+        val_minus_arr = np.array(current_data_df[col_name+'_minus'])/100
+        val_plus_arr = np.array(current_data_df[col_name+'_plus'])/100
+        current_data_df[col_name+'_lower'] = list(\
+            val_arr - np.multiply(val_arr, val_minus_arr))
+        current_data_df[col_name+'_upper'] = list(\
+            val_arr + np.multiply(val_arr, val_plus_arr))
+
+    src.stream(current_data_df)
+    df_temp = src.to_df().drop([0]).drop('index', axis=1)
+    src.data.update(ColumnDataSource(df_temp).data)
+
 # Create widgets
 # Create Radio Button Group Widget
 time_window_init = "Next 24 Hours"
@@ -287,5 +336,6 @@ layout = column(
 
 # Show to current document/page
 curdoc().add_root(layout)
+curdoc().add_periodic_callback(live_update, 60000)
 curdoc().theme = 'dark_minimal'
 curdoc().title = "Solar Forecast Plot"

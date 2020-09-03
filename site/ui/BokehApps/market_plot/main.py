@@ -1,12 +1,13 @@
 # Bokeh
 from bokeh.plotting import figure
-from bokeh.models import ColumnDataSource, LinearAxis, DataRange1d, Legend, LegendItem, Band, HoverTool, PanTool, WheelZoomTool, CustomJS, NumeralTickFormatter
+from bokeh.models import ColumnDataSource, LinearAxis, DataRange1d, Legend, LegendItem, Band, HoverTool, PanTool, WheelZoomTool, CustomJS, NumeralTickFormatter, Span
 from bokeh.models.widgets import Button, CheckboxGroup, RadioButtonGroup, Div, Select
 from bokeh.palettes import Category20
 from bokeh.layouts import column, row, WidgetBox, Spacer
 from bokeh.themes import built_in_themes
 from bokeh.events import DoubleTap
 from bokeh.io import curdoc
+from tornado import gen
 
 # Data manipulation
 import pandas as pd
@@ -27,7 +28,7 @@ TIME_BOXES = {'NEXT_6_HOURS': 6,
               }
 
 data_labels = list(map(lambda col: col.name, fmd._meta.get_fields()))
-current_datetime = datetime.datetime.now().replace(year=2010) # Eventually the year will be removed once live data is added
+current_datetime = datetime.datetime.now().replace(year=2010, second=0) # Eventually the year will be removed once live data is added
 
 plus_minus_regx = re.compile('.*(?<!_minus)(?<!_plus)$')
 base_data_labels = list(filter(plus_minus_regx.search, data_labels))
@@ -129,11 +130,21 @@ def make_plot(src): # Takes in a ColumnDataSource
     plot.toolbar.active_drag = pan_tool
     plot.toolbar.active_scroll = wheel_zoom_tool
 
-    plot.x_range.range_padding=0.02
+    plot.x_range.range_padding=0.005
     plot.x_range.range_padding_units="percent"
 
     # Set tick format to percentage
     plot.yaxis[0].formatter = NumeralTickFormatter(format='0.00%')
+
+    # Add current time vertical line
+    current_line = Span(
+        location=current_datetime,
+        dimension='height',
+        line_color='white',
+        line_dash='dashed',
+        line_width=2
+    )
+    plot.add_layout(current_line)
 
     plot.line( 
         x='timestamp',
@@ -173,6 +184,45 @@ def update_points(attr, old, new):
     # Update data
     new_src = make_dataset(time_box)
     src.data.update(new_src.data)
+
+@gen.coroutine
+def live_update():
+    ## Do a live update on the minute
+
+    new_current_datetime = datetime.datetime.now().replace(year=2010, second=0) # Until live data is being used
+    
+    # Change location of timeline
+    getattr(plot, 'center')[2].location = new_current_datetime
+
+    q = queue.Queue()
+
+    # Get updated time block information
+    active_time_window = time_window.options.index(time_window.value)
+    time_box = list(TIME_BOXES.keys())[active_time_window]
+    time_delta = datetime.timedelta(hours=TIME_BOXES[time_box])
+
+    # Current Data
+    thread = Thread(target=getForecastMarketData, 
+        args=((current_datetime + time_delta, new_current_datetime  + time_delta), 
+            q))
+    thread.start()
+    thread.join()
+    current_data_df = q.get()
+
+    # Add _lower and _upper columns for plotting
+  
+    val_arr = np.array(current_data_df['market_forecast'])
+    val_minus_arr = np.array(current_data_df['ci_minus'])/100
+    val_plus_arr = np.array(current_data_df['ci_plus'])/100
+    current_data_df['market_forecast_lower'] = list(\
+        val_arr - np.multiply(val_arr, val_minus_arr))
+    current_data_df['market_forecast_upper'] = list(\
+        val_arr + np.multiply(val_arr, val_plus_arr))
+    current_data_df.index.name = 'index'
+
+    src.stream(current_data_df)
+    df_temp = src.to_df().drop([0]).drop('index', axis=1)
+    src.data.update(ColumnDataSource(df_temp).data)
     
 
 
@@ -206,5 +256,6 @@ layout = column(
 )
 
 curdoc().add_root(layout)
+curdoc().add_periodic_callback(live_update, 60000)
 curdoc().theme = 'dark_minimal'
 curdoc().title = "Market Forecast Plot"

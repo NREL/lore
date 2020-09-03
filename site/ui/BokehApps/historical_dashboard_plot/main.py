@@ -7,6 +7,7 @@ from bokeh.layouts import column, row, WidgetBox, Spacer
 from bokeh.themes import built_in_themes
 from bokeh.events import DoubleTap
 from bokeh.io import curdoc
+from tornado import gen
 
 # Data manipulation
 import pandas as pd
@@ -20,7 +21,7 @@ from threading import Thread
 import queue
 
 data_labels = list(map(lambda col: col.name, dd._meta.get_fields()))
-current_datetime = datetime.datetime.now().replace(year=2010)
+current_datetime = datetime.datetime.now().replace(year=2010, second=0)
 
 label_colors = {col+'_color': i*2 for i,col in enumerate(data_labels[2:])}
 
@@ -119,7 +120,7 @@ def make_plot(src): # (Source Data)
     plot.toolbar.active_drag = pan_tool
     plot.toolbar.active_scroll = wheel_zoom_tool
 
-    plot.x_range.range_padding=0.02
+    plot.x_range.range_padding=0.005
     plot.x_range.range_padding_units="percent"
 
     plot.extra_y_ranges = {"mwt": DataRange1d()}
@@ -218,6 +219,31 @@ def update_points(attr, old, new):
     new_src = make_dataset(range_start, range_end)
     src.data.update(new_src.data)
 
+@gen.coroutine
+def live_update():
+    ## Do a live update on the minute
+
+    new_current_datetime = datetime.datetime.now().replace(year=2010, second=0) # Until live data is being used
+
+    # Change location of timeline
+    getattr(plot, 'center')[2].location = new_current_datetime
+
+    q = queue.Queue()
+
+    # Current Data
+    thread = Thread(target=getDashboardData, 
+        args=((current_datetime, new_current_datetime), 
+            ['timestamp', 'actual', 'optimal', 'scheduled', 'field_operation_generated', 'field_operation_available'],
+            q))
+    thread.start()
+    thread.join()
+    current_data_df = q.get()
+    
+    src.stream(current_data_df)
+    df_temp = src.to_df().drop([0]).drop('index', axis=1)
+    src.data.update(ColumnDataSource(df_temp).data)
+
+
 # Create widget layout
 # Create Checkbox Select Group Widget
 labels_list = [col_to_title(label) for label in data_labels[2:]]
@@ -287,5 +313,6 @@ layout = column(
     width_policy='max')
 
 curdoc().add_root(layout)
+curdoc().add_periodic_callback(live_update, 60000)
 curdoc().theme = 'dark_minimal'
 curdoc().title = "Historical Dashboard Plot"
