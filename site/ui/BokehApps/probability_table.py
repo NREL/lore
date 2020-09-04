@@ -5,7 +5,8 @@ from bokeh.io import curdoc
 from bokeh.models.widgets import Div
 from bokeh.layouts import column, row, WidgetBox, Spacer, layout
 from bokeh.models import ColumnDataSource, DataTable, DateFormatter, TableColumn
-from bokeh.themes import built_in_themes
+from bokeh.themes import Theme
+import theme
 
 probability_data = dict(
         probability_event=['Frost','Snow','Rain','Wind outage','Peak Demand','Unplanned outage'],

@@ -1,9 +1,26 @@
+:root{
+  /* Background Color */
+  --neutral1: #181d31;
+  --neutral2: #1f263c;
+
+  /* Gradient Stops */
+  --stop1: #2b2552;
+  --stop2: #502b69;
+  --stop3: #7b2c77;
+  --stop4: #a9257d;
+  --stop5: #b53894;
+  --stop6: #bf49ac;
+  --stop7: #c85bc5;
+  --stop8: #9981ed;
+  --stop9: #5a9fff;
+  --stop10: #00b6fd;
+  --stop11: #01c8ee;
+}
 body {
   padding: 0px;
   margin: 0;
-  color: white !important;
-  background-color: #1d262e !important;
-
+  background-color: var(--neutral1) !important;
+  color:white !important;
 }
 
 h1,h2,p,ul,li {
@@ -29,6 +46,7 @@ svg.fa-sort-down {
 .content {
   padding: 10px;
   margin-left: 75px;
+  /* background-color: var(--neutral); */
 }
 
 /* The side navigation menu */
@@ -38,7 +56,7 @@ svg.fa-sort-down {
   z-index: 1; /* Stay on top */
   top: 0; /* Stay at the top */
   left: 0;
-  background-color: #2b4055; /* Black*/
+  background-image: linear-gradient(0deg, black, var(--neutral2), var(--neutral2));
   overflow-x: hidden; /* Disable horizontal scroll */
   padding-left: 0px;
   padding-top: 10px; /* Place content 60px from the top */
@@ -185,7 +203,6 @@ svg.fa-sort-down {
 }
 
 .livestatus {
-  color: white;
   float: right;
   padding: 0 15px 0 0;
   position: absolute;
@@ -238,7 +255,7 @@ svg.fa-sort-down {
 
 .col .card, .tile_stats_count .card{
   border: none;
-  background-color: #15191c;
+  background-image: linear-gradient(45deg, black, var(--neutral2));
 }
 
 .tile_stats_count .card{
@@ -262,54 +279,64 @@ svg.fa-sort-down {
   justify-content: space-between;
 }
 
-.bokeh_buttons{
-  background-color: #1d262e !important;
-  color: white !important;
-  font-weight: bold;
-}
-
-.bk-root .bk-btn-default.bk-active{
-  background-color: #293744 !important;
-  color: white !important;
-  border-color: #1d2327;
-  border-width: 2px;
-}
-
-.bk-root .bk-btn-default {
-  color: white !important;
-  background-color: #15191c;
-  border-color: #1d2327;
-  border-width: 2px;
-}
-
-.bk-root .bk-btn-default:hover {
-  color: white !important;
-  background-color: #2b353d;
-  border-color: #1d2327;
-  border-width: 2px;
-}
-
-.bk-root .bk-input {
-  color: white;
-  background-color: #15191c;
-  border: 2px solid #1d2327;
-  border-radius: 4px;
-}
-
-.bk-root .slick-row.odd {
-  background: hsl(206, 14%, 10%);
-}
-
-.bk-root .slick-row{
-  background: hsl(206, 14%, 20%);
-}
-
-.bk-root .slick-header-column{
-  background:  hsl(206, 36%, 23%);
-}
-
-.active{
+.nav-btn.active{
   border-right-color: teal;
   border-right-width: 5px;
   border-right-style: solid;
 }
+
+/** BOKEH THEME ELEMENTS **/
+
+/* Select */
+select.bk.bk-input{
+  background-color:var(--neutral1);
+  background-image:url('data:image/svg+xml;utf8,<svg version="1.1" viewBox="0 0 25 20" xmlns="http://www.w3.org/2000/svg"><path d="M 0,0 25,0 12.5,20 Z" fill="white" /></svg>') !important;
+  color:white;
+  border-color:white !important;
+}
+
+select.bk.bk-input option{
+  background-color:var(--neutral1);
+  border:none;
+}
+
+/* Radio Buttons */
+.bk-btn-group > .bk-btn {
+  background-color: var(--neutral1);
+  color: white;
+  border-width: 1;
+  border-color: white;
+}
+
+.bk-btn-group > .bk-btn.bk-active {
+  background-color: var(--stop10);
+  color: var(--stop1);
+}
+
+.bk-btn-group > .bk-btn:hover {
+  background-color: var(--stop10);
+}
+
+/* Tables */
+.bk-root .slick-header-column {
+  background-image: none;
+  background-color: var(--neutral1);
+}
+
+.bk-root .slick-header-column:hover {
+  background-color: var(--stop8);
+  background-image: none;
+}
+
+.ui-widget-content.slick-row.even {
+  background-color: var(--stop1);
+}
+
+.ui-widget-content.slick-row.odd {
+  background-color: var(--neutral2);
+}
+
+.bk-root .slick-cell.selected {
+  background-color: var(--stop8);
+}
+

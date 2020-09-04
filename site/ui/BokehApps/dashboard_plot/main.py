@@ -4,10 +4,15 @@ from bokeh.models import Span, ColumnDataSource, LinearAxis, DataRange1d, Legend
 from bokeh.models.widgets import Button, CheckboxButtonGroup, RadioButtonGroup
 from bokeh.palettes import Category20
 from bokeh.layouts import column, row, WidgetBox, Spacer
-from bokeh.themes import built_in_themes
+from bokeh.themes import Theme
 from bokeh.io import curdoc
 from bokeh.events import DoubleTap
 from tornado import gen
+import sys
+sys.path.append('theme')
+sys.path.append('bokeh_utils')
+import theme
+import bokeh_utils as butil
 
 # Data manipulation
 import pandas as pd
@@ -305,3 +310,4 @@ layout = column(widgets, plot, max_height=525, height_policy='max', width_policy
 curdoc().add_root(layout)
 curdoc().add_periodic_callback(live_update, 60000)
 curdoc().title = "Dashboard"
+curdoc().theme = Theme(json=theme.json)

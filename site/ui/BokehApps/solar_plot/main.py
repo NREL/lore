@@ -4,10 +4,14 @@ from bokeh.models import ColumnDataSource, LinearAxis, DataRange1d, Legend, Lege
 from bokeh.models.widgets import RadioButtonGroup, CheckboxButtonGroup, Div, Select
 from bokeh.palettes import Category20
 from bokeh.layouts import column, row, WidgetBox, Spacer
-from bokeh.themes import built_in_themes
+from bokeh.themes import Theme, built_in_themes
 from bokeh.events import DoubleTap
 from bokeh.io import curdoc
 from tornado import gen
+import sys
+sys.path.append('theme')
+import theme
+
 
 # Data manipulation
 import pandas as pd
@@ -139,16 +143,6 @@ def make_plot(src): # Takes in a ColumnDataSource
 
     legend = Legend(orientation='vertical', location='top_left', spacing=10)
     
-    # Add current time vertical line
-    current_line = Span(
-        location=current_datetime,
-        dimension='height',
-        line_color='white',
-        line_dash='dashed',
-        line_width=2
-    )
-    plot.add_layout(current_line)
-
     for label in base_data_labels[2:]:
 
         legend_label = col_to_title_upper(label)
@@ -242,9 +236,6 @@ def live_update():
     global current_datetime
 
     new_current_datetime = datetime.datetime.now().replace(year=2010, second=0) # Until live data is being used
-
-    # Change location of timeline
-    getattr(plot, 'center')[2].location = new_current_datetime
 
     q = queue.Queue()
     
@@ -341,3 +332,4 @@ layout = column(
 curdoc().add_root(layout)
 curdoc().add_periodic_callback(live_update, 60000)
 curdoc().title = "Solar Forecast Plot"
+curdoc().theme = Theme(json=theme.json)

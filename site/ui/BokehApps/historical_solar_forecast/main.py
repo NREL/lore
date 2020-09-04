@@ -4,10 +4,15 @@ from bokeh.models import ColumnDataSource, LinearAxis, DataRange1d, Legend, Lege
 from bokeh.models.widgets import CheckboxButtonGroup, RadioButtonGroup, Div, DateSlider, Slider, Button, Select, DatePicker
 from bokeh.palettes import Category20
 from bokeh.layouts import column, row, WidgetBox, Spacer
-from bokeh.themes import built_in_themes
+from bokeh.themes import Theme
 from bokeh.events import DoubleTap
 from bokeh.io import curdoc
 from tornado import gen
+import sys
+sys.path.append('theme')
+sys.path.append('bokeh_utils')
+import theme
+import bokeh_utils as butil
 
 # Data manipulation
 import pandas as pd
@@ -44,16 +49,19 @@ def getTimeRange(queue):
     end_date = current_datetime
     queue.put((start_date, end_date))
 
-def make_dataset(start_date, end_date, distribution):
+def make_dataset(_start_date, _end_date, _distribution):
     # Prepare data
-    if end_date > current_datetime:
+    if _end_date > current_datetime and start_date >= current_datetime:
         return src
+    elif _end_date > current_datetime:
+        _end_date = current_datetime
+
     
     q = queue.Queue()
 
     # Get raw data
     thread = Thread(target=getForecastSolarData,
-        args=((start_date, end_date),
+        args=((_start_date, _end_date),
         q))
     thread.start()
     thread.join()
@@ -71,7 +79,7 @@ def make_dataset(start_date, end_date, distribution):
         cds.data[col_name+'_upper'] = list(\
             val_arr + np.multiply(val_arr, val_plus_arr))
 
-    if distribution == "Smoothed":
+    if _distribution == "Smoothed":
         window, order = 51, 3
         for label in cds.column_names[2:]:
             cds.data[label] = savgol_filter(cds.data[label], window, order)
@@ -219,14 +227,7 @@ def title_to_col(title):
 
 def update_points(attr, old, new):
     # Update range when sliders move and update button is clicked
-    delta = datetime.timedelta(hours=date_span_slider.value)
-    selected_date =date_slider.value_as_datetime
-    range_start = range_end = selected_date
-    if( datetime.timedelta(0) > delta):
-        range_start += delta
-    else:
-        range_end += delta
-
+    range_start, range_end = butil.get_update_range(date_slider, date_span_slider)
     new_src = make_dataset(range_start, range_end, distribution_select.value)
     src.data.update(new_src.data)
 
@@ -251,30 +252,34 @@ def live_update():
     q = queue.Queue()
 
     # Update timeline for current time
-    getattr(plot, 'center')[2].location = new_current_datetime
-    # Current Data
-    thread = Thread(target=getForecastSolarData, 
-        args=((current_datetime, new_current_datetime), 
-            q))
-    thread.start()
-    thread.join()
-    current_data_df = q.get()
+    _, range_end = butil.get_update_range(date_slider, date_span_slider)
+    if current_datetime <= range_end:
+        getattr(plot, 'center')[2].location = new_current_datetime
+        # Current Data
+        thread = Thread(target=getForecastSolarData, 
+            args=((current_datetime, new_current_datetime), 
+                q))
+        thread.start()
+        thread.join()
+        current_data_df = q.get()
 
-    # Add _lower and _upper columns for plotting
-    for col_name in base_data_labels[3:]:
-        val_arr = np.array(current_data_df[col_name])
-        val_minus_arr = np.array(current_data_df[col_name+'_minus'])/100
-        val_plus_arr = np.array(current_data_df[col_name+'_plus'])/100
-        current_data_df[col_name+'_lower'] = list(\
-            val_arr - np.multiply(val_arr, val_minus_arr))
-        current_data_df[col_name+'_upper'] = list(\
-            val_arr + np.multiply(val_arr, val_plus_arr))
+        # Add _lower and _upper columns for plotting
+        for col_name in base_data_labels[3:]:
+            val_arr = np.array(current_data_df[col_name])
+            val_minus_arr = np.array(current_data_df[col_name+'_minus'])/100
+            val_plus_arr = np.array(current_data_df[col_name+'_plus'])/100
+            current_data_df[col_name+'_lower'] = list(\
+                val_arr - np.multiply(val_arr, val_minus_arr))
+            current_data_df[col_name+'_upper'] = list(\
+                val_arr + np.multiply(val_arr, val_plus_arr))
 
-    src.stream(current_data_df)
-    df_temp = src.to_df().drop([0]).drop('index', axis=1)
-    src.data.update(ColumnDataSource(df_temp).data)
+        src.stream(current_data_df)
+        df_temp = src.to_df().drop([0]).drop('index', axis=1)
+        src.data.update(ColumnDataSource(df_temp).data)
 
     current_datetime = new_current_datetime
+    date_slider.end = current_datetime.date() + datetime.timedelta(days=1)
+
 
 ## Create widgets
 # Select for plots to show
@@ -297,7 +302,7 @@ thread.join()
 date_slider = DateSlider(
     title='Date',
     start=start_date.date(), 
-    end=end_date, 
+    end=end_date.date() + datetime.timedelta(days=1), 
     value=end_date,
     step=1, 
     width=150)
@@ -351,3 +356,4 @@ layout = column(
 curdoc().add_root(layout)
 curdoc().add_periodic_callback(live_update, 60000)
 curdoc().title = "Historical Solar Forecast Plot"
+curdoc().theme = Theme(json=theme.json)

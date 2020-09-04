@@ -4,10 +4,15 @@ from bokeh.models import ColumnDataSource, LinearAxis, DataRange1d, Legend, Lege
 from bokeh.models.widgets import CheckboxButtonGroup, RadioButtonGroup, Div, DateSlider, Slider, Button, DatePicker
 from bokeh.palettes import Category20
 from bokeh.layouts import column, row, WidgetBox, Spacer
-from bokeh.themes import built_in_themes
+from bokeh.themes import Theme
 from bokeh.events import DoubleTap
 from bokeh.io import curdoc
 from tornado import gen
+import sys
+sys.path.append('theme')
+sys.path.append('bokeh_utils')
+import theme
+import bokeh_utils as butil
 
 # Data manipulation
 import pandas as pd
@@ -45,17 +50,18 @@ def getTimeRange(queue):
     end_date = current_datetime
     queue.put((start_date, end_date))
 
-def make_dataset(start_date, end_date):
+def make_dataset(_start_date, _end_date):
     # Prepare data
-    start_date = start_date
-    if end_date > current_datetime:
+    if _end_date > current_datetime and start_date >= current_datetime:
         return src
+    elif _end_date > current_datetime:
+        _end_date = current_datetime
 
     q = queue.Queue()
 
     # Get Current Data
     thread = Thread(target=getDashboardData,
-        args=((start_date, end_date),
+        args=((_start_date, _end_date),
             ['timestamp', 'actual', 'optimal', 'scheduled', 'field_operation_generated', 'field_operation_available'],
             q))
     thread.start()
@@ -209,13 +215,7 @@ def update_lines(attr, old, new):
 
 def update_points(attr, old, new):
     # Update range when sliders move and update button is clicked
-    delta = datetime.timedelta(hours=date_span_slider.value)
-    selected_date = datetime.datetime.combine(date_slider.value_as_datetime, datetime.datetime.min.time())
-    range_start = range_end = selected_date
-    if( datetime.timedelta(0) > delta):
-        range_start += delta
-    else:
-        range_end += delta
+    range_start, range_end = butil.get_update_range(date_slider, date_span_slider)
     new_src = make_dataset(range_start, range_end)
     src.data.update(new_src.data)
 
@@ -224,27 +224,30 @@ def live_update():
     ## Do a live update on the minute
     global current_datetime
 
-    new_current_datetime = datetime.datetime.now().replace(year=2010, second=0) # Until live data is being used
+    new_current_datetime = datetime.datetime.now().replace(year=2010, second=0, microsecond=0) # Until live data is being used
 
     # Change location of timeline
     getattr(plot, 'center')[2].location = new_current_datetime
 
-    q = queue.Queue()
+    _, range_end = butil.get_update_range(date_slider, date_span_slider)
+    if current_datetime <= range_end:
+        q = queue.Queue()
 
-    # Current Data
-    thread = Thread(target=getDashboardData, 
-        args=((current_datetime, new_current_datetime), 
-            ['timestamp', 'actual', 'optimal', 'scheduled', 'field_operation_generated', 'field_operation_available'],
-            q))
-    thread.start()
-    thread.join()
-    current_data_df = q.get()
-    
-    src.stream(current_data_df)
-    df_temp = src.to_df().drop([0]).drop('index', axis=1)
-    src.data.update(ColumnDataSource(df_temp).data)
+        # Current Data
+        thread = Thread(target=getDashboardData, 
+            args=((current_datetime, new_current_datetime), 
+                ['timestamp', 'actual', 'optimal', 'scheduled', 'field_operation_generated', 'field_operation_available'],
+                q))
+        thread.start()
+        thread.join()
+        current_data_df = q.get()
+        
+        src.stream(current_data_df)
+        df_temp = src.to_df().drop([0]).drop('index', axis=1)
+        src.data.update(ColumnDataSource(df_temp).data)
 
     current_datetime = new_current_datetime
+    date_slider.end = current_datetime.date() + datetime.timedelta(days=1)
 
 
 # Create widget layout
@@ -254,9 +257,7 @@ labels_list = list(map(lambda label: label.replace('Operation', 'Op.'), labels_l
 plot_select = CheckboxButtonGroup(
     labels = labels_list,
     active = [0],
-    width_policy='min',
-    css_classes=['bokeh_buttons'],
-    background='#15191c'
+    width_policy='min'
 
 )
 plot_select.on_change('active', update_lines)
@@ -271,9 +272,9 @@ thread.join()
 
 date_slider = DateSlider(
     title='Date',
-    start=start_date.date(), 
-    end=end_date.date(), 
-    value=current_datetime.date(),
+    start=start_date, 
+    end=end_date.date() + datetime.timedelta(days=1), 
+    value=end_date,
     step=1, 
     width=150)
 date_slider.on_change('value_throttled', update_points)
@@ -318,3 +319,4 @@ layout = column(
 curdoc().add_root(layout)
 curdoc().add_periodic_callback(live_update, 60000)
 curdoc().title = "Historical Dashboard Plot"
+curdoc().theme = Theme(json=theme.json)
