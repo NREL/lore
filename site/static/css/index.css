@@ -346,3 +346,17 @@ select.bk.bk-input option{
   background-color: var(--stop8);
 }
 
+/* Modal Expand button */
+#expand {
+  font-size: 20px;
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  display: none;
+  transform-origin: left bottom;
+  transition: transform 0.1s linear 0.1s;
+}
+
+#expand:hover{
+  transform: scale(1.5);
+}

@@ -20,7 +20,8 @@ const removeLoader = function(mutationList, observer){
             }
             if(chartsLoaded == totalChartCount){
                 // Hide modal once all charts are loaded
-                $('.loader-modal').hide()
+                $('.loader-modal').hide();
+                $('svg#expand').show();
             }
             
         }
