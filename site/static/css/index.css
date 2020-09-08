@@ -16,11 +16,17 @@
   --stop10: #00b6fd;
   --stop11: #01c8ee;
 }
+
 body {
   padding: 0px;
   margin: 0;
   background-color: var(--neutral1) !important;
   color:white !important;
+  scrollbar-width: none;
+}
+
+body::-webkit-scrollbar{
+  display: none;
 }
 
 h1,h2,p,ul,li {

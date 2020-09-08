@@ -4,11 +4,12 @@
 <head>
     <!-- Stylesheets to load -->
     <link rel="stylesheet" href="{% static "css/unit.css" %}">
-    <link rel="stylesheet" href="{% static "css/index.css" %}">
     <link rel="stylesheet" href="{% static "css/bootstrap.min.css" %}">
     <link rel="stylesheet" href="{% static "css/DailyStatistics.css" %}">
     <link rel="stylesheet" href="{% static "css/fontawesome.all.min.css" %}">
     <link rel="icon" href="{% static "img/dtk32.png" %}">
+    <link rel="stylesheet" href="{% static "css/index.css" %}">
+    <link rel="stylesheet" href="{% static "css/loader.css" %}">
     
     <title>{% block title %}{% endblock %}</title>
     {% block head %}
@@ -21,6 +22,9 @@
 
     <!-- add live status markers -->
     {% include "snippets/live_status.html" %}
+
+    <!-- loader modal -->
+    {% include "snippets/loader_modal.html" %}
 
     <div class="content">
         {% block content %}
@@ -36,6 +40,7 @@
     <script type="text/javascript" src="{% static "js/bokeh-2.0.2.min.js" %}" crossorigin="anonymous"></script>
     <script type="text/javascript" src="{% static "js/bokeh-tables-2.0.2.min.js" %}" crossorigin="anonymous"></script>
     <script type="text/javascript" src="{% static "js/bokeh-widgets-2.0.2.min.js" %}" crossorigin="anonymous"></script>
+    <script type="text/javascript" src="{% static "js/loader.js" %}" ></script>
 
 </body>
 

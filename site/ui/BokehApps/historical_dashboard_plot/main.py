@@ -313,7 +313,7 @@ layout = column(
     ), 
     plot, 
     max_height=525, 
-    height_policy='max', 
+    height_policy='max',
     width_policy='max')
 
 curdoc().add_root(layout)

@@ -126,8 +126,10 @@ def make_plot(pred_src, curr_src): # (Predictive, Current)
         toolbar_location = None,
         x_axis_label = None,
         y_axis_label = "Power (MWe)",
-        output_backend='webgl'
+        output_backend='webgl',
         )
+
+    plot.css_classes = ['plot']
 
     # Set action to reset plot
     plot.js_on_event(DoubleTap, CustomJS(args=dict(p=plot), 
@@ -305,7 +307,12 @@ widgets = row(
     Spacer(width_policy='max'),
     plot_select)
 
-layout = column(widgets, plot, max_height=525, height_policy='max', width_policy='max')
+layout = column(
+    widgets, 
+    plot, 
+    max_height=525, 
+    height_policy='max', 
+    width_policy='max')
 
 curdoc().add_root(layout)
 curdoc().add_periodic_callback(live_update, 60000)

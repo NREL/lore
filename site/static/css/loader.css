@@ -1,0 +1,45 @@
+.loader-modal {
+  position: absolute;
+  height: 100%;
+  width: 100%;
+  background-color: hsla(0, 0%, 15%, 0.5);
+  display: block;
+}
+
+.loader {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+}
+
+.line {
+  animation: expand 1s ease-in-out infinite;
+  border-radius: 10px;
+  display: inline-block;
+  transform-origin: center center;
+  margin: 0 3px;
+  width: 1px;
+  height: 25px;
+  background: white
+}
+
+.line:nth-child(2) {
+  animation-delay: 200ms;
+}
+
+.line:nth-child(3) {
+  animation-delay: 400ms;
+}
+
+.line:nth-child(4) {
+  animation-delay: 600ms;
+}
+
+@keyframes expand {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(2);
+  }
+}
