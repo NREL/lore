@@ -266,10 +266,17 @@ svg.fa-sort-down {
 
 .tile_stats_count .card{
   height: 100%;
+  background-image: linear-gradient(45deg,var(--neutral2), black);
+  box-shadow: rgba(52, 73, 94, 0.44) 0 0 10px inset;
+
 }
 
 .row:has( .card.h-100){
   margin-top:20px;
+}
+
+.data .plots .row{
+  height: 70vh;
 }
 
 .row{
@@ -278,7 +285,7 @@ svg.fa-sort-down {
 
 .plots.row, .tables.row{
   margin-bottom: 20px !important;
-  padding: 20px auto;
+  padding: 20px 10px;
   display: flex;
 }
 .data-forecast .plots.row{
@@ -346,8 +353,9 @@ select.bk.bk-input option{
   background-color: var(--stop8);
 }
 
+/* CHART MODAL */
 /* Modal Expand button */
-#expand {
+.fa-expand {
   font-size: 20px;
   position: absolute;
   bottom: 10px;
@@ -357,6 +365,55 @@ select.bk.bk-input option{
   transition: transform 0.1s linear 0.1s;
 }
 
-#expand:hover{
+.fa-expand:hover{
   transform: scale(1.5);
+}
+
+/* Chart Modals */
+
+/* Modal Background */
+#chart-modal{
+  background-color: hsla(0,0%,0%,0.9);
+  padding-top: 10vh;
+}
+
+/* Modal Content (chart) */
+.modal-content {
+  margin: auto;
+  display: block;
+  width: 90vw;
+  height: 80vh;
+  background-color: var(--neutral2);
+  padding: 20px;
+  border-radius: 10px;
+  border-style:none;
+}
+
+/* Add Animation */
+.modal-content, #caption {  
+  animation-name: zoom;
+  animation-duration: 0.1s;
+}
+
+@keyframes zoom {
+  from {transform: scale(0.1)} 
+  to {transform: scale(1)}
+}
+
+/* The Close Button */
+.close {
+  position: absolute;
+  top: 15px;
+  right: 35px;
+  color: #f1f1f1;
+  font-size: 40px;
+  font-weight: bold;
+  transition: 0.3s;
+}
+
+.close:hover,
+.close:focus {
+  color: #bbb;
+  text-decoration: none;
+  cursor: pointer;
 }

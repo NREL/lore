@@ -21,12 +21,11 @@ const removeLoader = function(mutationList, observer){
             if(chartsLoaded == totalChartCount){
                 // Hide modal once all charts are loaded
                 $('.loader-modal').hide();
-                $('svg#expand').show();
+                $('.fa-expand').show();
             }
             
         }
     }
-
 }
 
 if (totalChartCount == 0){ // If there are no Bokeh charts, remove the modal
@@ -39,4 +38,50 @@ else{
 
     // Start observing the target node
     observer.observe(targetNode, config);
+}
+
+// MODAL CODE
+// Get the image and insert it inside the modal - use its "alt" text as a caption
+var modal = document.getElementById('chart-modal');
+var modalContent = document.getElementById("bokeh-chart");
+var captionText = document.getElementById("caption");
+
+// Get the <span> element that closes the modal
+var closeX = document.getElementsByClassName("close")[0];
+
+// When the user clicks on <span> (x) or hits ESC, close the modal
+closeX.onclick = close;
+$(document).on('keydown', function(e){
+    if(e.key == 'Escape'){
+        close();
+    }
+})
+function close() { 
+  modal.style.display = "none";
+
+  // Remove modal content
+  var modalContent = $('.modal-content');
+  modalContent.remove();
+}
+
+function openModal(el){
+
+  // Add Bokeh Script to modal content
+  var scriptElement = $(el.parentElement).find('#plot_script')[0].value;
+  modalContent = document.createElement('div');
+  modalContent.classList.add('modal-content');
+  modalContent.id = 'bokeh-chart';
+  modalContent.innerHTML = scriptElement;
+  $('#chart-modal')[0].appendChild(modalContent);
+
+  // Execute script in .modal-content
+  var script = $('#chart-modal').find('script')[0];
+
+  // Show modal
+  modal.style.display = "block";
+
+  // Timeout to let modal get to full size
+  setTimeout(eval(script.text), 500);
+  
+//   captionText.innerHTML = this.alt;
 }

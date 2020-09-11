@@ -43,6 +43,7 @@ tables = column(
     title,
     estimates_table,
     max_height=275,
+    sizing_mode='stretch_both',
     width_policy='max'
 )
 

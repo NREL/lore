@@ -2,7 +2,7 @@
 from bokeh.plotting import figure
 from bokeh.models import ColumnDataSource, LinearAxis, DataRange1d, Legend, LegendItem, Band, HoverTool, WheelZoomTool, PanTool, CustomJS, Span
 from bokeh.models.widgets import RadioButtonGroup, CheckboxButtonGroup, Div, Select
-from bokeh.palettes import Category20
+import colorcet as cc
 from bokeh.layouts import column, row, WidgetBox, Spacer
 from bokeh.themes import Theme, built_in_themes
 from bokeh.events import DoubleTap
@@ -36,8 +36,7 @@ current_datetime = datetime.datetime.now().replace(year=2010, second=0) # Eventu
 
 plus_minus_regx = re.compile('.*(?<!_minus)(?<!_plus)$')
 base_data_labels = list(filter(plus_minus_regx.search, data_labels))
-num_colors = len(base_data_labels[2:])
-label_colors = {col+'_color': i*2 for i,col in enumerate(base_data_labels[2:])}
+label_colors = {col+'_color': cc.fire[(i+1)*40] for i,col in enumerate(base_data_labels[2:])}
 lines = {}
 bands = {}
 
@@ -122,8 +121,9 @@ def make_plot(src): # Takes in a ColumnDataSource
     plot = figure(
         tools=[wheel_zoom_tool, pan_tool, hover_tool], # this gives us our tools
         x_axis_type="datetime",
-        sizing_mode='scale_width',
-        aspect_ratio=2.2,
+        width=650,
+        height=525,
+        sizing_mode='stretch_both',
         toolbar_location = None,
         x_axis_label = None,
         y_axis_label = "Power (W/m^2)",
@@ -156,7 +156,7 @@ def make_plot(src): # Takes in a ColumnDataSource
                 source=src,
                 level = 'underlay',
                 fill_alpha=0.2,
-                fill_color=Category20[20][label_colors[label+'_color']+1],
+                fill_color=label_colors[label+'_color'],
                 line_width=1, 
                 line_alpha=0.0,
                 visible = label in [title_to_col(plot_select.labels[i]) for i in plot_select.active],
@@ -166,7 +166,7 @@ def make_plot(src): # Takes in a ColumnDataSource
             lines[label] = plot.line( 
                 x='timestamp',
                 y=label,
-                line_color = Category20[20][label_colors[label+'_color']], 
+                line_color = label_colors[label+'_color'], 
                 line_alpha = 1.0,
                 line_width=3,
                 source=src,
@@ -179,7 +179,7 @@ def make_plot(src): # Takes in a ColumnDataSource
             lines[label] = plot.line( 
                 x='timestamp',
                 y=label,
-                line_color = Category20[20][label_colors[label+'_color']], 
+                line_color = label_colors[label+'_color'], 
                 line_alpha = 1.0,
                 line_width=3,
                 source=src,
@@ -312,20 +312,24 @@ widgets = column(
         row(
             Spacer(width_policy='max'),
             plot_select
-        )
+        ),
+        width_policy='max'
+
     ),
     row(
         Spacer(width_policy='max'),
         time_window,
         distribution_select),
-    width_policy='max'
+        width_policy='max'
     
 )
 
 layout = column(
-    row(widgets), 
-    plot, 
-    sizing_mode='stretch_both'
+    row(widgets),
+    Spacer(height=10),
+    plot,
+    sizing_mode='stretch_width',
+    width_policy='max'
 )
 
 # Show to current document/page

@@ -10,7 +10,9 @@ Dashboard
   <br/>
   <!-- Data Cards -->
   <div class="data">
-    {% include "snippets/card.html" with plot_script=db_script %}
+    <div class="plots">
+      {% include "snippets/card.html" with plot_script=db_script %}
+  </div>
   </div>
   
 </div>

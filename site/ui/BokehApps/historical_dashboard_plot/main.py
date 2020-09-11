@@ -2,7 +2,7 @@
 from bokeh.plotting import figure
 from bokeh.models import ColumnDataSource, LinearAxis, DataRange1d, Legend, LegendItem, PanTool, WheelZoomTool, HoverTool, CustomJS, Span
 from bokeh.models.widgets import CheckboxButtonGroup, RadioButtonGroup, Div, DateSlider, Slider, Button, DatePicker
-from bokeh.palettes import Category20
+import colorcet as cc
 from bokeh.layouts import column, row, WidgetBox, Spacer
 from bokeh.themes import Theme
 from bokeh.events import DoubleTap
@@ -28,12 +28,8 @@ import queue
 data_labels = list(map(lambda col: col.name, dd._meta.get_fields()))
 current_datetime = datetime.datetime.now().replace(year=2010, second=0)
 
-label_colors = {col+'_color': i*2 for i,col in enumerate(data_labels[2:])}
+label_colors = {col+'_color': cc.glasbey_cool[i] for i,col in enumerate(data_labels[2:])}
 
-for i, data_label in enumerate(data_labels[2:]):
-    label_colors.update({
-        data_label: Category20[12][i]
-    })
 lines = {}
 
 def getDashboardData(_range, _values_list, queue):
@@ -52,10 +48,8 @@ def getTimeRange(queue):
 
 def make_dataset(_start_date, _end_date):
     # Prepare data
-    if _end_date > current_datetime and start_date >= current_datetime:
+    if _end_date > current_datetime and _start_date >= current_datetime or _end_date == _start_date:
         return src
-    elif _end_date > current_datetime:
-        _end_date = current_datetime
 
     q = queue.Queue()
 
@@ -111,12 +105,13 @@ def make_plot(src): # (Source Data)
     plot = figure(
         tools=[hover_tool, wheel_zoom_tool, pan_tool], # this gives us our tools
         x_axis_type="datetime",
-        width_policy='max',
-        height_policy='max',
+        width=650,
+        height=525,
+        sizing_mode='stretch_both',
         toolbar_location = None,
         x_axis_label = None,
         y_axis_label = "Power (MWe)",
-        output_backend='webgl'
+        output_backend='webgl',
         )
     # Set action to reset plot
     plot.js_on_event(DoubleTap, CustomJS(args=dict(p=plot), code="""
@@ -150,9 +145,9 @@ def make_plot(src): # (Source Data)
             lines[label] = plot.line( 
                 x='timestamp',
                 y=label,
-                line_color = label_colors[label], 
+                line_color = label_colors[label+'_color'], 
                 line_alpha = 1.0, 
-                hover_line_color = label_colors[label],
+                hover_line_color = label_colors[label+'_color'],
                 y_range_name='mwt',
                 level='underlay',
                 source = src,
@@ -170,9 +165,9 @@ def make_plot(src): # (Source Data)
             lines[label] = plot.line( 
                 x='timestamp',
                 y=label,
-                line_color = label_colors[label], 
+                line_color = label_colors[label+'_color'], 
                 line_alpha = 1.0, 
-                hover_line_color = label_colors[label],
+                hover_line_color = label_colors[label+'_color'],
                 source= src,
                 level='glyph' if label == 'actual' else 'underlay',
                 line_width=3,
@@ -215,7 +210,7 @@ def update_lines(attr, old, new):
 
 def update_points(attr, old, new):
     # Update range when sliders move and update button is clicked
-    range_start, range_end = butil.get_update_range(date_slider, date_span_slider)
+    range_start, range_end = butil.get_update_range(date_slider, date_span_slider, current_datetime)
     new_src = make_dataset(range_start, range_end)
     src.data.update(new_src.data)
 
@@ -229,7 +224,7 @@ def live_update():
     # Change location of timeline
     getattr(plot, 'center')[2].location = new_current_datetime
 
-    _, range_end = butil.get_update_range(date_slider, date_span_slider)
+    _, range_end = butil.get_update_range(date_slider, date_span_slider, current_datetime)
     if current_datetime <= range_end:
         q = queue.Queue()
 
@@ -258,7 +253,6 @@ plot_select = CheckboxButtonGroup(
     labels = labels_list,
     active = [0],
     width_policy='min'
-
 )
 plot_select.on_change('active', update_lines)
 
@@ -310,11 +304,11 @@ layout = column(
     row(
         Spacer(width_policy='max'),
         plot_select
-    ), 
-    plot, 
-    max_height=525, 
-    height_policy='max',
-    width_policy='max')
+    ),
+    Spacer(height=10),
+    plot,
+    sizing_mode='stretch_width',
+)
 
 curdoc().add_root(layout)
 curdoc().add_periodic_callback(live_update, 60000)

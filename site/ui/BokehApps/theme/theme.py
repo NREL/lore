@@ -71,6 +71,18 @@ json = {
             "text_color": "#ffffff",
             "text_font": "Helvetica",
             "text_font_size": "1.15em"
+        },
+
+        "RadioButtonGroup": {
+            "height": 31
+        },
+
+        "CheckboxButtonGroup": {
+            "height": 31
+        },
+
+        "Select": {
+            "height": 31
         }
     }
 }

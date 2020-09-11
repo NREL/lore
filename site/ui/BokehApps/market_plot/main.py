@@ -122,8 +122,9 @@ def make_plot(src): # Takes in a ColumnDataSource
         x_axis_label = None,
         y_axis_label = "Market Forecast",
         output_backend='webgl',
-        sizing_mode='scale_width',
-        aspect_ratio=2
+        width=650,
+        height=525,
+        sizing_mode='stretch_both',
         )
 
     # Set action to reset plot
@@ -243,10 +244,11 @@ title = Div(text="""<h3>Market Forecast</h3>""")
 layout = column(
     row(
         title,
-        widgets,
-        width_policy='max'),
+        widgets,),
+    Spacer(height=20),
     plot,
-    sizing_mode='stretch_both'
+    sizing_mode='stretch_width',
+    width_policy='max'
 )
 
 curdoc().add_root(layout)

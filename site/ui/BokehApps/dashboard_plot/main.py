@@ -2,7 +2,7 @@
 from bokeh.plotting import figure
 from bokeh.models import Span, ColumnDataSource, LinearAxis, DataRange1d, Legend, LegendItem, PanTool, WheelZoomTool, HoverTool, CustomJS
 from bokeh.models.widgets import Button, CheckboxButtonGroup, RadioButtonGroup
-from bokeh.palettes import Category20
+import colorcet as cc
 from bokeh.layouts import column, row, WidgetBox, Spacer
 from bokeh.themes import Theme
 from bokeh.io import curdoc
@@ -34,11 +34,8 @@ TIME_BOXES = {'TODAY': 1,
 data_labels = list(map(lambda col: col.name, dd._meta.get_fields()))
 current_datetime = datetime.datetime.now().replace(year=2010, second=0) # Eventually the year will be removed once live data is added
 
-label_colors = {}
-for i, data_label in enumerate(data_labels[2:]):
-    label_colors.update({
-        data_label: Category20[12][i]
-    })
+label_colors = {col+'_color': cc.glasbey_cool[i] for i,col in enumerate(data_labels[2:])}
+
 lines = {}
 
 def getDashboardData(_range, _values_list, queue):
@@ -121,15 +118,15 @@ def make_plot(pred_src, curr_src): # (Predictive, Current)
     plot = figure(
         tools=[wheel_zoom_tool, pan_tool, hover_tool], # this gives us our tools
         x_axis_type="datetime",
-        width_policy='max',
-        height_policy='max',
+        width=650,
+        height=525,
+        align='center',
+        sizing_mode='stretch_both',
         toolbar_location = None,
         x_axis_label = None,
         y_axis_label = "Power (MWe)",
         output_backend='webgl',
         )
-
-    plot.css_classes = ['plot']
 
     # Set action to reset plot
     plot.js_on_event(DoubleTap, CustomJS(args=dict(p=plot), 
@@ -164,9 +161,9 @@ def make_plot(pred_src, curr_src): # (Predictive, Current)
             lines[label] = plot.line( 
                 x='timestamp',
                 y=label,
-                line_color = label_colors[label], 
+                line_color = label_colors[label+'_color'], 
                 line_alpha = 0.7, 
-                hover_line_color = label_colors[label],
+                hover_line_color = label_colors[label+'_color'],
                 hover_alpha = 1.0,
                 y_range_name='mwt',
                 level='underlay',
@@ -184,9 +181,9 @@ def make_plot(pred_src, curr_src): # (Predictive, Current)
             lines[label] = plot.line( 
                 x='timestamp',
                 y=label,
-                line_color = label_colors[label], 
+                line_color = label_colors[label+'_color'], 
                 line_alpha = 0.7, 
-                hover_line_color = label_colors[label],
+                hover_line_color = label_colors[label+'_color'],
                 hover_alpha = 1.0,
                 source= curr_src if label == 'actual' else pred_src,
                 level='glyph' if label == 'actual' else 'underlay',
@@ -283,7 +280,8 @@ def live_update():
 time_window = RadioButtonGroup(
     labels=["Today", "Last 6 Hours", "Last 12 Hours", "Last 24 Hours", "Last 48 Hours"], 
     active=0,
-    width_policy='min')
+    width_policy='min',
+    height=31)
 time_window.on_change('active', update_points)
 
 # Create Checkbox Select Group Widget
@@ -291,7 +289,8 @@ labels_list = [col_to_title(label) for label in data_labels[2:]]
 plot_select = CheckboxButtonGroup(
     labels = labels_list,
     active = [0],
-    width_policy='min'
+    width_policy='min',
+    height=31
 )
 
 plot_select.on_change('active', update_lines)
@@ -308,10 +307,10 @@ widgets = row(
     plot_select)
 
 layout = column(
-    widgets, 
-    plot, 
-    max_height=525, 
-    height_policy='max', 
+    widgets,
+    Spacer(height=20),
+    plot,
+    sizing_mode='stretch_width',
     width_policy='max')
 
 curdoc().add_root(layout)

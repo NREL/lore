@@ -10,7 +10,7 @@
     <link rel="icon" href="{% static "img/dtk32.png" %}">
     <link rel="stylesheet" href="{% static "css/index.css" %}">
     <link rel="stylesheet" href="{% static "css/loader.css" %}">
-    
+
     <title>{% block title %}{% endblock %}</title>
     {% block head %}
     {% endblock %}
@@ -25,6 +25,9 @@
 
     <!-- loader modal -->
     {% include "snippets/loader_modal.html" %}
+
+    <!-- Chart Modal -->
+    {% include "snippets/chart_modal.html" %}
 
     <div class="content">
         {% block content %}
