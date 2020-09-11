@@ -56,6 +56,17 @@ For production testing, the web server [Waitress](https://docs.pylonsproject.org
   * http://10.10.10.10:8000 is the address of the Waitress web server . However, web servers shouldn't/can't be used to serve static content, like the images and CSS, and this is the purpose of the upstream Nginx reverse proxy.
   * You can navigate directly to http://10.10.10.10:8000 to see what the website looks like when bypassing the Nginx proxy, and thus without the static file content. Also, the Bokeh charts will not work as the source port of 8000 is not being allowed by the Bokeh server.
 
+  **New Instructions using Powershell scripts (Windows) [9/10/2020]**
+1. If the the latest versions of Python installed as well as PIP, go ahead and run <pre><code>python -m pip install -r requirements.txt</code></pre> from inside the ./lore/site/ directory. This will install all of the necessary packages to run python.
+    >NOTE: It would be wise to setup a virtual environment before you run this command in case you have other projects which require different versions of other packages. A link explaining how to do so can be found here: https://packaging.python.org/guides/installing-using-pip-and-virtual-environments/)
+
+2. Once the required pacakages are installed, the user can run the setup.ps1 script from the site folder either from the commandline using <pre><code>powershell .\setup.ps1</code></pre> or from a PowerShell terminal simply <pre><code>.\setup.ps1</code></pre> 
+    >Make sure that you are still in the ./lore/site/ directory.
+
+    > This step will walk you through the setup of the Loopback Adapter if not already configured. This step will also use the migration files to setup an SQLite database in the site folder. (Currently for demo data gathered from spreadsheeets from 2010)
+
+3. Once the loopback adapter is setup and the database is ready to go, startup the site by running <pre><code>powershell .\run_dashboard_app.ps1</code></pre> from the ./lore/site/ folder in command prompt or simply running the script from the PowerShell terminal like so <pre><code>.\run_dashboard_app.ps1</code></pre>
+
 
 # Dashboard Plots
 
@@ -66,13 +77,15 @@ The top of the Dashboard will be the same displayed on the Dashboard, Forecast, 
 In the very top right of all pages there are indicators for the statuses of the Connection and the Model as well as the current time and date.
 
 ## Dashboard Home
-![Dashboard](./media/README/dashboard_plot1.png)
+![Dashboard](./media/README/main_dashboard_plot.png)
 _Dashboard Plot_
 
 The Dashboad shows the current information for the plant. It will show the Actual, Optimal, Scheduled, Field Operation Generated and Available values for the current daily window as well as the last 6, 12, 24, and 48 hour windows. The radio buttons on the top left will allow for the selection of a window, and the select buttons on the top right allow for multiple plots to be shown at the same time with the two axes denoted on the left and right, with the legend below denoting which axes apply to which plots.
 
 ## Forecasts
-![Forecasts](./media/README/dashboard_plot2.png)
+![Forecasts](./media/README/forecast_plots.png)
+
+![Tables](./media/README/chart_examples.png)
 _Forecasts Plots & Tables_
 
 The Forecast tab will allow for the user to see the Market and Solar forecast data. Both plots have dropdowns for the window of time which will again come in 6, 12, 24, and 48 hour time blocks. The difference between these and the Dashboard plot time windows is that the windows are in the future from the current time.
@@ -80,7 +93,17 @@ The Forecast tab will allow for the user to see the Market and Solar forecast da
 The Probability and Estimates tables below provide information on weather predictions and startup and usage information for the current day, past week, and last 6 months.
 
 ## History
-![History](./media/README/dashboard_plot3.png)
+![History](./media/README/historical_plots.png)
 _History Plots_
 
-The history plots show the same data from the dashboard and solar plots, except these plots have sliders. The two sliders on bot plots allow for the user to change the date and the time window. The time window goes from -120 to 120 hours (&#177; 5 days).
+![History_Solar_Zoomed](./media/README/zoomed_in_example.png)
+_Zoomed In Feature_
+
+The history plots show the same data from the dashboard and solar plots, except these plots have sliders. The two sliders on bot plots allow for the user to change the date and the time window. The time window goes from -120 to 120 hours (&#177; 10 days).
+
+## Navigation
+To Navigate to the plots, only the first three tabs on the right hand side are active. These will take you to a main dahsboard page, forecast page, and a history page as noted in the sections above.
+
+To zoom in, one can either pinch using touch screens, or use the scroll wheel to zoom. To pan, simply click and drag. The plots will only update their plot renders on the minute, or as the user make different selections. To reset the plot, simply double click.
+
+Each plot has a pop-up that can be used to look closer at a given chart. In the bottom left hand of each chart pane, there is an expand icon <i class="fas fa-expand"></i> . Clicking on the expand icon will enlarge the selected plot. When that plot is openned you can resume all of the same functionality as in the regulary view. When you are done, simply click the 'x' in the top right corner, or press the ESC key.

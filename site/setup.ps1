@@ -38,3 +38,8 @@ if(!$loopback_exists)
         Write-Output "Setup of LoopBack Adapter failed."
     }
 }
+
+## Import data to Django Models
+
+# Setup New Database
+python manage.py migrate
