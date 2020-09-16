@@ -43,3 +43,5 @@ if(!$loopback_exists)
 
 # Setup New Database
 python manage.py migrate
+set-location data
+python import_data.py .
