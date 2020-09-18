@@ -34,6 +34,170 @@ epsilon = 1.0e-10
 # Alphabetize!
 # TODO discuss whether battery, PV, persistence parameters warrant separate sections
 schemas = {
+    'power_plant': {},
+    'weather': {},
+    'pysam_daotk': {
+        'defocus': {
+            'type': 'list',
+            'schema': {
+                'type': 'float',
+                'min': 0,
+                'max': 1,
+                },
+            'required': True,
+            'meta': {'label': 'Field optical focus fraction [-]'}
+            },
+        'disp_pceff_expected': {
+            'type': 'list',
+            'schema': {
+                'type': 'float',
+                'min': 0,
+                'max': 1,
+                },
+            'required': True,
+            'meta': {'label': 'Dispatch expected power cycle efficiency adj. [-]'}
+            },
+        'disp_tes_expected': {
+            'type': 'list',
+            'schema': {
+                'type': 'float',
+                'min': 0,
+                'max': big_number,
+                },
+            'required': True,
+            'meta': {'label': 'Dispatch expected TES charge level [MWht]'}
+            },
+        'disp_wpb_expected': {
+            'type': 'list',
+            'schema': {
+                'type': 'float',
+                'min': 0,
+                'max': big_number,
+                },
+            'required': True,
+            'meta': {'label': 'Dispatch expected power generation [MWe]'}
+            },
+        'e_ch_tes': {
+            'type': 'list',
+            'schema': {
+                'type': 'float',
+                'min': 0,
+                'max': big_number,
+                },
+            'required': True,
+            'meta': {'label': 'TES charge state [MWht]'}
+            },
+        'helio_positions': {
+            'type': 'list',
+            'schema': {
+                'type': 'float',
+                'min': 0,
+                'max': big_number,
+                },
+            'required': True,
+            'meta': {'label': 'Heliostat position table [matrix]'}
+            },
+        'P_cycle': {
+            'type': 'list',
+            'schema': {
+                'type': 'float',
+                'min': 0,
+                'max': big_number,
+                },
+            'required': True,
+            'meta': {'label': 'PC electrical power output, gross [MWe]'}
+            },
+        'P_out_net': {
+            'type': 'list',
+            'schema': {
+                'type': 'float',
+                'min': -big_number,
+                'max': big_number,
+                },
+            'required': True,
+            'meta': {'label': 'Total electric power to grid [MWe]'}
+            },
+        'P_rec_heattrace': {
+            'type': 'list',
+            'schema': {
+                'type': 'float',
+                'min': 0,
+                'max': big_number,
+                },
+            'required': True,
+            'meta': {'label': 'Receiver heat trace parasitic load [MWe]'}
+            },
+        'q_dot_rec_inc': {
+            'type': 'list',
+            'schema': {
+                'type': 'float',
+                'min': 0,
+                'max': big_number,
+                },
+            'required': True,
+            'meta': {'label': 'Receiver incident thermal power [MWt]'}
+            },
+        'q_pc_startup': {
+            'type': 'list',
+            'schema': {
+                'type': 'float',
+                'min': 0,
+                'max': big_number,
+                },
+            'required': True,
+            'meta': {'label': 'PC startup thermal energy [MWht]'}
+            },
+        'q_sf_inc': {
+            'type': 'list',
+            'schema': {
+                'type': 'float',
+                'min': 0,
+                'max': big_number,
+                },
+            'required': True,
+            'meta': {'label': 'Field incident thermal power [MWt]'}
+            },
+        'q_startup': {
+            'type': 'list',
+            'schema': {
+                'type': 'float',
+                'min': 0,
+                'max': big_number,
+                },
+            'required': True,
+            'meta': {'label': 'Receiver startup thermal energy consumed [MWt]'}
+            },
+        'Q_thermal': {
+            'type': 'list',
+            'schema': {
+                'type': 'float',
+                'min': -big_number,
+                'max': big_number,
+                },
+            'required': True,
+            'meta': {'label': 'Receiver thermal power to HTF less piping loss [MWt]'}
+            },
+        'sf_adjust_out': {
+            'type': 'list',
+            'schema': {
+                'type': 'float',
+                'min': 0,
+                'max': 1,
+                },
+            'required': True,
+            'meta': {'label': 'Field availability adjustment factor [-]'}
+            },
+        'T_pc_in': {
+            'type': 'list',
+            'schema': {
+                'type': 'float',
+                'min': -50,
+                'max': 1000,
+                },
+            'required': True,
+            'meta': {'label': 'PC HTF inlet temperature [C]'}
+            }
+        }, # pysam_daotk
     'dispatch_opt': {
         'A_V': {
             'type': 'float',
