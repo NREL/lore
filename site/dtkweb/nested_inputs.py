@@ -44,7 +44,10 @@ schemas = {
                 'max': 31,
                 },
             'required': True,
-            'meta': {'label': 'Day [-]'}
+            'meta': {
+                    'label': 'Day [-]',
+                    'column_labels': ['day']
+                }
             },
         'dhi': {
             'type': 'list',
@@ -54,7 +57,13 @@ schemas = {
                 'max': 1500.0,
                 },
             'required': True,
-            'meta': {'label': 'Diffuse horizontal irradiance [W/m^2]'}
+            'meta': {
+                    'label': 'Diffuse horizontal irradiance [W/m^2]',
+                    'column_labels': [
+                        'df', 'dhi', 'diffuse', 'diffuse horizontal',
+                        'diffuse horizontal irradiance'
+                        ]
+                }
             },
         'dni': {
             'type': 'list',
@@ -64,7 +73,13 @@ schemas = {
                 'max': 1500.0,
                 },
             'required': True,
-            'meta': {'label': 'Direct normal irradiance [W/m^2]'}
+            'meta': {
+                    'label': 'Direct normal irradiance [W/m^2]',
+                    'column_labels': ['dn', 'dni', 'beam', 'direct normal',
+                        'direct normal irradiance'
+                        ]
+                    }
+                }
             },
         'ghi': {
             'type': 'list',
@@ -74,7 +89,13 @@ schemas = {
                 'max': 1500.0,
                 },
             'required': True,
-            'meta': {'label': 'Global horizontal irradiance [W/m^2]'}
+            'meta': {
+                    'label': 'Global horizontal irradiance [W/m^2]',
+                    'column_labels': [
+                        'gh', 'ghi', 'global', 'global horizontal',
+                        'global horizontal irradiance'
+                        ]
+                    }
             },
         'hour': {
             'type': 'list',
@@ -84,7 +105,10 @@ schemas = {
                 'max': 23,
                 },
             'required': True,
-            'meta': {'label': 'Hour [-]'}
+            'meta': {
+                    'label': 'Hour [-]',
+                    'column_labels': ['hour', 'hr']
+                    }
             },
         'minute': {
             'type': 'list',
@@ -94,7 +118,10 @@ schemas = {
                 'max': 59,
                 },
             'required': True,
-            'meta': {'label': 'Minute [-]'}
+            'meta': {
+                    'label': 'Minute [-]',
+                    'column_labels': ['min', 'minute']
+                    }
             },
         'month': {
             'type': 'list',
@@ -104,7 +131,10 @@ schemas = {
                 'max': 12,
                 },
             'required': True,
-            'meta': {'label': 'Month [-]'}
+            'meta': {
+                    'label': 'Month [-]',
+                    'column_labels': ['month', 'mo']
+                    }
             },
         'pres': {
             'type': 'list',
@@ -114,7 +144,10 @@ schemas = {
                 'max': 1.0e4,
                 },
             'required': True,
-            'meta': {'label': 'Atmospheric pressure [millibar]'}
+            'meta': {
+                    'label': 'Atmospheric pressure [millibar]',
+                    'column_labels': ['pres', 'pressure']
+                    }
             },
         'rh': {
             'type': 'list',
@@ -124,7 +157,11 @@ schemas = {
                 'max': 100.0,
                 },
             'required': True,
-            'meta': {'label': 'Relaive humidity [%]'}
+            'meta': {
+                    'label': 'Relaive humidity [%]',
+                    'column_labels': ['rh', 'rhum', 'relative humidity',
+                        'humidity']
+                    }
             },
         'tdew': {
             'type': 'list',
@@ -134,7 +171,11 @@ schemas = {
                 'max': 100.0,
                 },
             'required': True,
-            'meta': {'label': 'Dew point temperature [degrees Celsius]'}
+            'meta': {
+                    'label': 'Dew point temperature [degrees Celsius]',
+                    'column_labels': ['tdew' , 'dew point', 
+                        'dew point temperature']
+                    }
             },
         'tdry': {
             'type': 'list',
@@ -144,7 +185,25 @@ schemas = {
                 'max': 100.0,
                 },
             'required': True,
-            'meta': {'label': 'Dry bulc temperature [degrees Celsius]'}
+            'meta': {
+                    'label': 'Ambient dry bulb temperature [degrees Celsius]',
+                    'column_labels': ['tdry', 'dry bulb', 'dry bulb temp',
+                        'temperature', 'ambient', 'ambient temp']
+                    }
+            },
+        'twet': {
+            'type': 'list',
+            'schema': {
+                'type': 'float',
+                'min': -273.15,
+                'max': 100.0,
+                },
+            'required': False,
+            'meta': {
+                    'label': 'Wet bulb temperature [degrees Celsius]',
+                    'column_labels': ['twet', 'wet bulb', 
+                        'wet bulb temperature']
+                    }
             },
         'wdir': {
             'type': 'list',
@@ -154,7 +213,10 @@ schemas = {
                 'max': 360.0,
                 },
             'required': True,
-            'meta': {'label': 'Wind direction [degrees]'}
+            'meta': {
+                    'label': 'Wind direction [degrees]',
+                    'column_labels': ['wdir', 'wind direction']
+                    }
             },
         'wspd': {
             'type': 'list',
@@ -164,7 +226,10 @@ schemas = {
                 'max': 200.0,
                 },
             'required': True,
-            'meta': {'label': 'Wind speed [m/s]'}
+            'meta': {
+                    'label': 'Wind speed [m/s]',
+                    'column_labels': ['wspd', 'wind speed']
+                    }
             },
         'year': {
             'type': 'list',
@@ -174,7 +239,10 @@ schemas = {
                 'max': 2100,
                 },
             'required': True,
-            'meta': {'label': 'Year [-]'}    
+            'meta': {
+                    'label': 'Year [-]',
+                    'column_labels': ['year', 'yr']
+                    }    
             }
         }, #weather
     'pysam_daotk': {
