@@ -35,7 +35,148 @@ epsilon = 1.0e-10
 # TODO discuss whether battery, PV, persistence parameters warrant separate sections
 schemas = {
     'power_plant': {},
-    'weather': {},
+    'weather': {
+        'day': {
+            'type': 'list',
+            'schema': {
+                'type': 'int',
+                'min': 1,
+                'max': 31,
+                },
+            'required': True,
+            'meta': {'label': 'Day [-]'}
+            },
+        'dhi': {
+            'type': 'list',
+            'schema': {
+                'type': 'float',
+                'min': 0.0,
+                'max': 1500.0,
+                },
+            'required': True,
+            'meta': {'label': 'Diffuse horizontal irradiance [W/m^2]'}
+            },
+        'dni': {
+            'type': 'list',
+            'schema': {
+                'type': 'float',
+                'min': 0.0,
+                'max': 1500.0,
+                },
+            'required': True,
+            'meta': {'label': 'Field optical focus fraction [-]'}
+            },
+        'ghi': {
+            'type': 'list',
+            'schema': {
+                'type': 'float',
+                'min': 0.0,
+                'max': 1500.0,
+                },
+            'required': True,
+            'meta': {'label': 'Field optical focus fraction [-]'}
+            },
+        'hour': {
+            'type': 'list',
+            'schema': {
+                'type': 'int',
+                'min': 0,
+                'max': 23,
+                },
+            'required': True,
+            'meta': {'label': 'Hour [-]'}
+            },
+        'minute': {
+            'type': 'list',
+            'schema': {
+                'type': 'int',
+                'min': 0,
+                'max': 59,
+                },
+            'required': True,
+            'meta': {'label': 'Minute [-]'}
+            },
+        'month': {
+            'type': 'list',
+            'schema': {
+                'type': 'int',
+                'min': 1,
+                'max': 12,
+                },
+            'required': True,
+            'meta': {'label': 'Month [-]'}
+            },
+        'pres': {
+            'type': 'list',
+            'schema': {
+                'type': 'float',
+                'min': 0.0,
+                'max': 1.0e4,
+                },
+            'required': True,
+            'meta': {'label': 'Atmospheric pressure [millibar]'}
+            },
+        'rh': {
+            'type': 'list',
+            'schema': {
+                'type': 'float',
+                'min': 0.0,
+                'max': 100.0,
+                },
+            'required': True,
+            'meta': {'label': 'Relaive humidity [%]'}
+            },
+        'tdew': {
+            'type': 'list',
+            'schema': {
+                'type': 'float',
+                'min': -273.15,
+                'max': 100.0,
+                },
+            'required': True,
+            'meta': {'label': 'Dew point temperature [degrees Celsius]'}
+            },
+        'tdry': {
+            'type': 'list',
+            'schema': {
+                'type': 'float',
+                'min': -273.15,
+                'max': 100.0,
+                },
+            'required': True,
+            'meta': {'label': 'Dry bulc temperature [degrees Celsius]'}
+            },
+        'wdir': {
+            'type': 'list',
+            'schema': {
+                'type': 'float',
+                'min': 0.0,
+                'max': 360.0,
+                },
+            'required': True,
+            'meta': {'label': 'Wind direction [degrees]'}
+            },
+        'wspd': {
+            'type': 'list',
+            'schema': {
+                'type': 'float',
+                'min': 0.0,
+                'max': 200.0,
+                },
+            'required': True,
+            'meta': {'label': 'Wind speed [m/s]'}
+            },
+        'year': {
+            'type': 'list',
+            'schema': {
+                'type': 'int',
+                'min': 1900,
+                'max': 2100,
+                },
+            'required': True,
+            'meta': {'label': 'Year [-]'}    
+            }
+        }, #weather
     'pysam_daotk': {
         'defocus': {
             'type': 'list',
