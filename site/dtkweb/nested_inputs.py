@@ -64,7 +64,7 @@ schemas = {
                 'max': 1500.0,
                 },
             'required': True,
-            'meta': {'label': 'Field optical focus fraction [-]'}
+            'meta': {'label': 'Direct normal irradiance [W/m^2]'}
             },
         'ghi': {
             'type': 'list',
@@ -74,7 +74,7 @@ schemas = {
                 'max': 1500.0,
                 },
             'required': True,
-            'meta': {'label': 'Field optical focus fraction [-]'}
+            'meta': {'label': 'Global horizontal irradiance [W/m^2]'}
             },
         'hour': {
             'type': 'list',
@@ -182,8 +182,8 @@ schemas = {
             'type': 'list',
             'schema': {
                 'type': 'float',
-                'min': 0,
-                'max': 1,
+                'min': 0.0,
+                'max': 1.0,
                 },
             'required': True,
             'meta': {'label': 'Field optical focus fraction [-]'}
@@ -192,8 +192,8 @@ schemas = {
             'type': 'list',
             'schema': {
                 'type': 'float',
-                'min': 0,
-                'max': 1,
+                'min': 0.0,
+                'max': 1.0,
                 },
             'required': True,
             'meta': {'label': 'Dispatch expected power cycle efficiency adj. [-]'}
@@ -202,7 +202,7 @@ schemas = {
             'type': 'list',
             'schema': {
                 'type': 'float',
-                'min': 0,
+                'min': 0.0,
                 'max': big_number,
                 },
             'required': True,
@@ -212,7 +212,7 @@ schemas = {
             'type': 'list',
             'schema': {
                 'type': 'float',
-                'min': 0,
+                'min': 0.0,
                 'max': big_number,
                 },
             'required': True,
@@ -222,7 +222,7 @@ schemas = {
             'type': 'list',
             'schema': {
                 'type': 'float',
-                'min': 0,
+                'min': 0.0,
                 'max': big_number,
                 },
             'required': True,
@@ -232,7 +232,7 @@ schemas = {
             'type': 'list',
             'schema': {
                 'type': 'float',
-                'min': 0,
+                'min': 0.0,
                 'max': big_number,
                 },
             'required': True,
@@ -242,7 +242,7 @@ schemas = {
             'type': 'list',
             'schema': {
                 'type': 'float',
-                'min': 0,
+                'min': 0.0,
                 'max': big_number,
                 },
             'required': True,
@@ -262,7 +262,7 @@ schemas = {
             'type': 'list',
             'schema': {
                 'type': 'float',
-                'min': 0,
+                'min': 0.0,
                 'max': big_number,
                 },
             'required': True,
@@ -272,7 +272,7 @@ schemas = {
             'type': 'list',
             'schema': {
                 'type': 'float',
-                'min': 0,
+                'min': 0.0,
                 'max': big_number,
                 },
             'required': True,
@@ -282,7 +282,7 @@ schemas = {
             'type': 'list',
             'schema': {
                 'type': 'float',
-                'min': 0,
+                'min': 0.0,
                 'max': big_number,
                 },
             'required': True,
@@ -292,7 +292,7 @@ schemas = {
             'type': 'list',
             'schema': {
                 'type': 'float',
-                'min': 0,
+                'min': 0.0,
                 'max': big_number,
                 },
             'required': True,
@@ -302,7 +302,7 @@ schemas = {
             'type': 'list',
             'schema': {
                 'type': 'float',
-                'min': 0,
+                'min': 0.0,
                 'max': big_number,
                 },
             'required': True,
@@ -322,8 +322,8 @@ schemas = {
             'type': 'list',
             'schema': {
                 'type': 'float',
-                'min': 0,
-                'max': 1,
+                'min': 0.0,
+                'max': 1.0,
                 },
             'required': True,
             'meta': {'label': 'Field availability adjustment factor [-]'}
@@ -332,8 +332,8 @@ schemas = {
             'type': 'list',
             'schema': {
                 'type': 'float',
-                'min': -50,
-                'max': 1000,
+                'min': -50.0,
+                'max': 1000.0,
                 },
             'required': True,
             'meta': {'label': 'PC HTF inlet temperature [C]'}
