@@ -12,7 +12,7 @@ import sys
 sys.path.append('theme')
 sys.path.append('bokeh_utils')
 import theme
-import bokeh_utils as butil
+import bokeh_utils as butils
 
 # Data manipulation
 import pandas as pd
@@ -64,25 +64,6 @@ def make_dataset(_start_date, _end_date):
     cds = ColumnDataSource(current_data_df)
 
     return cds
-
-# Styling for a plot
-def style(p):
-    # Title 
-    p.title.align = 'center'
-    p.title.text_font_size = '20pt'
-    p.title.text_font = 'serif'
-
-    # Axis titles
-    p.xaxis.axis_label_text_font_size = '14pt'
-    p.xaxis.axis_label_text_font_style = 'bold'
-    p.yaxis.axis_label_text_font_size = '14pt'
-    p.yaxis.axis_label_text_font_style = 'bold'
-
-    # Tick labels
-    p.xaxis.major_label_text_font_size = '12pt'
-    p.yaxis.major_label_text_font_size = '12pt'
-
-    return p
 
 def make_plot(src): # (Source Data)
     ## Create the plot
@@ -140,7 +121,7 @@ def make_plot(src): # (Source Data)
     plot.add_layout(current_line)
 
     for label in data_labels[2:]:
-        legend_label = col_to_title(label)
+        legend_label = butils.col_to_title(label)
         if 'field' in label:
             lines[label] = plot.line( 
                 x='timestamp',
@@ -152,7 +133,7 @@ def make_plot(src): # (Source Data)
                 level='underlay',
                 source = src,
                 line_width=3,
-                visible=label in [title_to_col(plot_select.labels[i]) for i in plot_select.active],
+                visible=label in [butils.title_to_col(plot_select.labels[i]) for i in plot_select.active],
                 name=legend_label
                 )
 
@@ -171,7 +152,7 @@ def make_plot(src): # (Source Data)
                 source= src,
                 level='glyph' if label == 'actual' else 'underlay',
                 line_width=3,
-                visible=label in [title_to_col(plot_select.labels[i]) for i in plot_select.active],
+                visible=label in [butils.title_to_col(plot_select.labels[i]) for i in plot_select.active],
                 name=legend_label
                 )
 
@@ -180,37 +161,24 @@ def make_plot(src): # (Source Data)
             plot.y_range.renderers.append(lines[label])
     
     # styling
-    plot = style(plot)
+    plot = butils.style(plot)
     legend.label_text_font_size = '11px'
 
     plot.add_layout(legend, 'below')
 
     return plot
 
-def col_to_title(label):
-    # Convert column name to title
-
-    legend_label = ' '.join([word.title() for word in label.split('_')])
-    legend_label = legend_label.replace('Operation', 'Op.')
-    return legend_label
-
-def title_to_col(title):
-    # Convert title to a column name
-
-    col_name = title.lower().replace(' ','_')
-    return col_name
-
 def update_lines(attr, old, new):
     # Update visible lines
     selected_labels = [plot_select.labels[i] for i in plot_select.active]
     
     for label in lines.keys():
-        label_name = col_to_title(label)
+        label_name = butils.col_to_title(label)
         lines[label].visible = label_name in selected_labels
 
 def update_points(attr, old, new):
     # Update range when sliders move and update button is clicked
-    range_start, range_end = butil.get_update_range(date_slider, date_span_slider, current_datetime)
+    range_start, range_end = butils.get_update_range(date_slider, date_span_slider, current_datetime)
     new_src = make_dataset(range_start, range_end)
     src.data.update(new_src.data)
 
@@ -224,7 +192,7 @@ def live_update():
     # Change location of timeline
     getattr(plot, 'center')[2].location = new_current_datetime
 
-    _, range_end = butil.get_update_range(date_slider, date_span_slider, current_datetime)
+    _, range_end = butils.get_update_range(date_slider, date_span_slider, current_datetime)
     if current_datetime <= range_end:
         q = queue.Queue()
 
@@ -247,7 +215,7 @@ def live_update():
 
 # Create widget layout
 # Create Checkbox Select Group Widget
-labels_list = [col_to_title(label) for label in data_labels[2:]]
+labels_list = [butils.col_to_title(label) for label in data_labels[2:]]
 labels_list = list(map(lambda label: label.replace('Operation', 'Op.'), labels_list))
 plot_select = CheckboxButtonGroup(
     labels = labels_list,
@@ -286,7 +254,7 @@ date_span_slider.on_change('value_throttled', update_points)
 title = Div(text="""<h3>Dashboard Data</h3>""")
 
 # Set initial plot information
-initial_plots = [title_to_col(plot_select.labels[i]) for i in plot_select.active]
+initial_plots = [butils.title_to_col(plot_select.labels[i]) for i in plot_select.active]
 
 delta_init = datetime.timedelta(hours=24)
 src = make_dataset(current_datetime - delta_init, current_datetime)

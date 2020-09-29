@@ -12,7 +12,7 @@ import sys
 sys.path.append('theme')
 sys.path.append('bokeh_utils')
 import theme
-import bokeh_utils as butil
+import bokeh_utils as butils
 
 # Data manipulation
 import pandas as pd
@@ -83,25 +83,6 @@ def make_dataset(_start_date, _end_date, _distribution):
     
     return cds
 
-# Styling for a plot
-def style(p):
-    # Title 
-    p.title.align = 'center'
-    p.title.text_font_size = '20pt'
-    p.title.text_font = 'serif'
-
-    # Axis titles
-    p.xaxis.axis_label_text_font_size = '14pt'
-    p.xaxis.axis_label_text_font_style = 'bold'
-    p.yaxis.axis_label_text_font_size = '14pt'
-    p.yaxis.axis_label_text_font_style = 'bold'
-
-    # Tick labels
-    p.xaxis.major_label_text_font_size = '12pt'
-    p.yaxis.major_label_text_font_size = '12pt'
-
-    return p
-
 def make_plot(src): # Takes in a ColumnDataSource
     ## Create the plot
     
@@ -157,7 +138,7 @@ def make_plot(src): # Takes in a ColumnDataSource
 
     for label in base_data_labels[2:]:
 
-        legend_label = col_to_title_upper(label)
+        legend_label = butils.col_to_title_upper(label)
         lower_upper_regex = re.compile(label+'(_plus|_minus)')
         if len(list(filter(lower_upper_regex.search, data_labels_forecast_solar))):
             bands[label] = Band(
@@ -170,7 +151,7 @@ def make_plot(src): # Takes in a ColumnDataSource
                 fill_color=label_colors[label+'_color'],
                 line_width=1, 
                 line_color='black',
-                visible = label in [title_to_col(plot_select.labels[i]) for i in plot_select.active],
+                visible = label in [butils.title_to_col(plot_select.labels[i]) for i in plot_select.active],
                 name = label,
                 )
             plot.add_layout(bands[label])
@@ -181,7 +162,7 @@ def make_plot(src): # Takes in a ColumnDataSource
                 line_alpha = 1.0,
                 line_width=3,
                 source=src,
-                visible = label in [title_to_col(plot_select.labels[i]) for i in plot_select.active],
+                visible = label in [butils.title_to_col(plot_select.labels[i]) for i in plot_select.active],
                 name = legend_label,
                
                 )
@@ -196,7 +177,7 @@ def make_plot(src): # Takes in a ColumnDataSource
                 line_alpha = 1.0,
                 line_width=3,
                 source=src,
-                visible = label in [title_to_col(plot_select.labels[i]) for i in plot_select.active],
+                visible = label in [butils.title_to_col(plot_select.labels[i]) for i in plot_select.active],
                 name = legend_label,
                
                 )
@@ -204,28 +185,15 @@ def make_plot(src): # Takes in a ColumnDataSource
             legend.items.append(legend_item)
 
     # styling
-    plot = style(plot)
+    plot = butils.style(plot)
 
     plot.add_layout(legend, 'below')
 
     return plot
 
-def col_to_title_upper(label):
-    # Convert column name to title
-
-    legend_label = ' '.join([word.upper() for word in label.split('_')])
-
-    return legend_label
-
-def title_to_col(title):
-    # Convert title to a column name
-
-    col_name = title.lower().replace(' ','_')
-    return col_name
-
 def update_points(attr, old, new):
     # Update range when sliders move and update button is clicked
-    range_start, range_end = butil.get_update_range(date_slider, date_span_slider, current_datetime)
+    range_start, range_end = butils.get_update_range(date_slider, date_span_slider, current_datetime)
     new_src = make_dataset(range_start, range_end, distribution_select.value)
     src.data.update(new_src.data)
 
@@ -235,7 +203,7 @@ def update_lines(attr, old, new):
     selected_labels = [plot_select.labels[i] for i in plot_select.active]
 
     for label in lines.keys():
-        label_name = col_to_title_upper(label)
+        label_name = butils.col_to_title_upper(label)
         lines[label].visible = label_name in selected_labels
         if label in bands.keys():
             bands[label].visible = lines[label].visible
@@ -250,7 +218,7 @@ def live_update():
     q = queue.Queue()
 
     # Update timeline for current time
-    _, range_end = butil.get_update_range(date_slider, date_span_slider, current_datetime)
+    _, range_end = butils.get_update_range(date_slider, date_span_slider, current_datetime)
     if current_datetime <= range_end:
         getattr(plot, 'center')[2].location = new_current_datetime
         # Current Data
@@ -282,7 +250,7 @@ def live_update():
 ## Create widgets
 # Select for plots to show
 plot_select = CheckboxButtonGroup(
-    labels = list(map(col_to_title_upper, base_data_labels[2:])),
+    labels = list(map(butils.col_to_title_upper, base_data_labels[2:])),
     active = [0],
     width_policy='min'
 )
@@ -325,7 +293,7 @@ distribution_select.on_change('value', update_points)
 title = Div(text="""<h3>Solar</h3>""")
 
 # Set initial plot information
-initial_plots = [title_to_col(plot_select.labels[i]) for i in plot_select.active]
+initial_plots = [butils.title_to_col(plot_select.labels[i]) for i in plot_select.active]
 
 delta_init = datetime.timedelta(hours=24)
 src = make_dataset(current_datetime - delta_init, current_datetime, distribution_init)

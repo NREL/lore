@@ -11,7 +11,9 @@ from bokeh.io import curdoc
 from tornado import gen
 import sys
 sys.path.append('theme')
+sys.path.append('bokeh_utils')
 import theme
+import bokeh_utils as butils
 
 # Data manipulation
 import pandas as pd
@@ -77,25 +79,6 @@ def make_dataset(time_box):
         val_arr + np.multiply(val_arr, val_plus_arr))
 
     return cds
-
-# Styling for a plot
-def style(p):
-    # Title 
-    p.title.align = 'center'
-    p.title.text_font_size = '20pt'
-    p.title.text_font = 'serif'
-
-    # Axis titles
-    p.xaxis.axis_label_text_font_size = '14pt'
-    p.xaxis.axis_label_text_font_style = 'bold'
-    p.yaxis.axis_label_text_font_size = '14pt'
-    p.yaxis.axis_label_text_font_style = 'bold'
-
-    # Tick labels
-    p.xaxis.major_label_text_font_size = '12pt'
-    p.yaxis.major_label_text_font_size = '12pt'
-
-    return p
 
 def make_plot(src): # Takes in a ColumnDataSource
     ## Create the plot
@@ -165,7 +148,7 @@ def make_plot(src): # Takes in a ColumnDataSource
 
     plot.add_layout(band)
     # styling
-    plot = style(plot)
+    plot = butils.style(plot)
 
     return plot
 

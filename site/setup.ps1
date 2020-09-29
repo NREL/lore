@@ -41,5 +41,14 @@ if(!$loopback_exists)
 
 ## Import data to Django Models
 
+Set-Location $PSScriptRoot
+
+# Activate the environment
+Scripts\activate
+
 # Setup New Database
 python manage.py migrate
+
+## Only if there are no current migrations with data
+Set-Location data
+python import_data.py .

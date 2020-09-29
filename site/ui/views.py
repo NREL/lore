@@ -161,7 +161,6 @@ def outlook_view(request, *args, **kwargs):
 def forecast_view(request, *args, **kwargs):
 
     from bokeh.embed import server_session
-    from bokeh.util import session_id
 
     market_url = "http://127.0.0.1:5006/market_plot"
     mkt_script = server_session(None, session_id=token.generate_session_id(),

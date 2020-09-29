@@ -12,7 +12,7 @@ import sys
 sys.path.append('theme')
 sys.path.append('bokeh_utils')
 import theme
-import bokeh_utils as butil
+import bokeh_utils as butils
 
 # Data manipulation
 import pandas as pd
@@ -78,25 +78,6 @@ def make_dataset(time_box):
 
     return predictive_cds, current_cds
 
-# Styling for a plot
-def style(p):
-    # Title 
-    p.title.align = 'center'
-    p.title.text_font_size = '20pt'
-    p.title.text_font = 'serif'
-
-    # Axis titles
-    p.xaxis.axis_label_text_font_size = '14pt'
-    p.xaxis.axis_label_text_font_style = 'bold'
-    p.yaxis.axis_label_text_font_size = '14pt'
-    p.yaxis.axis_label_text_font_style = 'bold'
-
-    # Tick labels
-    p.xaxis.major_label_text_font_size = '12pt'
-    p.yaxis.major_label_text_font_size = '12pt'
-
-    return p
-
 def make_plot(pred_src, curr_src): # (Predictive, Current)
     ## Create the plot
 
@@ -156,7 +137,7 @@ def make_plot(pred_src, curr_src): # (Predictive, Current)
     plot.add_layout(current_time_line)
 
     for label in data_labels[2:]:
-        legend_label = col_to_title(label)
+        legend_label = butils.col_to_title(label)
         if 'field' in label:
             lines[label] = plot.line( 
                 x='timestamp',
@@ -169,7 +150,7 @@ def make_plot(pred_src, curr_src): # (Predictive, Current)
                 level='underlay',
                 source = curr_src,
                 line_width=2,
-                visible=label in [title_to_col(plot_select.labels[i]) for i in plot_select.active],
+                visible=label in [butils.title_to_col(plot_select.labels[i]) for i in plot_select.active],
                 name=legend_label
                 )
 
@@ -188,7 +169,7 @@ def make_plot(pred_src, curr_src): # (Predictive, Current)
                 source= curr_src if label == 'actual' else pred_src,
                 level='glyph' if label == 'actual' else 'underlay',
                 line_width=3 if label == 'actual' else 2,
-                visible=label in [title_to_col(plot_select.labels[i]) for i in plot_select.active],
+                visible=label in [butils.title_to_col(plot_select.labels[i]) for i in plot_select.active],
                 name=legend_label,
                 )
 
@@ -197,31 +178,18 @@ def make_plot(pred_src, curr_src): # (Predictive, Current)
             plot.y_range.renderers.append(lines[label])
 
     # styling
-    plot = style(plot)
+    plot = butils.style(plot)
 
     plot.add_layout(legend, 'below')
 
     return plot
-
-def col_to_title(label):
-    # Convert column name to title
-
-    legend_label = ' '.join([word.title() for word in label.split('_')])
-
-    return legend_label
-
-def title_to_col(title):
-    # Convert title to a column name
-
-    col_name = title.lower().replace(' ','_')
-    return col_name
 
 def update_lines(attr, old, new):
     # Update visible lines
     selected_labels = [plot_select.labels[i] for i in plot_select.active]
 
     for label in lines.keys():
-        label_name = col_to_title(label)
+        label_name = butils.col_to_title(label)
         lines[label].visible = label_name in selected_labels
 
 
@@ -285,7 +253,7 @@ time_window = RadioButtonGroup(
 time_window.on_change('active', update_points)
 
 # Create Checkbox Select Group Widget
-labels_list = [col_to_title(label) for label in data_labels[2:]]
+labels_list = [butils.col_to_title(label) for label in data_labels[2:]]
 plot_select = CheckboxButtonGroup(
     labels = labels_list,
     active = [0],
@@ -296,7 +264,7 @@ plot_select = CheckboxButtonGroup(
 plot_select.on_change('active', update_lines)
 
 # Set initial plot information
-initial_plots = [title_to_col(plot_select.labels[i]) for i in plot_select.active]
+initial_plots = [butils.title_to_col(plot_select.labels[i]) for i in plot_select.active]
 
 [pred_src, curr_src] = make_dataset('TODAY')
 plot = make_plot(pred_src, curr_src)
