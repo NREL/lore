@@ -49,7 +49,7 @@ conda activate pysam_daotk
    <tr><td>PYSAMDIR</td><td>...\sam_dev\pysam</td></tr>
    </table>
 3. Register at [PyPI.org](https://pypi.org/)
-4. Edit the arguments to setup() at the bottom of setup.py and /stubs/setup.py. Example:
+4. In `.../lore/pysam/files/`, edit the arguments to setup() at the bottom of setup.py and /stubs/setup.py. Example:
 	```
 	name='NREL-PySAM-DAO-Tk'  [append '-stubs' for /stubs/setup.py]
 	...
