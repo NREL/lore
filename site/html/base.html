@@ -2,98 +2,48 @@
 <html>
 
 <head>
-    <!-- <link rel="stylesheet" href="{% static "css/base.css" %}"> -->
+    <!-- Stylesheets to load -->
     <link rel="stylesheet" href="{% static "css/unit.css" %}">
-    <link rel="stylesheet" href="{% static "css/index.css" %}">
-    <link rel="subresource" href="https://kit.fontawesome.com/980bc245e1.js" />
-    <!-- <link rel="stylesheet" href="http://cdn.pydata.org/bokeh/release/bokeh-2.0.1.min.css">
-    <link rel="stylesheet" href="http://cdn.pydata.org/bokeh/release/bokeh-widgets-2.0.1.min.css"> -->
     <link rel="stylesheet" href="{% static "css/bootstrap.min.css" %}">
     <link rel="stylesheet" href="{% static "css/DailyStatistics.css" %}">
+    <link rel="stylesheet" href="{% static "css/fontawesome.all.min.css" %}">
     <link rel="icon" href="{% static "img/dtk32.png" %}">
-    <link rel="subresource" href="{% static "js/jquery-3.4.1.slim.min.js" %}">
-    <link rel="subresource" href="{% static "js/index.js" %}">
-    <link rel="subresource" href="{% static "js/popper.min.js" %}">
-    <link rel="subresource" href="https://cdn.pydata.org/bokeh/release/bokeh-2.0.2.min.js">
-    <link rel="subresource" href="https://cdn.pydata.org/bokeh/release/bokeh-widgets-2.0.2.min.js">
-    <link rel="subresource" href="https://cdn.pydata.org/bokeh/release/bokeh-tables-2.0.2.min.js">
-    <link rel="subresource" href="https://cdn.pydata.org/bokeh/release/bokeh-gl-2.0.2.min.js">
-    <link rel="subresource" href="{% static "js/bootstrap.min.js" %}">
-    <script>
-        var scripts = [
-            'https://kit.fontawesome.com/980bc245e1.js',
-            '{% static "js/jquery-3.4.1.slim.min.js" %}',
-            '{% static "js/index.js" %}',
-            '{% static "js/popper.min.js" %}',
-            'https://cdn.pydata.org/bokeh/release/bokeh-2.0.2.min.js',
-            'https://cdn.pydata.org/bokeh/release/bokeh-widgets-2.0.2.min.js',
-            'https://cdn.pydata.org/bokeh/release/bokeh-tables-2.0.2.min.js',
-            'https://cdn.pydata.org/bokeh/release/bokeh-gl-2.0.2.min.js',
-            '{% static "js/bootstrap.min.js" %}'
-        ];
-        var src;
-        var currentScript;
-        var pendingScripts = [];
-        var firstScript = document.scripts[0];
+    <link rel="stylesheet" href="{% static "css/index.css" %}">
+    <link rel="stylesheet" href="{% static "css/loader.css" %}">
 
-        // Watch scripts load in IE
-        function stateChange() {
-            // Execute as many scripts in order as we can
-            var pendingScript;
-            while (pendingScripts[0] && pendingScripts[0].readyState == 'loaded') {
-                pendingScript = pendingScripts.shift();
-                // avoid future loading events from this script (eg, if src changes)
-                pendingScript.onreadystatechange = null;
-                // can't just appendChild, old IE bug if element isn't closed
-                firstScript.parentNode.insertBefore(pendingScript, firstScript);
-            }
-        }
-
-        // loop through our script urls
-        while (src = scripts.shift()) {
-            if ('async' in firstScript) { // modern browsers
-                currentScript = document.createElement('script');
-                currentScript.async = false;
-                currentScript.src = src;
-                document.head.appendChild(currentScript);
-            }
-            else if (firstScript.readyState) { // IE<10
-                // create a script and add it to our todo pile
-                currentScript = document.createElement('script');
-                pendingScripts.push(currentScript);
-                // listen for state changes
-                currentScript.onreadystatechange = stateChange;
-                // must set src AFTER adding onreadystatechange listener
-                // else we’ll miss the loaded event for cached scripts
-                script.src = src;
-            }
-            else { // fall back to defer
-                document.write('<script src="' + src + '" defer></' + 'script>');
-            }
-        }
-    </script>
     <title>{% block title %}{% endblock %}</title>
-    {% block head %}{% endblock %}
+    {% block head %}
+    {% endblock %}
 </head>
 
 <body>
+    <!-- add navigation bar -->
     {% include "snippets/navbar.html" %}
 
+    <!-- add live status markers -->
     {% include "snippets/live_status.html" %}
 
+    <!-- loader modal -->
+    {% include "snippets/loader_modal.html" %}
+
+    <!-- Chart Modal -->
+    {% include "snippets/chart_modal.html" %}
+
     <div class="content">
-        {% block content %}{% endblock %}
+        {% block content %}
+        {% endblock %}
     </div>
     
-    <script type="text/javascript" src="{% static "js/jquery-3.4.1.slim.min.js" %}"></script>
+    <!-- Load all of the javascript files -->
+    <script type="text/javascript" src="{% static "js/jquery-3.5.1.slim.min.js" %}" crossorigin="anonymous"></script>
+    <script type="text/javascript" src="{% static "js/popper.min.js" %}" crossorigin="anonymous"></script>
+    <script type="text/javascript" src="{% static "js/bootstrap.min.js" %}" crossorigin="anonymous"></script>
     <script type="text/javascript" src="{% static "js/index.js" %}"></script>
-    <script src="https://kit.fontawesome.com/980bc245e1.js"></script>
-    <script type="text/javascript" src="{% static "js/popper.min.js" %}"></script>
-    <script type="text/javascript" src="https://cdn.pydata.org/bokeh/release/bokeh-2.0.2.min.js" ></script>
-    <script type="text/javascript" src="https://cdn.pydata.org/bokeh/release/bokeh-widgets-2.0.2.min.js" ></script>
-    <script type="text/javascript" src="https://cdn.pydata.org/bokeh/release/bokeh-tables-2.0.2.min.js" ></script>
-    <script type="text/javascript" src="https://cdn.pydata.org/bokeh/release/bokeh-gl-2.0.2.min.js" ></script>
-    <script type="text/javascript" src="{% static "js/bootstrap.min.js" %}"></script>
+    <script type="text/javascript" src="{% static "js/fontawesome.all.min.js" %}" crossorigin="anonymous"></script>
+    <script type="text/javascript" src="{% static "js/bokeh-2.0.2.min.js" %}" crossorigin="anonymous"></script>
+    <script type="text/javascript" src="{% static "js/bokeh-tables-2.0.2.min.js" %}" crossorigin="anonymous"></script>
+    <script type="text/javascript" src="{% static "js/bokeh-widgets-2.0.2.min.js" %}" crossorigin="anonymous"></script>
+    <script type="text/javascript" src="{% static "js/loader.js" %}" ></script>
 
 </body>
 

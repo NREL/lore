@@ -8,24 +8,32 @@ Forecast
 <div>
   {% load static %}
 </div>
-<!-- <h1>Forecast Data</h1> -->
-<div class="data data-forcast">
+
+<div class="data data-forecast">
+
   <!-- Daily Statistics -->
   {% include "snippets/live_data.html" %}
   <br/>
+
   <!-- Data Cards -->
   <div class='data'>
     <div class="plots row row-cols-2">
+
       <!-- Market Data -->
       {% include "snippets/card.html" with plot_script=mkt_script %}
+
       <!-- Solar Forecast Data -->
       {% include "snippets/card.html" with plot_script=solar_script %}
+
     </div>
     <div class="tables row row-cols-2">
+
       <!-- Probability Data Table -->
       {% include "snippets/card.html" with plot_script=probability_table_script %}
+
       <!-- Estimates Data Table -->
       {% include "snippets/card.html" with plot_script=estimates_table_script %}
+
     </div>
   </div>
 </div>

@@ -1,0 +1,28 @@
+<!-- Updates the color and arrow direction of appropriate parts of live data bar -->
+{% load custom_filters %}
+{% load custom_tags %}
+
+{% if change > 0 %}
+{% set_value "green" as color %}
+{% elif change < 0 %}
+{% set_value "red" as color %}
+{% else %}
+{% set_value "" as color %}
+{% endif %}
+
+<div class="card">
+    <div class="card-body">
+        <span class="count_top">
+            <i class="fas {{icon}}"></i> {{title}}
+        </span>
+        <div class="count {{color}}">{{data|floatformat:2}}</div>
+        <span class="count_bottom">
+            <i class={{color}}>
+                {% if change == 0 and data == 0 %}
+                    <i>NaN</i></i>
+                {% else  %}
+                    <i class="fas fa-sort-{% if change > 0 %}up{% else %}down{% endif %}"></i>{{change|abs|floatformat:2}}%</i>
+                {% endif %}
+        </span>
+    </div>
+</div>

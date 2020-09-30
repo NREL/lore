@@ -2,168 +2,135 @@
 from django.shortcuts import render
 from django.http import HttpResponse, Http404, HttpResponseRedirect
 from django.db import transaction
-# Model imports
-from ui.models import DashboardSummaryItem, TimeSeriesEntry, TimeSeriesHighlight
+
 # Other package imports
 from datetime import datetime, timedelta
 import matplotlib.pyplot as plt, mpld3
 from io import StringIO
 import pandas
-#plot files imports
-from fig import timeseries
+
+# bokeh server interactions
+from bokeh.embed import server_session
+from bokeh.util import token
+
+# pysam script
+from ui import mspt
+
 #global variables
 PROGRESS_BAR_WIDTH = 160
 
 # Create your views here.
 #-------------------------------------------------------------
 #-------------------------------------------------------------
-def load_pysam_data(request):
-    from ui import mspt
 
-    request.session['pysam_output'] = mspt.get_pysam_data()
-    print(request.session.keys())
+def getLiveStatusData():
+    return {
+            'connection_status' : True,
+            'model_status' : False,
+            'last_refresh' : datetime.now(),
+            }
 
-def index(request, path=None):
+# def collectPysamData(request):
+# Collect data from PySAM run
+pysam_output = mspt.get_pysam_data()
+pysam_output['time'] = list(pysam_output['time_hr'])
+pysam_output['time'] = [timedelta(hours=int(x)) for x in pysam_output['time']]
+pysam_output['time'] = list(map(lambda hr: hr + datetime(2010, 1, 1), pysam_output['time'])) # Jan 1, 2010 used because that is the start of our solar data
 
-    context = {
-        'connection_status' : True,
-        'model_status' : False,
-        'last_refresh' : datetime.now(),
+def getLiveBarData():
+
+    global pysam_output
+
+    ## Collects the data from the pysam_output stored on the server (as of now).
+    ## This will update the bar on the hour (the frequency of the data entries in the weather file).
+
+    # get current date and hour as well as yesterdays datetime 24 hours from the current
+    current_time = datetime.today().replace(year=2010, minute=0, second=0, microsecond=0)
+    prev_day = current_time - timedelta(days=1)
+
+    live_data_index = {
+        "time": 0,
+        "e_ch_tes": 1, 
+        "eta_therm": 2,
+        "tou_value": 3, 
+        "P_out_net": 4,
+        "eta_field": 5}
+
+    ## Live Data
+    # Zip desired live data, and place into a list format
+    live_data = list(zip(
+        pysam_output["time"],
+        pysam_output["e_ch_tes"],
+        pysam_output["eta_therm"],
+        pysam_output["tou_value"],
+        pysam_output["P_out_net"],
+        pysam_output["eta_field"]
+    ))
+
+    # Get data from both the previous day and current date and hour
+    prev_days_data = list(filter(lambda t: t[0] == prev_day, live_data))[0]
+    curr_live_data = list(filter(lambda t: t[0] == current_time, live_data))[0]
+
+    # tes charge
+    tes_charge = curr_live_data[live_data_index['e_ch_tes']]
+    prev_tes_charge = prev_days_data[live_data_index['e_ch_tes']]
+    # Get % change
+    if prev_tes_charge != 0:
+        tes_charge_pct_change = ((tes_charge - prev_tes_charge) / prev_tes_charge) * 100
+    else:
+        tes_charge_pct_change = ((tes_charge - prev_tes_charge) / 1) * 100
+
+    # receiver thermal efficiency
+    receiver_therm_eff = curr_live_data[live_data_index['eta_therm']] * 100
+    prev_receiver_therm_eff = prev_days_data[live_data_index['eta_therm']] * 100
+    # Get % change
+    if prev_receiver_therm_eff != 0:
+        receiver_therm_eff_pct_change = ((receiver_therm_eff - prev_receiver_therm_eff) / prev_receiver_therm_eff) * 100
+    else:
+        receiver_therm_eff_pct_change = ((receiver_therm_eff - prev_receiver_therm_eff) / 1) * 100
+
+    # net power out
+    net_power_out = curr_live_data[live_data_index['P_out_net']]
+    prev_net_power_out = prev_days_data[live_data_index['P_out_net']]
+    # Get % change
+    if prev_net_power_out != 0:
+        net_power_out_pct_change = ((net_power_out - prev_net_power_out) / prev_net_power_out) * 100
+    else:
+        net_power_out_pct_change = ((net_power_out - prev_net_power_out) / 1) * 100
+
+    # CSP time of use value
+    tou_value = curr_live_data[live_data_index['tou_value']]
+
+    # field optical efficiency
+    field_optical_eff = curr_live_data[live_data_index['eta_field']] * 100
+    prev_field_optical_eff = prev_days_data[live_data_index['eta_field']] * 100
+    # Get % change
+    if prev_field_optical_eff != 0:
+        field_optical_eff_pct_change = ((field_optical_eff - prev_field_optical_eff) / prev_field_optical_eff) * 100
+    else:
+        field_optical_eff_pct_change = ((field_optical_eff - prev_field_optical_eff) / 1) * 100
+
+    # Export live data such that it can be used with the django template
+    live_data = {
+
+        "tes" : tes_charge,
+        "tes_change" : tes_charge_pct_change,
+        "receiver_therm_eff" : receiver_therm_eff,
+        "receiver_therm_eff_change" : receiver_therm_eff_pct_change,
+        "net_power_out" : net_power_out,
+        "net_power_out_change" : net_power_out_pct_change,
+        "tou_value" : tou_value,
+        "field_optical_eff" : field_optical_eff,
+        "field_optical_eff_change" : field_optical_eff_pct_change
     }
 
-    if not path:
-        return HttpResponseRedirect("dashboard")
-    #handle URL based on path
-    pvals = path.split('/')
-
-    if 'configure' in pvals[0]:
-        if len(pvals) != 2:
-            return Http404(request)
-        
-        if 'event_log' in pvals[1]:
-            return configure_event_log(request, context)
-        elif 'logging' in pvals[1]:
-            return configure_logging(request, context)
-        elif 'model_settings' in pvals[1]:
-            return configure_model_settings(request, context)
-        elif 'sources' in pvals[1]:
-            return configure_sources(request, context)
-        elif 'ui_settings' in pvals[1]:
-            return configure_ui_settings(request, context)
-        else:
-            return Http404(request)
-
-    elif 'whatif' in pvals[0]:
-        if len(pvals) != 2:
-            return Http404(request)
-        
-        if 'interruptions' in pvals[1]:
-            return whatif_interruptions(request, context)
-        elif 'resources' in pvals[1]:
-            return whatif_resources(request, context)
-        elif 'weather' in pvals[1]:
-            return whatif_weather(request, context)
-        else:
-            return Http404(request)
-    else:
-        if 'dashboard' in pvals[0]:
-            return dashboard(request, context)
-        elif 'forecast' in pvals[0]:
-            return forecast(request, context)
-        elif 'history' in pvals[0]:
-            return history(request, context)
-        elif 'maintenance' in pvals[0]:
-            return maintenance(request, context)
-        elif 'settings' in pvals[0]:
-            return settings(request, context)
-        else:
-            return Http404(request)
-
-    return 
-
-#>>>>> temporary code to create necessary database objects
-def _temp_populate_database():
-
-    #-- dashboard summary items
-    DashboardSummaryItem.objects.all().delete()
-    data = []
-                # name                      #units              #icon           #varname                #group      #max        #actual     #model
-    data.append(["Daily production total",  "MWh<sub>e</sub>",  "flash.png",    "daily_production",     "summary",  110*14*.75, 110*14*.25, 110*14*.31   ])
-    data.append(["Net power",               "MW<sub>e</sub>",   "tower.png",    "net_power",            "summary",  110,        95,         80          ])
-    data.append(["Gross power",             "MW<sub>e</sub>",   "turbine.png",  "gross_power",          "summary",  120,        100,      111.9       ])
-    data.append(["Thermal storage charge",  "MWh<sub>t</sub>",  "tank.png",     "tes_charge",           "summary",  110*12/.4,  110*6/.4,   110*7/.4    ])
-    data.append(["Daily revenue",           "$",                "notes.png",    "daily_revenue",        "summary",  ] + [ d * 90 for d in data[0][-3:]])
-    
-
-    with transaction.atomic():
-        for row in data:
-            DSI = DashboardSummaryItem(
-                name = row[0],
-                units = row[1],
-                icon = row[2],
-                varname = row[3],
-                group = row[4],
-                baseline_max = row[5],
-                actual = row[6],
-                model = row[7],
-            )
-            DSI.save()
-    #-- end dashboard summary items
-
-    #-- hourly data
-    TimeSeriesHighlight.objects.all().delete()
-
-    # csvraw = [line.strip("\n").split(",")[0:2] for line in open("C:/Users/mwagner/Documents/NREL/software/dao-tk/web/site/fig/tsdata.csv",'r').readlines()[1:]]
-    df = pandas.read_csv("./fig/tsdata.csv", index_col='timestamp', date_parser=timeseries._timestamp_parse, keep_date_col=True)
-    hdr_pairs = [
-        ["gross_actual", "gross_model"], 
-        ["net_actual", "net_model"], 
-        ["tes_actual", "tes_model"], 
-        ["revenue_actual", "revenue_model"], 
-        ["production_actual", "production_model"],
-    ]
-
-    with transaction.atomic():
-        for pair in hdr_pairs:
-            ky = pair[0].split("_")[0]
-            #find associated highlight
-            dsi = DashboardSummaryItem.objects.all().filter(varname__icontains=ky)[0]
-            TSH = TimeSeriesHighlight(
-                name = dsi.name,
-                varname = dsi.varname,
-                units = dsi.units,
-                xaxis_label = "Time",
-                yaxis_label = dsi.name + " " + dsi.units,
-            )
-            TSH.save()
-
-            for timestamp,row in df[pair].iterrows():
-                TSE = TimeSeriesEntry(
-                        timestamp = timestamp,
-                        data = "{:f},{:f}".format(row[pair[0]], row[pair[1]]),
-                    )
-                TSE.save()
-
-                TSH.entries.add(TSE)
-                TSH.save()
-
-    #-- end hourly data
-
-    return
-#<<<<<<<<< end temporary code
+    return live_data
 
 #-------------------------------------------------------------
-def dashboard(request, context={}):
+def dashboard_view(request, *args, **kwargs):
     """
     main view for the dashboard
     """
-    from bokeh.embed import server_session
-    from bokeh.util import token
-    from django.contrib.sessions.backends.db import SessionStore
-
-    if 'pysam_output' not in request.session:
-        print("...loading PySAM data")
-        load_pysam_data(request)
 
     bokeh_server_url = "http://127.0.0.1:5006/dashboard_plot"
     server_script = server_session(None, session_id=token.generate_session_id(),
@@ -171,65 +138,52 @@ def dashboard(request, context={}):
 
     context = {"db_name" : "Dashboard",
                "db_script" : server_script,
-               "last_refresh": datetime.now(),
-               "connection_status": True,
-               "dashboard_data": request.session['pysam_output']
+               "live_data" : getLiveBarData(),
+               **(getLiveStatusData())
               }
 
     return render(request, "dashboard.html", context)
 
 #-------------------------------------------------------------
-def outlook(request, context={}):
-    from bokeh.embed import server_session
-    from bokeh.util import session_id
+def outlook_view(request, *args, **kwargs):
 
-    if 'pysam_output' not in request.session:
-        print("...loading PySAM data")
-        load_pysam_data(request)
 
     bokeh_server_url = "http://127.0.0.1:5006/sliders"
-    server_script = server_session(None, session_id=session_id.generate_session_id(),
+    server_script = server_session(None, session_id=token.generate_session_id(),
                                    url=bokeh_server_url)
     context = {"graphname" : "Sliders",
-               "server_script" : server_script,
-               "dashboard_data": request.session['pysam_output']
+               "server_script" : server_script
               }
 
     return render(request, "outlook.html", context)
 
 #-------------------------------------------------------------
-def forecast(request, context={}):
+def forecast_view(request, *args, **kwargs):
 
     from bokeh.embed import server_session
-    from bokeh.util import session_id
-
-    if 'pysam_output' not in request.session:
-        print("...loading PySAM data")
-        load_pysam_data(request)
 
     market_url = "http://127.0.0.1:5006/market_plot"
-    mkt_script = server_session(None, session_id=session_id.generate_session_id(),
+    mkt_script = server_session(None, session_id=token.generate_session_id(),
                                     url=market_url)
 
     solar_url = "http://127.0.0.1:5006/solar_plot"
-    solar_script = server_session(None, session_id=session_id.generate_session_id(),
+    solar_script = server_session(None, session_id=token.generate_session_id(),
                                     url=solar_url)
 
     probability_table_url = "http://127.0.0.1:5006/probability_table"
-    probability_table_script = server_session(None, session_id=session_id.generate_session_id(),
+    probability_table_script = server_session(None, session_id=token.generate_session_id(),
                                     url=probability_table_url)
     
     estimates_table_url = "http://127.0.0.1:5006/estimates_table"
-    estimates_table_script = server_session(None, session_id=session_id.generate_session_id(),
+    estimates_table_script = server_session(None, session_id=token.generate_session_id(),
                                     url=estimates_table_url)
     
-    context = {"last_refresh": datetime.now(),
-               "connection_status": True,
+    context = {**(getLiveStatusData()),
                "mkt_script" : "Market Forecast",
                "mkt_script" : mkt_script,
                "solar_plot": "Solar Forecast",
                "solar_script": solar_script,
-               "dashboard_data": request.session['pysam_output'],
+               "live_data": getLiveBarData(),
                "probability_table_script": probability_table_script,
                "estimates_table_script": estimates_table_script,
 
@@ -238,74 +192,30 @@ def forecast(request, context={}):
     return render(request, "forecast.html", context)
 
 #-------------------------------------------------------------
-def history(request, context={}):
-
-    from bokeh.embed import server_session
-    from bokeh.util import session_id
-
-    if 'pysam_output' not in request.session:
-        print("...loading PySAM data")
-        load_pysam_data(request)
+def history_view(request, *args, **kwargs):
         
     hsf_url = "http://127.0.0.1:5006/historical_solar_forecast"
-    hsf_server_script = server_session(None, session_id=session_id.generate_session_id(),
+    hsf_server_script = server_session(None, session_id=token.generate_session_id(),
                                    url=hsf_url)
     hdbp_url = "http://127.0.0.1:5006/historical_dashboard_plot"
-    hdbp_server_script = server_session(None, session_id=session_id.generate_session_id(),
+    hdbp_server_script = server_session(None, session_id=token.generate_session_id(),
                                    url=hdbp_url)
 
-    context = {"last_refresh": datetime.now(),
-               "connection_status": True,
+    context = {**(getLiveStatusData()),
                "hsf_plot_name": "Historical Solar Forecast Data",
                "hsf_script": hsf_server_script,
                "hdbp_plot_name": "Historical Dashboard Data",
                "hdbp_script": hdbp_server_script,
-               "dashboard_data": request.session['pysam_output']
+               "live_data": getLiveBarData()
               }
     return render(request, "history.html", context)
 
 #-------------------------------------------------------------
-def maintenance(request, context={}):
+def maintenance_view(request, *args, **kwargs):
+    context = {**(getLiveStatusData())}
     return render(request, "maintenance.html", context)
 
 #-------------------------------------------------------------
-def settings(request, context={}):
+def settings_view(request, *args, **kwargs):
+    context = {**(getLiveStatusData())}
     return render(request, "settings.html", context)
-
-#-------------------------------------------------------------
-def planning(request, context={}):
-    return render(request, "planning.html", context)
-
-#-------------------------------------------------------------
-def system(request, context={}):
-    return render(request, "system.html", context)
-
-#-------------------------------------------------------------
-#-------------------------------------------------------------
-
-def configure_sources(request, context={}):
-    return render(request, "configure/sources.html", context)    
-
-def configure_logging(request, context={}):
-    return render(request, "configure/logging.html", context)    
-
-def configure_model_settings(request, context={}):
-    return render(request, "configure/model_settings.html", context)    
-
-def configure_ui_settings(request, context={}):
-    return render(request, "configure/ui_settings.html", context)    
-
-def configure_event_log(request, context={}):
-    return render(request, "configure/event_log.html", context)    
-
-#-------------------------------------------------------------
-#-------------------------------------------------------------
-
-def whatif_interruptions(request, context={}):
-    return render(request, "whatif/interruptions.html", context)
-
-def whatif_resources(request, context={}):
-    return render(request, "whatif/resources.html", context)
-
-def whatif_weather(request, context={}):
-    return render(request, "whatif/weather.html", context)

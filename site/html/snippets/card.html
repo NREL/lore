@@ -2,7 +2,9 @@
     <div class="col">
         <div class="card h-100">
             <div class="card-body">
-                {{plot_script|safe}}
+                <input type="hidden" id="plot_script" name="plot_script" value='{{plot_script}}'>
+                {{plot_script|safe}} <!-- bokeh script-->
+                <i class="fas fa-expand" onclick="openModal(this)" ></i>
             </div>
         </div>
     </div>

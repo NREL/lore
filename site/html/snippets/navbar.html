@@ -1,12 +1,15 @@
 {% load static %}
+
 <div class="navigation">
-    <!-- Image of the sun -->
-    <!-- <img src="{% static "img/dtk64.png" %}" height="46px" alt="Logo" style="margin-left: 4px"> -->
     <ul class="sidebar-navigation nav-min">
+        <!-- Image of the sun -->
         <li class="site-title">
             <h3><img src="{% static "img/dtk64.png" %}" alt="CSP PLANT logo"
                 class="csp-logo" width=35px/><span class='site-title-text'>CSP Plant</span></h3>
         </li>
+
+        <!-- Profile Image -->
+        <!-- NOTE: This will need need to be updated once we have authenticated users -->
         <li>
             <div class="profile">
                 <div class="profile_pic">
@@ -18,23 +21,30 @@
                 </div>
             </div>
         </li>
+
+        <!-- Home/Main Dashboard -->
         <li class="nav-btn">
-            <a href="{% url 'dashboard' %}"><i class="fas fa-home"></i> Dashboard</a>
+            <a href="{% url 'dashboard' %}"><i class="fas fa-home"></i>Dashboard</a>
         </li>
+
+        <!-- Forecast -->
         <li class="nav-btn">
-            <a href="{% url 'forecast' %}"><i class="fas fa-chart-line"></i> Forecast</a>
+            <a href="{% url 'forecast' %}"><i class="fas fa-chart-line"></i>Forecast</a>
         </li>
+
+        <!-- History -->
         <li class="nav-btn">
-            <a href="{% url 'history' %}"><i class="fas fa-chart-bar    "></i>History</a>
+            <a href="{% url 'history' %}"><i class="fas fa-chart-bar"></i>History</a>
         </li>
+
+        <!-- Maintenance -->
         <li class="nav-btn">
             <a href="{% url 'maintenance' %}"><i class="fas fa-table"></i>Maintenance</a>
         </li>
+
+        <!-- User settings -->
         <li class="nav-btn">
-            <a href="{% url 'settings' %}"><i class="fas fa-cogs    "></i>User Settings</a>
-        </li>
-        <li class="menu-toggle">
-            <i class="fa fa-angle-right" aria-hidden="true"></i>
+            <a href="{% url 'settings' %}"><i class="fas fa-cogs"></i>User Settings</a>
         </li>
     </ul>
 </div>

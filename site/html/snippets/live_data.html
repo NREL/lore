@@ -1,66 +1,40 @@
-{% load utils %}
+<!-- NOTE: This will need to be updated based on whatever metrics you are hoping to capture in the live data.
+           The Django templates language provides filters to modify how things look, and I've provided some 
+           examples here. -->
 
 <div class="live-data">
     <div class="tile_count row">
+
+        <!-- TES Charge State -->
         <div class="col-md col-sm-4  tile_stats_count">
-            <span class="count_top">
-                <i class="fas fa-bolt"></i> TES Charge State [MWht]
-            </span>
-            <div class="count green">{{dashboard_data.e_ch_tes|avgcalc|floatformat:2}}</div>
-            <span class="count_bottom">
-                <i class="green">
-                    <i class="fas fa-sort-up    "></i>4%
-                </i>
-                From last Week
-            </span>
+            {% include "snippets/value_change.html" with data=live_data.tes change=live_data.tes_change title='TES Charge State [MWht]' icon='fa-bolt' %}
         </div>
+
+        <!-- Receiver Thermal Efficiency -->
         <div class="col-md col-sm-4  tile_stats_count">
-            <span class="count_top">
-                <i class="fas fa-solar-panel"></i> Expected Solar Field Generation [MWht]
-            </span>
-            <div class="count green">{{dashboard_data.disp_qsfprod_expected|avgcalc|floatformat:2}}</div>
-            <span class="count_bottom">
-                <i class="green">
-                    <i class="fas fa-sort-up    "></i>3%
-                </i>
-                From last Week
-            </span>
+            {% include "snippets/value_change.html" with data=live_data.receiver_therm_eff change=live_data.receiver_therm_eff_change title='Receiver Thermal Efficiency [%]' icon='fa-satellite-dish'%}
         </div>
+       
+        <!-- Field Optical Efficiency -->
         <div class="col-md col-sm-4  tile_stats_count">
-            <span class="count_top">
-                <i class="fas fa-fan"></i> Net Power Out [MWe]
-            </span>
-            <div class="count green">{{dashboard_data.P_out_net|avgcalc|floatformat:2}}</div>
-            <span claZss="count_bottom">
-                <i class="green">
-                    <i class="fas fa-sort-up    "></i>34%
-                </i>
-                From last Week
-            </span>
+            {% include "snippets/value_change.html" with data=live_data.field_optical_eff change=live_data.field_optical_eff_change title='Field Optical Efficiency [%]' icon='fa-solar-panel'%}
         </div>
+
+        <!-- Net Power Out -->
         <div class="col-md col-sm-4  tile_stats_count">
-            <span class="count_top">
-                <i class="fas fa-battery-three-quarters"></i> Annual Energy [kWhe]
-            </span>
-            <div class="count red">{{dashboard_data.annual_energy|stringformat:".2e"}}</div>
-            <span class="count_bottom">
-                <i class="red">
-                    <i class="fas fa-sort-down    "></i>12%
-                </i>
-                From last Week
-            </span>
+            {% include "snippets/value_change.html" with data=live_data.net_power_out change=live_data.net_power_out_change title='Net Power Out [MWe]' icon='fa-fan'%}
         </div>
+
+        <!-- SCSP Time of Use Value -->
         <div class="col-md col-sm-4  tile_stats_count">
-            <span class="count_top">
-                <i class="fas fa-money-bill"></i> Expected Revenue [$]
-            </span>
-            <div class="count green">{{dashboard_data.disp_rev_expected|avgcalc|floatformat:2}}</div>
-            <span class="count_bottom">
-                <i class="green">
-                    <i class="fas fa-sort-up    "></i>34%
-                </i>
-                From last Week
-            </span>
+            <div class="card">
+                <div class="card-body">
+                    <span class="count_top">
+                        <i class="fas fa-hourglass-half"></i> SCSP Time of Use Value
+                    </span>
+                    <div class="count">{{live_data.tou_value|floatformat:2}}</div>
+                </div>
+            </div>
         </div>
     </div>
 </div>

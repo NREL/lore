@@ -5,7 +5,8 @@ from bokeh.io import curdoc
 from bokeh.layouts import column, row, WidgetBox, Spacer, layout
 from bokeh.models.widgets import Div
 from bokeh.models import ColumnDataSource, DataTable, DateFormatter, TableColumn
-from bokeh.themes import built_in_themes
+from bokeh.themes import Theme
+import theme
 
 estimates_data = dict(
         parameter=['Cycle startup cost','Receiver startup cost','Startup energy usage','Receiver startup time',\
@@ -42,8 +43,10 @@ tables = column(
     title,
     estimates_table,
     max_height=275,
+    sizing_mode='stretch_both',
     width_policy='max'
 )
 
 curdoc().add_root(tables)
+curdoc().theme = Theme(json=theme.json)
 curdoc().title = "Estimates Tables"

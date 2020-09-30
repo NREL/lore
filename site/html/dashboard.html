@@ -1,13 +1,18 @@
 {% extends "base.html" %}
+
 {% block title %}
 Dashboard
 {% endblock %}
+
 {% block content %}
 <div class='data main-dahsboard'>
   {% include "snippets/live_data.html" %}
   <br/>
   <!-- Data Cards -->
-  {% include "snippets/card.html" with plot_script=db_script %}
+  <div class="data">
+    <div class="plots">
+      {% include "snippets/card.html" with plot_script=db_script %}
+  </div>
   </div>
   
 </div>
