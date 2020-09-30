@@ -91,7 +91,7 @@ conda activate pysam_daotk
 	cd build
 	cmake -G "Visual Studio 16 2019" -DCMAKE_CONFIGURATION_TYPES="Release" -DCMAKE_SYSTEM_VERSION=10.0 .. 
 	```
-15. Continue with the batch-build in step 8, but just for Release and first unloading:
+15. Open `/build/system_advisor_model.sln` in Visual Studio and perform a batch-build of the Release configuration, but first unload the following projects:
 	* TCSConsole
 	* SDKtool
 		
