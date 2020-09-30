@@ -84,8 +84,11 @@ conda activate pysam_daotk
 11. Delete the `.../sam_dev/pysam/build` directory if it exists
 12. Delete the contents of `.../sam_dev/pysam/dist/`
 13. Copy config.h to `.../sam-dev/ssc/nlopt` if the file does not exist
-14. Remove `.../sam_dev/build/` and run CMake to create the DAO-Tk solution ([step 7.4](https://github.com/NREL/SAM/wiki/Windows-Build-Instructions#7-run-cmake-to-generate-sam-vs-2019-project-files)). Omit the setting that disables the API, as shown in the command below:
+14. Remove the contents of `.../sam_dev/build/` and run CMake in the `/build` directory to create the DAO-Tk solution ([step 7.4](https://github.com/NREL/SAM/wiki/Windows-Build-Instructions#7-run-cmake-to-generate-sam-vs-2019-project-files)). Omit the setting that disables the API, as shown in the commands below:
 	```
+	rmdir /Q/S build
+	mkdir build
+	cd build
 	cmake -G "Visual Studio 16 2019" -DCMAKE_CONFIGURATION_TYPES="Release" -DCMAKE_SYSTEM_VERSION=10.0 .. 
 	```
 15. Continue with the batch-build in step 8, but just for Release and first unloading:
