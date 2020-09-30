@@ -1,5 +1,7 @@
 # Live Operations Recommendations Engine (LORE)
 
+![Data Flow Diagram](data-flow-diagram.png)
+
 This project develops a user interface for the design, analysis, and optimization of concentrating solar power 
 (CSP) systems, including optimization of both physical design variables and operations and maintenance 
 (O&M) activity. The software is derived and actively developed under funding from the U.S. Department of 
