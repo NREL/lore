@@ -49,6 +49,21 @@ conda activate pysam_daotk
    <tr><td>PYSAMDIR</td><td>...\sam_dev\pysam</td></tr>
    </table>
 3. Register at [PyPI.org](https://pypi.org/)
+4. Edit the arguments to setup() at the bottom of setup.py and /stubs/setup.py. Example:
+	```
+	name='NREL-PySAM-DAO-Tk'  [append '-stubs' for /stubs/setup.py]
+	...
+	url='https://github.com/NREL/dao-tk'
+	description="National Renewable Energy Laboratory's DAO-Tk Python Wrapper"		[append ', stub files' for /stubs/setup.py]
+	...
+	author="Matthew-Boyd"
+	author_email="matthew.boyd@nrel.gov"
+	...
+	packages=['PySAM-DAO-Tk'],  [append '-stubs' for /stubs/setup.py]
+	package_dir={'PySAM-DAO-Tk': 'files'},     [change to: {'PySAM-DAO-Tk-stubs': 'stubs/stubs'} for stubs file]
+	...
+	install_requires=['NREL-PySAM-DAO-Tk-stubs'],
+	```
 
 *Windows*
 
@@ -101,21 +116,6 @@ conda activate pysam_daotk
 		* Increment the version (major.minor.patch)
 		* Version must not equal any previous versions or PyPI will not let it on the repo
 	2. Edit RELEASE.md, adding the most recent changes
-	3. Edit the arguments to setup() at the bottom of setup.py and /stubs/setup.py. Example:
-		```
-		name='NREL-PySAM-DAO-Tk'  [append '-stubs' for /stubs/setup.py]
-		...
-		url='https://github.com/NREL/dao-tk'
-		description="National Renewable Energy Laboratory's DAO-Tk Python Wrapper"		[append ', stub files' for /stubs/setup.py]
-		...
-		author="Matthew-Boyd"
-		author_email="matthew.boyd@nrel.gov"
-		...
-		packages=['PySAM-DAO-Tk'],  [append '-stubs' for /stubs/setup.py]
-		package_dir={'PySAM-DAO-Tk': 'files'},     [change to: {'PySAM-DAO-Tk-stubs': 'stubs/stubs'} for stubs file]
-		...
-		install_requires=['NREL-PySAM-DAO-Tk-stubs'],
-		```
 17. Copy the entire contents of `.../lore/pysam/files` to `.../sam_dev/pysam/`, overriding all the respective files
 
 *Windows*
