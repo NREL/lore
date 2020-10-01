@@ -133,11 +133,11 @@ conda activate pysam_daotk
 
 19. Start Docker Desktop for Linux containers if it is not running
 20. In a command prompt, cd to .../sam_dev/
-21. To run confidently:
+21. To build automatically:
 	```
 	docker run --rm -v %cd%:/io quay.io/pypa/manylinux1_x86_64 /io/pysam/build_manylinux.sh
 	```
-22. To debug:
+22. To run manually (debug):
 	1. Build manylinux image by running:
 		```
 		docker run --rm -dit -v %cd%:/io quay.io/pypa/manylinux1_x86_64 /sbin/init
@@ -146,8 +146,8 @@ conda activate pysam_daotk
 		```
 		docker exec -it <id> bash -l
 		```
-	3. Copy commands from build_manylinux.sh to the bash window (right-clicking pastes) to step-through the script
-23. The four resulting Linux wheels corresponding to the different Python versions, plus a stub file wheel, are put in /sam-dev/pysam/dist/
+	3. Copy commands from build_manylinux.sh to the bash window (right-clicking pastes) to step-through the script. NOTE: copy the trailing end-of-line character, or you will have to press Enter once the last command is reached.
+23. The four resulting Linux wheels corresponding to the different Python versions are put in `/sam-dev/pysam/dist/` alongside the already existing Windows wheels and stub file.
 24. Ctrl-D to exit shell prompt
 
 *Windows and Linux*
