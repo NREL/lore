@@ -147,7 +147,7 @@ conda activate pysam_daotk
 		docker exec -it <id> bash -l
 		```
 	3. Copy commands from build_manylinux.sh to the bash window (right-clicking pastes) to step-through the script
-23. The three resulting Linux wheels are put in /sam-dev/pysam/dist/
+23. The four resulting Linux wheels corresponding to the different Python versions, plus a stub file wheel, are put in /sam-dev/pysam/dist/
 24. Ctrl-D to exit shell prompt
 
 *Windows and Linux*
