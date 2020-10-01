@@ -167,3 +167,4 @@ conda activate pysam_daotk
 	git checkout -- .
 	git clean -fd
 	```
+29. Commit the changes to the RELEASE.md and the two version.py files and push to the lore repo
