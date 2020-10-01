@@ -120,7 +120,7 @@ conda activate pysam_daotk
 
 *Windows*
 
-18. Run build_win.bat to build pysam, install the nrel-pysam-dao-tk package for the different Python versions locally and to create the corresponding wheel (.whl) files. There may be a couple test errors. If you recently built pysam, you can comment out the following lines (REM) in build_win.bat to save time:
+18. Run `...sam_dev/pysam/build_win.bat` to build pysam, install the nrel-pysam-dao-tk package for the different Python versions locally and to create the corresponding wheel (.whl) files. There may be a couple test errors. If you recently built pysam, you can comment out the following lines (REM) in build_win.bat to save time:
 	```
 	mkdir %SSCDIR%\..\build_pysam
 	cd %SSCDIR%\..\build_pysam
