@@ -1,2 +1,5 @@
 *.profile
 *.sqlite3
+Lib
+Scripts
+pyvenv.cfg
