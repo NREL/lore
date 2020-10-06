@@ -1,0 +1,29 @@
+# The alpine version can be used instead:
+#  FROM python:3.8.0-alpine
+#  however this will cause errors that need to be addressed. See:
+#  https://stackoverflow.com/questions/60595581/failed-to-install-gcc-on-python-3-7-alpine-docker-container
+FROM python:3.8.0
+LABEL maintainer="NREL - Thermal Sciences"
+
+ENV PYTHONUNBUFFERED 1
+
+# This addresses the build error:
+#  "unable to execute 'gcc': No such file or directory error: command 'gcc' failed with exit status 1"
+#RUN apk add --no-cache --virtual .build-deps gcc musl-dev \
+# && pip install cython \
+# && apk del .build-deps gcc musl-dev
+
+# Copy local requirements file to container and install those requirements there
+COPY ./requirements.txt /requirements.txt
+RUN pip install -r /requirements.txt
+
+# Create a folder in the image called 'site', make that the working directory in the image, and copy everything
+#  into that image folder
+RUN mkdir /site
+WORKDIR /site
+COPY . /site
+
+# Add a user named 'user' for running applications only and switch to it
+#  This makes the default user have no root privileges for security reasons
+RUN useradd -s /bin/bash user
+USER user
