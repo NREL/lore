@@ -8,24 +8,24 @@ For production testing, the web server [Waitress](https://docs.pylonsproject.org
 
 **Setup the Django Project (needed first time only)**
 1. If using the Anaconda Python distribution platform (preferred default), setup PowerShell for use with Python.
-  1. Open PowerShell and execute:
-  	  ```
-	  conda init
-	  ```
-  2. Close PowerShell
+	1. Open PowerShell and execute:
+		```
+		conda init
+		```
+	2. Close PowerShell
 2. Setup and activate a dedicated virtual environment, install all needed Python packages, install a loopback adapter for the Bokeh server and populate the Django database.
-  1. Navigate to the `\site` directory and run the following PowerShell script via:
-     ```
-	 .\init.ps1
-	 ```
-  2. Enter credentials when prompted in order to open up a new PowerShell instance with Administrator privileges
-  3. Press Enter when asked to "Select which SQLite3 database to import to:"
-  
-  7. ***Very Important***: NREL computers will not allow a second network 'connection' at the same time as a WiFi connection (however, this may only be for NREL WiFi networks). The loopback adapter is seen as another network connection and thus WiFi will not work while this is present and enabled. To disable the loopback address and regain access to the NREL WiFi networks, start a command prompt with administrator privileges and run:
-    ```
-	netsh interface set interface "Ethernet 5" disable
-	```
-    This is for a loopback adapter named "Ethernet 5". To re-enable, just re-run the above command but change 'disable' to 'enable'. Verify the change by running `ipconfig /all`
+	1. Close other instances of Python (e.g., VSCode) or there will be a permissions error.
+	2. Navigate to the `\site` directory and run the following PowerShell script via:
+		```
+		.\init.ps1
+		```
+	3. Enter credentials when prompted in order to open up a new PowerShell instance with Administrator privileges
+	4. Press Enter when asked to "Select which SQLite3 database to import to:"
+	5. ***Very Important***: NREL computers will not allow a second network 'connection' at the same time as a WiFi connection (however, this may only be for NREL WiFi networks). The loopback adapter is seen as another network connection and thus WiFi will not work while this is present and enabled. To disable the loopback address and regain access to the NREL WiFi networks, start a command prompt with administrator privileges and run:
+		```
+		netsh interface set interface "Ethernet 5" disable
+		```
+	This is for a loopback adapter named "Ethernet 5". To re-enable, just re-run the above command but change 'disable' to 'enable'. Verify the change by running `ipconfig /all`
 
 **Run the Django Project**
 1. If continuing from initial setup, in the same open PowerShell window, change to the `\site` directory:
