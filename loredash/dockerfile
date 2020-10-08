@@ -17,11 +17,11 @@ ENV PYTHONUNBUFFERED 1
 COPY ./requirements.txt /requirements.txt
 RUN pip install -r /requirements.txt
 
-# Create a folder in the image called 'site', make that the working directory in the image, and copy everything
+# Create a folder in the image called 'loredash', make that the working directory in the image, and copy everything
 #  into that image folder
-RUN mkdir /site
-WORKDIR /site
-COPY . /site
+RUN mkdir /loredash
+WORKDIR /loredash
+COPY . /loredash
 
 # Add a user named 'user' for running applications only and switch to it
 #  This makes the default user have no root privileges for security reasons
