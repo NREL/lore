@@ -6,7 +6,7 @@ from bokeh.layouts import column, row, WidgetBox, Spacer, layout
 from bokeh.models.widgets import Div
 from bokeh.models import ColumnDataSource, DataTable, DateFormatter, TableColumn
 from bokeh.themes import Theme
-import theme
+import theme.theme as theme
 
 estimates_data = dict(
         parameter=['Cycle startup cost','Receiver startup cost','Startup energy usage','Receiver startup time',\

@@ -38,6 +38,40 @@ For production testing, the web server [Waitress](https://docs.pylonsproject.org
 3. Run the script via `.\run_dashboard_app.ps1`
 4. Open a browser and navigate to: `10.10.10.10`
 
+**Alternative (better?) setup and run method using conda environments**
+1. If first-time setup
+	1. Create a new conda virtual environment and activate it. In a terminal (e.g., Anaconda Prompt):
+		```
+		conda create --name loredash python=3.8 -y
+		conda activate loredash
+		```
+	2. Navigate to `/lore/loredash`
+	3. Install requirements (must use pip instead of conda)
+		```
+		python -m pip install -r .\requirements.txt
+		```
+	4. Setup loopback adapter for running a local version of the plotting server
+		```
+		powershell setup_loopback_adapter.ps1
+		```
+	5. Setup a new database and migrate the mock data to it
+		```
+		python manage.py migrate
+		python ./data/import_data.py ./data
+		```
+2. If needed, navigate to `/lore/loredash` and activate the virtual environment
+	```
+	conda activate loredash
+	```
+3. Start the plotting server
+	```
+	start powershell -noexit -file run_bokeh_server.ps1
+	```
+4. Start the Django project
+	```
+	python manage.py runserver 10.10.10.10:80
+	```
+5. Open the dashboard by going to the address `10.10.10.10` in a web browser
 
 # Dashboard Plots
 

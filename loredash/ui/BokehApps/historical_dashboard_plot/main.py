@@ -8,11 +8,10 @@ from bokeh.themes import Theme
 from bokeh.events import DoubleTap
 from bokeh.io import curdoc
 from tornado import gen
-import sys
-sys.path.append('theme')
-sys.path.append('bokeh_utils')
-import theme
-import bokeh_utils as butils
+import sys, os
+sys.path.insert(1, os.path.join(sys.path[0], '..'))
+import theme.theme as theme
+import bokeh_utils.bokeh_utils as butils
 
 # Data manipulation
 import pandas as pd
