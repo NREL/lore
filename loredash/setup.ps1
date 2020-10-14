@@ -1,4 +1,5 @@
-.\setup_loopback_adapter.ps1
+# Loopback adapter not currently needed
+#.\setup_loopback_adapter.ps1
 
 ## Import data to Django Models
 
