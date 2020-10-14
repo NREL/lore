@@ -7,6 +7,14 @@ LABEL maintainer="NREL - Thermal Sciences"
 
 ENV PYTHONUNBUFFERED 1
 
+# Replicate a virtualenv, see here for why:  https://pythonspeed.com/articles/activate-virtualenv-dockerfile/
+# ENV VIRTUAL_ENV=/loredash
+# RUN python -m venv $VIRTUAL_ENV
+# ENV PATH="$VIRTUAL_ENV:$PATH"
+
+# I don't think this works:
+# ENV DJANGO_SETTINGS_MODULE=loredash.settings
+
 # This addresses the build error:
 #  "unable to execute 'gcc': No such file or directory error: command 'gcc' failed with exit status 1"
 #RUN apk add --no-cache --virtual .build-deps gcc musl-dev \
@@ -19,7 +27,7 @@ RUN pip install -r /requirements.txt
 
 # Create a folder in the image called 'loredash', make that the working directory in the image, and copy everything
 #  into that image folder
-RUN mkdir /loredash
+# RUN mkdir /loredash
 WORKDIR /loredash
 COPY . /loredash
 

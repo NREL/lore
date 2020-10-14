@@ -2,43 +2,27 @@
 
 The UI dashboard is based on [Django](https://www.djangoproject.com/), which is a high-level Python web framework. In order to have interactive plots that are driven by Python code executed real-time, a charting server is needed. The open-source visualization library [Bokeh](https://bokeh.org/) is used for this purpose. Bokeh can be run a number of different ways, but running as a charting server is necessary to have Python-driven interative plots.
 
-The Bokeh server can be run alongside Django same as before, including while debugging in Visual Studio Code. However, in order to do so on a local machine, with or without an additional web server (e.g., Apache), you must add another loopback address. Normally, on the production server, the Bokeh charting server will utilize the default loopback address of 127.0.0.1 and the web server will utilize the public facing IP address. On a local machine, however, the IP address cannot be repurposed in this way so another loopback address must be added, for either the the web server or Django's manage.py module. In order to get another loopback address, a loopback adapter must be installed.
-
 For production testing, the web server [Waitress](https://docs.pylonsproject.org/projects/waitress/en/stable/) is used along with the [Nginx](https://www.nginx.com/) web server. The Nginx server is configured as a public-facing reverse proxy that passes the outside web requests to the Waitress server, but predominantly it is needed to serve the static files.
 
-**Setup the Django Project (needed first time only)**
-1. If using the Anaconda Python distribution platform (preferred default), setup PowerShell for use with Python.
-	1. Open PowerShell and execute:
-		```
-		conda init
-		```
-	2. Close PowerShell
-2. Setup and activate a dedicated virtual environment, install all needed Python packages, install a loopback adapter for the Bokeh server and populate the Django database.
-	1. Close other instances of Python (e.g., VSCode) or there will be a permissions error.
-	2. Navigate to the `\site` directory and run the following PowerShell script via:
-		```
-		.\init.ps1
-		```
-	3. Enter credentials when prompted in order to open up a new PowerShell instance with Administrator privileges
-	4. Press Enter when asked to "Select which SQLite3 database to import to:"
-	5. ***Very Important***: NREL computers will not allow a second network 'connection' at the same time as a WiFi connection (however, this may only be for NREL WiFi networks). The loopback adapter is seen as another network connection and thus WiFi will not work while this is present and enabled. To disable the loopback address and regain access to the NREL WiFi networks, start a command prompt with administrator privileges and run:
-		```
-		netsh interface set interface "Ethernet 5" disable
-		```
-	This is for a loopback adapter named "Ethernet 5". To re-enable, just re-run the above command but change 'disable' to 'enable'. Verify the change by running `ipconfig /all`
+## Setup and run from Docker
+1. Start Docker Desktop
+	1. Download and install from [docker.com](https://www.docker.com/products/docker-desktop)
+	2. Start Docker Desktop. If you get a not-enough-memory error:
+		1. Download and run [RAMMap](https://docs.microsoft.com/en-us/sysinternals/downloads/rammap)
+		2. Empty -> Empty Working Sets
+		3. File -> Refresh
+		4. Close
+2. Navigate in a terminal to `/lore/loredash`
+3. Run:
+	```
+	docker-compose up dash
+	```
+4. Open a web browser to:
+	```
+	127.0.0.1:8000
+	```
 
-**Run the Django Project**
-1. If continuing from initial setup, in the same open PowerShell window, change to the `\site` directory:
-   ```
-   cd ..
-   ```
-2. Else if running the second time and after:
-	1. Navigate to the `\site` directory and run the PowerShell script `setup.ps1`
-	2. Press Enter when asked to "Select which SQLite3 database to import to:"
-3. Run the script via `.\run_dashboard_app.ps1`
-4. Open a browser and navigate to: `10.10.10.10`
-
-**Alternative (better?) setup and run method using conda environments**
+## Setup and run from Python
 1. If first-time setup
 	1. Create a new conda virtual environment and activate it. In a terminal (e.g., Anaconda Prompt):
 		```
@@ -50,28 +34,59 @@ For production testing, the web server [Waitress](https://docs.pylonsproject.org
 		```
 		python -m pip install -r .\requirements.txt
 		```
-	4. Setup loopback adapter for running a local version of the plotting server
-		```
-		powershell setup_loopback_adapter.ps1
-		```
-	5. Setup a new database and migrate the mock data to it
-		```
-		python manage.py migrate
-		python ./data/import_data.py ./data
-		```
-2. If needed, navigate to `/lore/loredash` and activate the virtual environment
+2. Navigate to `/lore/loredash` and activate the virtual environment
 	```
 	conda activate loredash
 	```
-3. Start the plotting server
+3. If needed, migrate new/mock data to the database
+	```
+	python manage.py migrate
+	python ./data/import_data.py ./data
+	```
+4. Start the plotting server
 	```
 	start powershell -noexit -file run_bokeh_server.ps1
 	```
-4. Start the Django project
+5. Start the Django project
 	```
-	python manage.py runserver 10.10.10.10:80
+	python manage.py runserver 127.0.0.1:8000
 	```
-5. Open the dashboard by going to the address `10.10.10.10` in a web browser
+6. Open the dashboard by going to the above address in a web browser
+
+## Alternative approach
+
+### Setup the Django Project (needed first time only)
+1. If using the Anaconda Python distribution platform (preferred default), setup PowerShell for use with Python.
+	1. Open PowerShell and execute:
+		```
+		conda init
+		```
+	2. Close PowerShell
+2. Setup and activate a dedicated virtual environment, install all needed Python packages, install a loopback adapter for the Bokeh server and populate the Django database.
+	1. Close other instances of Python (e.g., VSCode) or there will be a permissions error.
+	2. Navigate to the `/lore/loredash` directory and run the following PowerShell script via:
+		```
+		.\init.ps1
+		```
+	3. Enter credentials when prompted in order to open up a new PowerShell instance with Administrator privileges
+	4. Press Enter when asked to "Select which SQLite3 database to import to:"
+
+### Run the Django Project
+1. If continuing from initial setup, in the same open PowerShell window, change to the `/lore/loredash` directory:
+   ```
+   cd ..
+   ```
+2. Else if running the second time and after:
+	1. Navigate to the `/lore/loredash` directory and run the following PowerShell script via:
+		```
+		.\setup.ps1
+		```
+	2. Press Enter when asked to "Select which SQLite3 database to import to:"
+3. Change directories back to `/lore/loredash` and run the following Powershell script via:
+	```
+	.\run_dashboard_app.ps1
+	```
+4. Open a browser and navigate to: `127.0.0.1:8000`
 
 # Dashboard Plots
 
