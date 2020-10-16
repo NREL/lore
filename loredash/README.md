@@ -53,41 +53,6 @@ For production testing, the web server [Waitress](https://docs.pylonsproject.org
 	```
 6. Open the dashboard by going to the above address in a web browser
 
-## Alternative approach
-
-### Setup the Django Project (needed first time only)
-1. If using the Anaconda Python distribution platform (preferred default), setup PowerShell for use with Python.
-	1. Open PowerShell and execute:
-		```
-		conda init
-		```
-	2. Close PowerShell
-2. Setup and activate a dedicated virtual environment, install all needed Python packages, install a loopback adapter for the Bokeh server and populate the Django database.
-	1. Close other instances of Python (e.g., VSCode) or there will be a permissions error.
-	2. Navigate to the `/lore/loredash` directory and run the following PowerShell script via:
-		```
-		.\init.ps1
-		```
-	3. Enter credentials when prompted in order to open up a new PowerShell instance with Administrator privileges
-	4. Press Enter when asked to "Select which SQLite3 database to import to:"
-
-### Run the Django Project
-1. If continuing from initial setup, in the same open PowerShell window, change to the `/lore/loredash` directory:
-   ```
-   cd ..
-   ```
-2. Else if running the second time and after:
-	1. Navigate to the `/lore/loredash` directory and run the following PowerShell script via:
-		```
-		.\setup.ps1
-		```
-	2. Press Enter when asked to "Select which SQLite3 database to import to:"
-3. Change directories back to `/lore/loredash` and run the following Powershell script via:
-	```
-	.\run_dashboard_app.ps1
-	```
-4. Open a browser and navigate to: `127.0.0.1:8000`
-
 # Dashboard Plots
 
 The Dashboard stack currently uses Django and Bokeh both running on a server. These will both be run in production mode once on the local plant server.
