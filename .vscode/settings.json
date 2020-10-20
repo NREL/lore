@@ -68,5 +68,5 @@
         "*.xpm": "cpp",
         "core": "cpp"
     },
-    "python.pythonPath": "c:\\Users\\mboyd\\AppData\\Local\\Continuum\\miniconda3\\envs\\lore_python_3.8\\python.exe",
+    "python.pythonPath": "C:\\Users\\mboyd\\AppData\\Local\\Continuum\\miniconda3\\envs\\loredash\\python.exe",
 }

@@ -1,0 +1,30 @@
+# The base image is often a plain Linux OS
+# For first builds, use python:3.8.0. However, this will result in very large images
+# The smaller, popular alpine base image has issues for Python builds:
+#  https://pythonspeed.com/articles/alpine-docker-python/
+FROM python:3.8-slim-buster
+LABEL maintainer="NREL - Thermal Sciences"
+
+ENV PYTHONUNBUFFERED 1
+
+# Replicate a virtualenv, see here for why:  https://pythonspeed.com/articles/activate-virtualenv-dockerfile/
+# ENV VIRTUAL_ENV=/loredash
+# RUN python -m venv $VIRTUAL_ENV
+# ENV PATH="$VIRTUAL_ENV:$PATH"
+
+# Copy local requirements file to container and install those requirements there
+COPY ./requirements.txt /requirements.txt
+RUN apt-get -qq update
+RUN apt-get -qq install gcc
+RUN pip install -r /requirements.txt
+
+# Create a folder in the image called 'loredash', make that the working directory in the image, and copy everything
+#  into that image folder
+# RUN mkdir /loredash
+WORKDIR /loredash
+COPY . /loredash
+
+# Add a user named 'user' for running applications only and switch to it
+#  This makes the default user have no root privileges for security reasons
+RUN useradd -s /bin/bash user
+USER user
