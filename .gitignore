@@ -308,5 +308,6 @@ deploy/linux/dao-tk
 deploy/samples/clustering/*
 deploy/samples/*.csv
 
-# Visual Studdio Code
+# Visual Studio Code
 .vscode/
+.vscode/settings.json
