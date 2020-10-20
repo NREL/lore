@@ -4,7 +4,39 @@ The UI dashboard is based on [Django](https://www.djangoproject.com/), which is 
 
 For production testing, the web server [Waitress](https://docs.pylonsproject.org/projects/waitress/en/stable/) is used along with the [Nginx](https://www.nginx.com/) web server. The Nginx server is configured as a public-facing reverse proxy that passes the outside web requests to the Waitress server, but predominantly it is needed to serve the static files.
 
-## Setup and run from Docker
+
+## Run via remotely hosted Docker image
+1. Request Docker Hub repository access to @Matthew-Boyd
+2. Start Docker Desktop
+	1. Download and install from [docker.com](https://www.docker.com/products/docker-desktop)
+	2. Start Docker Desktop. If you get a not-enough-memory error:
+		1. Download and run [RAMMap](https://docs.microsoft.com/en-us/sysinternals/downloads/rammap)
+		2. Empty -> Empty Working Sets
+		3. File -> Refresh
+		4. Close
+		5. If this fails, restart your computer.
+3. Open the Images section in Docker Desktop and delete any prior lore images (if not the first time testing)
+4. Right-click the Docker tray icon and switch to Linux containers if needed (if there’s an option that says ‘Switch to Windows containers..’ then you’re already set)
+5. Create a new folder outside of the lore repo and copy to it `docker-compose.yml`
+6. Open a terminal (e.g., Anaconda Prompt) and change directory to this new folder
+7. Create and activate a fresh python environment via:
+	```
+	conda create --name basic_3.8 python=3.8 -y
+	conda activate basic_3.8
+	```
+8. Execute:
+	```
+	docker pull amd64/python:3.8-slim-buster
+	docker pull matthewtboyd/lore:latest
+	docker-compose up dash
+	```
+9. Open a browser to:
+	```
+	127.0.0.1:8000
+	```
+
+
+## Setup and run locally using Docker
 1. Start Docker Desktop
 	1. Download and install from [docker.com](https://www.docker.com/products/docker-desktop)
 	2. Start Docker Desktop. If you get a not-enough-memory error:
@@ -12,6 +44,7 @@ For production testing, the web server [Waitress](https://docs.pylonsproject.org
 		2. Empty -> Empty Working Sets
 		3. File -> Refresh
 		4. Close
+		5. If this fails, restart your computer.
 2. Navigate in a terminal to `/lore/loredash`
 3. Run:
 	```
