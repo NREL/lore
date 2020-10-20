@@ -1,3 +1,4 @@
+# The base image is often a plain Linux OS
 # For first builds, use python:3.8.0. However, this will result in very large images
 # The smaller, popular alpine base image has issues for Python builds:
 #  https://pythonspeed.com/articles/alpine-docker-python/

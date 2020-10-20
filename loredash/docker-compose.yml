@@ -15,14 +15,15 @@ version: "3"
 services:
     # this is an 'app' from which a container is created. 'plots' is another app and will be another container
     dash:
-        image: lore
+        image: matthewtboyd/lore
         networks:
             app_net:
                 ipv4_address: 10.10.10.10
         command: python manage.py runserver 0.0.0.0:8000
         container_name: dashboard
-        volumes:
-            - .:/loredash
+        # Mapping to a volume may be causing a problematic local dependency on manage.py
+        # volumes:
+        #     - .:/loredash
         ports:
             # HOST_PORT:CONTAINER_PORT ('host' is the computer hosting the container)
             - "8000:8000"
@@ -31,7 +32,7 @@ services:
             - migration
             - plots
     plots:
-        image: lore
+        image: matthewtboyd/lore
         networks:
             app_net:
                 ipv4_address: 10.10.10.11
@@ -49,8 +50,9 @@ services:
             --allow-websocket-origin 127.0.0.1:8000 --address 10.10.10.11 --port 5006"
         #   allow connections from IP:PORT, and host plotting server on IP and PORT
         container_name: plotting_server
-        volumes:
-            - .:/loredash
+        # Also not mapping to a local volume here as well
+        # volumes:
+        #     - .:/loredash
         ports:
             # Networked service-to-service communication uses the CONTAINER_PORT.
             # When HOST_PORT is defined, the service is accessible outside the swarm as well.
@@ -60,20 +62,23 @@ services:
             - migration
     migration:
         build: .
-        image: lore
+        image: matthewtboyd/lore
         networks:
             - app_net
         command: python manage.py migrate
         container_name: migration
-        volumes:
-            - .:/loredash
+        # Mapping to a volume may be causing a problematic local dependency on manage.py
+        # volumes:
+        #     - .:/loredash
 
 networks:
     app_net:
         driver: bridge
-        enable_ipv6: false
+        # Removing for greater compatibility across systems
+        # enable_ipv6: false
         ipam:
             driver: default
             config:
                 - subnet: 10.10.10.0/24
-                  gateway: 10.10.10.254
+        # Removing for greater compatibility across systems
+        #          gateway: 10.10.10.254
