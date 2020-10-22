@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+{% extends "ui/base.html" %}
 
 {% block title %}
 History
@@ -8,7 +8,7 @@ History
 <div class="data data-forecast">
 
     <!-- Daily Statistics -->
-    {% include "snippets/live_data.html" %}
+    {% include "ui/snippets/live_data.html" %}
     <br/>
 
     <!-- Data Cards -->
@@ -16,10 +16,10 @@ History
         <div class="row row-cols-2 plots">
 
             <!-- Historical Dashboard Data -->
-            {% include "snippets/card.html" with plot_script=hdbp_script %}
+            {% include "ui/snippets/card.html" with plot_script=hdbp_script %}
             
             <!-- Historical Solar Data -->
-            {% include "snippets/card.html" with plot_script=hsf_script %}
+            {% include "ui/snippets/card.html" with plot_script=hsf_script %}
         </div>
     </div>
 </div>

@@ -7,22 +7,22 @@
 
         <!-- TES Charge State -->
         <div class="col-md col-sm-4  tile_stats_count">
-            {% include "snippets/value_change.html" with data=live_data.tes change=live_data.tes_change title='TES Charge State [MWht]' icon='fa-bolt' %}
+            {% include "ui/snippets/value_change.html" with data=live_data.tes change=live_data.tes_change title='TES Charge State [MWht]' icon='fa-bolt' %}
         </div>
 
         <!-- Receiver Thermal Efficiency -->
         <div class="col-md col-sm-4  tile_stats_count">
-            {% include "snippets/value_change.html" with data=live_data.receiver_therm_eff change=live_data.receiver_therm_eff_change title='Receiver Thermal Efficiency [%]' icon='fa-satellite-dish'%}
+            {% include "ui/snippets/value_change.html" with data=live_data.receiver_therm_eff change=live_data.receiver_therm_eff_change title='Receiver Thermal Efficiency [%]' icon='fa-satellite-dish'%}
         </div>
        
         <!-- Field Optical Efficiency -->
         <div class="col-md col-sm-4  tile_stats_count">
-            {% include "snippets/value_change.html" with data=live_data.field_optical_eff change=live_data.field_optical_eff_change title='Field Optical Efficiency [%]' icon='fa-solar-panel'%}
+            {% include "ui/snippets/value_change.html" with data=live_data.field_optical_eff change=live_data.field_optical_eff_change title='Field Optical Efficiency [%]' icon='fa-solar-panel'%}
         </div>
 
         <!-- Net Power Out -->
         <div class="col-md col-sm-4  tile_stats_count">
-            {% include "snippets/value_change.html" with data=live_data.net_power_out change=live_data.net_power_out_change title='Net Power Out [MWe]' icon='fa-fan'%}
+            {% include "ui/snippets/value_change.html" with data=live_data.net_power_out change=live_data.net_power_out_change title='Net Power Out [MWe]' icon='fa-fan'%}
         </div>
 
         <!-- SCSP Time of Use Value -->

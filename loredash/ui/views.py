@@ -145,7 +145,7 @@ def dashboard_view(request, *args, **kwargs):
                **(getLiveStatusData())
               }
 
-    return render(request, "dashboard.html", context)
+    return render(request, "ui/dashboard.html", context)
 
 #-------------------------------------------------------------
 def outlook_view(request, *args, **kwargs):
@@ -158,7 +158,7 @@ def outlook_view(request, *args, **kwargs):
                "server_script" : server_script
               }
 
-    return render(request, "outlook.html", context)
+    return render(request, "ui/outlook.html", context)
 
 #-------------------------------------------------------------
 def forecast_view(request, *args, **kwargs):
@@ -192,7 +192,7 @@ def forecast_view(request, *args, **kwargs):
 
               }
 
-    return render(request, "forecast.html", context)
+    return render(request, "ui/forecast.html", context)
 
 #-------------------------------------------------------------
 def history_view(request, *args, **kwargs):
@@ -211,14 +211,14 @@ def history_view(request, *args, **kwargs):
                "hdbp_script": hdbp_server_script,
                "live_data": getLiveBarData()
               }
-    return render(request, "history.html", context)
+    return render(request, "ui/history.html", context)
 
 #-------------------------------------------------------------
 def maintenance_view(request, *args, **kwargs):
     context = {**(getLiveStatusData())}
-    return render(request, "maintenance.html", context)
+    return render(request, "ui/maintenance.html", context)
 
 #-------------------------------------------------------------
 def settings_view(request, *args, **kwargs):
     context = {**(getLiveStatusData())}
-    return render(request, "settings.html", context)
+    return render(request, "ui/settings.html", context)
