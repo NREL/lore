@@ -5,20 +5,21 @@ import datetime
 # New plot tables:
 #--------------Dashboard Data------------------------------
 class DashboardDataRTO(models.Model):
-    timestamp = models.DateTimeField(verbose_name="Timestamp")
+    timestamp = models.DateTimeField(verbose_name="Timestamp", db_index=True)
     actual = models.FloatField(verbose_name="Actual [MWe]", default=None)
     optimal = models.FloatField(verbose_name="Optimal [MWe]",default=None)
     scheduled = models.FloatField(verbose_name="Scheduled [MWe]", default=None)
     field_operation_generated = models.FloatField(verbose_name="Field Operation Generated [MWt]", default=None)
     field_operation_available = models.FloatField(verbose_name="Field Operation Available [MWt]", default=None)
 
+    # define what is shown when entry is generically queried
     def __str__(self):
         return str(self.timestamp)
 
 
 #----------Forcasts Market Data----------------------------
 class ForecastsMarketData(models.Model):
-    timestamp = models.DateTimeField(verbose_name="Timestamp")
+    timestamp = models.DateTimeField(verbose_name="Timestamp", db_index=True)
     market_forecast = models.FloatField(verbose_name="Market Forcast [-]", default=None)
     ci_plus = models.FloatField(verbose_name="CI+ [%]", default=None)
     ci_minus = models.FloatField(verbose_name="CI- [%]", default=None)
@@ -28,7 +29,7 @@ class ForecastsMarketData(models.Model):
 
 #-----------Forcasts Solar Data----------------------------
 class ForecastsSolarData(models.Model):
-    timestamp = models.DateTimeField(verbose_name="Timestamp")
+    timestamp = models.DateTimeField(verbose_name="Timestamp", db_index=True)
     clear_sky = models.FloatField(verbose_name="Clear Sky [W/m2]", default=None)
     nam = models.FloatField(verbose_name="NAM [W/m2]", default=None)
     nam_plus = models.FloatField(verbose_name="NAM+ [%]", default=None)
