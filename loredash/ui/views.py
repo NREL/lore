@@ -1,17 +1,15 @@
-#django imports
 from django.shortcuts import render
 from django.http import HttpResponse, Http404, HttpResponseRedirect
 from django.db import transaction
+
+from bokeh.embed import server_session
+from bokeh.util import token
 
 # Other package imports
 from datetime import datetime, timedelta
 import matplotlib.pyplot as plt, mpld3
 from io import StringIO
 import pandas
-
-# bokeh server interactions
-from bokeh.embed import server_session
-from bokeh.util import token
 
 # pysam script
 from ui import mspt
@@ -23,21 +21,23 @@ PROGRESS_BAR_WIDTH = 160
 #-------------------------------------------------------------
 #-------------------------------------------------------------
 
-def getLiveStatusData():
-    return {
-            'connection_status' : True,
-            'model_status' : False,
-            'last_refresh' : datetime.now(),
-            }
-
-# def collectPysamData(request):
 # Collect data from PySAM run
 pysam_output = mspt.get_pysam_data()
 pysam_output['time'] = list(pysam_output['time_hr'])
 pysam_output['time'] = [timedelta(hours=int(x)) for x in pysam_output['time']]
 pysam_output['time'] = list(map(lambda hr: hr + datetime(2010, 1, 1), pysam_output['time'])) # Jan 1, 2010 used because that is the start of our solar data
 
+def getLiveStatusData():
+    """Returns the last update time and connection and model statuses at the top of the main page."""
+
+    return {
+            'connection_status' : True,
+            'model_status' : False,
+            'last_refresh' : datetime.now(),
+            }
+
 def getLiveBarData():
+    """Returns the data displayed in the 5 small boxes at the top of the main dashboard page."""
 
     global pysam_output
 
@@ -112,7 +112,6 @@ def getLiveBarData():
 
     # Export live data such that it can be used with the django template
     live_data = {
-
         "tes" : tes_charge,
         "tes_change" : tes_charge_pct_change,
         "receiver_therm_eff" : receiver_therm_eff,

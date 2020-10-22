@@ -1,18 +1,18 @@
+import sys, os
+sys.path.insert(1, os.path.join(sys.path[0], '..'))
 # Bokeh
 from bokeh.plotting import figure
 from bokeh.models import Span, ColumnDataSource, LinearAxis, DataRange1d, Legend, LegendItem, PanTool, WheelZoomTool, HoverTool, CustomJS
 from bokeh.models.widgets import Button, CheckboxButtonGroup, RadioButtonGroup
-import colorcet as cc
 from bokeh.layouts import column, row, WidgetBox, Spacer
 from bokeh.themes import Theme
 from bokeh.io import curdoc
 from bokeh.events import DoubleTap
-from tornado import gen
-import sys, os
-sys.path.insert(1, os.path.join(sys.path[0], '..'))
-import theme.theme as theme
 import bokeh_utils.bokeh_utils as butils
 
+import colorcet as cc
+from tornado import gen
+import theme.theme as theme
 
 # Data manipulation
 import pandas as pd
