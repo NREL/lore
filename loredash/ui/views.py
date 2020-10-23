@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 import matplotlib.pyplot as plt, mpld3
 from io import StringIO
 import pandas
-from ui import config
+from ui import apps
 
 # pysam script
 from ui import mspt
@@ -31,7 +31,7 @@ def getPysamData():
     pysam_output['time'] = list(map(lambda hr: hr + datetime(2010, 1, 1), pysam_output['time'])) # Jan 1, 2010 used because that is the start of our solar data
     return pysam_output
 
-config.pysam_output = getPysamData()
+apps.pysam_output = getPysamData()
 
 def getLiveStatusData():
     """Returns the last update time and connection and model statuses at the top of the main page."""
@@ -45,7 +45,7 @@ def getLiveStatusData():
 def getLiveBarData():
     """Returns the data displayed in the 5 small boxes at the top of the main dashboard page."""
 
-    pysam_output = config.pysam_output
+    pysam_output = apps.pysam_output
 
     ## Collects the data from the pysam_output stored on the server (as of now).
     ## This will update the bar on the hour (the frequency of the data entries in the weather file).
