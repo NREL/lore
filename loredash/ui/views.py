@@ -31,7 +31,7 @@ def getPysamData():
     pysam_output['time'] = list(map(lambda hr: hr + datetime(2010, 1, 1), pysam_output['time'])) # Jan 1, 2010 used because that is the start of our solar data
     return pysam_output
 
-apps.pysam_output = getPysamData()
+apps.pysam_output = getPysamData()      # this should be put in a better place, but is currently here so it's not also called by the bokeh server
 
 def getLiveStatusData():
     """Returns the last update time and connection and model statuses at the top of the main page."""
