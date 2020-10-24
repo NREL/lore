@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 import matplotlib.pyplot as plt, mpld3
 from io import StringIO
 import pandas
+from ui import apps
 
 # pysam script
 from ui import mspt
@@ -21,11 +22,16 @@ PROGRESS_BAR_WIDTH = 160
 #-------------------------------------------------------------
 #-------------------------------------------------------------
 
-# Collect data from PySAM run
-pysam_output = mspt.get_pysam_data()
-pysam_output['time'] = list(pysam_output['time_hr'])
-pysam_output['time'] = [timedelta(hours=int(x)) for x in pysam_output['time']]
-pysam_output['time'] = list(map(lambda hr: hr + datetime(2010, 1, 1), pysam_output['time'])) # Jan 1, 2010 used because that is the start of our solar data
+
+def getPysamData():
+    """Collect data from PySAM run"""
+    pysam_output = mspt.get_pysam_data()
+    pysam_output['time'] = list(pysam_output['time_hr'])
+    pysam_output['time'] = [timedelta(hours=int(x)) for x in pysam_output['time']]
+    pysam_output['time'] = list(map(lambda hr: hr + datetime(2010, 1, 1), pysam_output['time'])) # Jan 1, 2010 used because that is the start of our solar data
+    return pysam_output
+
+apps.pysam_output = getPysamData()      # this should be put in a better place, but is currently here so it's not also called by the bokeh server
 
 def getLiveStatusData():
     """Returns the last update time and connection and model statuses at the top of the main page."""
@@ -39,7 +45,7 @@ def getLiveStatusData():
 def getLiveBarData():
     """Returns the data displayed in the 5 small boxes at the top of the main dashboard page."""
 
-    global pysam_output
+    pysam_output = apps.pysam_output
 
     ## Collects the data from the pysam_output stored on the server (as of now).
     ## This will update the bar on the hour (the frequency of the data entries in the weather file).
@@ -141,7 +147,7 @@ def dashboard_view(request, *args, **kwargs):
                **(getLiveStatusData())
               }
 
-    return render(request, "dashboard.html", context)
+    return render(request, "ui/dashboard.html", context)
 
 #-------------------------------------------------------------
 def outlook_view(request, *args, **kwargs):
@@ -154,7 +160,7 @@ def outlook_view(request, *args, **kwargs):
                "server_script" : server_script
               }
 
-    return render(request, "outlook.html", context)
+    return render(request, "ui/outlook.html", context)
 
 #-------------------------------------------------------------
 def forecast_view(request, *args, **kwargs):
@@ -188,7 +194,7 @@ def forecast_view(request, *args, **kwargs):
 
               }
 
-    return render(request, "forecast.html", context)
+    return render(request, "ui/forecast.html", context)
 
 #-------------------------------------------------------------
 def history_view(request, *args, **kwargs):
@@ -207,14 +213,14 @@ def history_view(request, *args, **kwargs):
                "hdbp_script": hdbp_server_script,
                "live_data": getLiveBarData()
               }
-    return render(request, "history.html", context)
+    return render(request, "ui/history.html", context)
 
 #-------------------------------------------------------------
 def maintenance_view(request, *args, **kwargs):
     context = {**(getLiveStatusData())}
-    return render(request, "maintenance.html", context)
+    return render(request, "ui/maintenance.html", context)
 
 #-------------------------------------------------------------
 def settings_view(request, *args, **kwargs):
     context = {**(getLiveStatusData())}
-    return render(request, "settings.html", context)
+    return render(request, "ui/settings.html", context)

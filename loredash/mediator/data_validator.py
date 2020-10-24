@@ -1,4 +1,6 @@
-import nested_inputs
+from django.conf import settings
+
+from mediator import nested_inputs
 from cerberus import Validator
 
 def validate(values, schema, **kwargs):
@@ -34,22 +36,11 @@ def validate(values, schema, **kwargs):
     - Python does not have NULL, rather it uses the None object.
     - Python NaN is created by float("NaN") and can be tested for using math.isnan()
     """
-    debugging = True    # don't let missing required variables cause a failure
+    update = settings.DEBUG    # don't let missing required variables cause a failure while debugging
 
     v = Validator(schema)
-    result = v.validated(values, update=debugging, **kwargs)
+    result = v.validated(values, update=update, **kwargs)
     if result is not None:
         sorted(result)      # sort keys alphabetically
     errors = v.errors
     return result
-
-
-if __name__ == '__main__':
-    schema = nested_inputs.schemas['dispatch_opt']
-
-    good_inputs = {'A_V': 1, 'alpha': 1}    # A_V is not required while alpha is, both have a min = 0
-    bad_inputs = {'A_V': -1, 'alpha': 1}
-    
-    result = validate(good_inputs, schema)
-    result = validate(bad_inputs, schema)
-    pass

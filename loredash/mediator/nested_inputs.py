@@ -79,7 +79,6 @@ schemas = {
                         'direct normal irradiance'
                         ]
                     }
-                }
             },
         'ghi': {
             'type': 'list',
