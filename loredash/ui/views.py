@@ -23,15 +23,15 @@ PROGRESS_BAR_WIDTH = 160
 #-------------------------------------------------------------
 
 
-def getPysamData():
-    """Collect data from PySAM run"""
-    pysam_output = mspt.get_pysam_data()
-    pysam_output['time'] = list(pysam_output['time_hr'])
-    pysam_output['time'] = [timedelta(hours=int(x)) for x in pysam_output['time']]
-    pysam_output['time'] = list(map(lambda hr: hr + datetime(2010, 1, 1), pysam_output['time'])) # Jan 1, 2010 used because that is the start of our solar data
-    return pysam_output
+# def getPysamData():
+#     """Collect data from PySAM run"""
+#     pysam_output = mspt.get_pysam_data()
+#     pysam_output['time'] = list(pysam_output['time_hr'])
+#     pysam_output['time'] = [timedelta(hours=int(x)) for x in pysam_output['time']]
+#     pysam_output['time'] = list(map(lambda hr: hr + datetime(2010, 1, 1), pysam_output['time'])) # Jan 1, 2010 used because that is the start of our solar data
+#     return pysam_output
 
-apps.pysam_output = getPysamData()      # this should be put in a better place, but is currently here so it's not also called by the bokeh server
+# apps.pysam_output = getPysamData()
 
 def getLiveStatusData():
     """Returns the last update time and connection and model statuses at the top of the main page."""
@@ -45,88 +45,93 @@ def getLiveStatusData():
 def getLiveBarData():
     """Returns the data displayed in the 5 small boxes at the top of the main dashboard page."""
 
-    pysam_output = apps.pysam_output
 
-    ## Collects the data from the pysam_output stored on the server (as of now).
-    ## This will update the bar on the hour (the frequency of the data entries in the weather file).
+    # DATA NEEDS TO BE PULLED FROM THE DATABASE INSTEAD OF RUNNING PYSAM HERE
 
-    # get current date and hour as well as yesterdays datetime 24 hours from the current
-    current_time = datetime.today().replace(year=2010, minute=0, second=0, microsecond=0)
-    prev_day = current_time - timedelta(days=1)
 
-    live_data_index = {
-        "time": 0,
-        "e_ch_tes": 1, 
-        "eta_therm": 2,
-        "tou_value": 3, 
-        "P_out_net": 4,
-        "eta_field": 5}
+    # pysam_output = apps.pysam_output
 
-    ## Live Data
-    # Zip desired live data, and place into a list format
-    live_data = list(zip(
-        pysam_output["time"],
-        pysam_output["e_ch_tes"],
-        pysam_output["eta_therm"],
-        pysam_output["tou_value"],
-        pysam_output["P_out_net"],
-        pysam_output["eta_field"]
-    ))
+    # ## Collects the data from the pysam_output stored on the server (as of now).
+    # ## This will update the bar on the hour (the frequency of the data entries in the weather file).
 
-    # Get data from both the previous day and current date and hour
-    prev_days_data = list(filter(lambda t: t[0] == prev_day, live_data))[0]
-    curr_live_data = list(filter(lambda t: t[0] == current_time, live_data))[0]
+    # # get current date and hour as well as yesterdays datetime 24 hours from the current
+    # current_time = datetime.today().replace(year=2010, minute=0, second=0, microsecond=0)
+    # prev_day = current_time - timedelta(days=1)
 
-    # tes charge
-    tes_charge = curr_live_data[live_data_index['e_ch_tes']]
-    prev_tes_charge = prev_days_data[live_data_index['e_ch_tes']]
-    # Get % change
-    if prev_tes_charge != 0:
-        tes_charge_pct_change = ((tes_charge - prev_tes_charge) / prev_tes_charge) * 100
-    else:
-        tes_charge_pct_change = ((tes_charge - prev_tes_charge) / 1) * 100
+    # live_data_index = {
+    #     "time": 0,
+    #     "e_ch_tes": 1, 
+    #     "eta_therm": 2,
+    #     "tou_value": 3, 
+    #     "P_out_net": 4,
+    #     "eta_field": 5}
 
-    # receiver thermal efficiency
-    receiver_therm_eff = curr_live_data[live_data_index['eta_therm']] * 100
-    prev_receiver_therm_eff = prev_days_data[live_data_index['eta_therm']] * 100
-    # Get % change
-    if prev_receiver_therm_eff != 0:
-        receiver_therm_eff_pct_change = ((receiver_therm_eff - prev_receiver_therm_eff) / prev_receiver_therm_eff) * 100
-    else:
-        receiver_therm_eff_pct_change = ((receiver_therm_eff - prev_receiver_therm_eff) / 1) * 100
+    # ## Live Data
+    # # Zip desired live data, and place into a list format
+    # live_data = list(zip(
+    #     pysam_output["time"],
+    #     pysam_output["e_ch_tes"],
+    #     pysam_output["eta_therm"],
+    #     pysam_output["tou_value"],
+    #     pysam_output["P_out_net"],
+    #     pysam_output["eta_field"]
+    # ))
 
-    # net power out
-    net_power_out = curr_live_data[live_data_index['P_out_net']]
-    prev_net_power_out = prev_days_data[live_data_index['P_out_net']]
-    # Get % change
-    if prev_net_power_out != 0:
-        net_power_out_pct_change = ((net_power_out - prev_net_power_out) / prev_net_power_out) * 100
-    else:
-        net_power_out_pct_change = ((net_power_out - prev_net_power_out) / 1) * 100
+    # # Get data from both the previous day and current date and hour
+    # prev_days_data = list(filter(lambda t: t[0] == prev_day, live_data))[0]
+    # curr_live_data = list(filter(lambda t: t[0] == current_time, live_data))[0]
 
-    # CSP time of use value
-    tou_value = curr_live_data[live_data_index['tou_value']]
+    # # tes charge
+    # tes_charge = curr_live_data[live_data_index['e_ch_tes']]
+    # prev_tes_charge = prev_days_data[live_data_index['e_ch_tes']]
+    # # Get % change
+    # if prev_tes_charge != 0:
+    #     tes_charge_pct_change = ((tes_charge - prev_tes_charge) / prev_tes_charge) * 100
+    # else:
+    #     tes_charge_pct_change = ((tes_charge - prev_tes_charge) / 1) * 100
 
-    # field optical efficiency
-    field_optical_eff = curr_live_data[live_data_index['eta_field']] * 100
-    prev_field_optical_eff = prev_days_data[live_data_index['eta_field']] * 100
-    # Get % change
-    if prev_field_optical_eff != 0:
-        field_optical_eff_pct_change = ((field_optical_eff - prev_field_optical_eff) / prev_field_optical_eff) * 100
-    else:
-        field_optical_eff_pct_change = ((field_optical_eff - prev_field_optical_eff) / 1) * 100
+    # # receiver thermal efficiency
+    # receiver_therm_eff = curr_live_data[live_data_index['eta_therm']] * 100
+    # prev_receiver_therm_eff = prev_days_data[live_data_index['eta_therm']] * 100
+    # # Get % change
+    # if prev_receiver_therm_eff != 0:
+    #     receiver_therm_eff_pct_change = ((receiver_therm_eff - prev_receiver_therm_eff) / prev_receiver_therm_eff) * 100
+    # else:
+    #     receiver_therm_eff_pct_change = ((receiver_therm_eff - prev_receiver_therm_eff) / 1) * 100
+
+    # # net power out
+    # net_power_out = curr_live_data[live_data_index['P_out_net']]
+    # prev_net_power_out = prev_days_data[live_data_index['P_out_net']]
+    # # Get % change
+    # if prev_net_power_out != 0:
+    #     net_power_out_pct_change = ((net_power_out - prev_net_power_out) / prev_net_power_out) * 100
+    # else:
+    #     net_power_out_pct_change = ((net_power_out - prev_net_power_out) / 1) * 100
+
+    # # CSP time of use value
+    # tou_value = curr_live_data[live_data_index['tou_value']]
+
+    # # field optical efficiency
+    # field_optical_eff = curr_live_data[live_data_index['eta_field']] * 100
+    # prev_field_optical_eff = prev_days_data[live_data_index['eta_field']] * 100
+    # # Get % change
+    # if prev_field_optical_eff != 0:
+    #     field_optical_eff_pct_change = ((field_optical_eff - prev_field_optical_eff) / prev_field_optical_eff) * 100
+    # else:
+    #     field_optical_eff_pct_change = ((field_optical_eff - prev_field_optical_eff) / 1) * 100
 
     # Export live data such that it can be used with the django template
+    # CURRENTLY JUST PLACEHOLDERS -> NEED TO QUERY ACTUAL FROM A DATABASE TABLE
     live_data = {
-        "tes" : tes_charge,
-        "tes_change" : tes_charge_pct_change,
-        "receiver_therm_eff" : receiver_therm_eff,
-        "receiver_therm_eff_change" : receiver_therm_eff_pct_change,
-        "net_power_out" : net_power_out,
-        "net_power_out_change" : net_power_out_pct_change,
-        "tou_value" : tou_value,
-        "field_optical_eff" : field_optical_eff,
-        "field_optical_eff_change" : field_optical_eff_pct_change
+        "tes" : 1143.5,                             # tes_charge,
+        "tes_change" : -1.439,                      # tes_charge_pct_change,
+        "receiver_therm_eff" : 95.60,               # receiver_therm_eff,
+        "receiver_therm_eff_change" : -0.01211,     # receiver_therm_eff_pct_change,
+        "net_power_out" : 104.5,                    # net_power_out,
+        "net_power_out_change" : -1.311,            # net_power_out_pct_change,
+        "tou_value" : 5.0,                          # tou_value,
+        "field_optical_eff" : 56.67,                # field_optical_eff,
+        "field_optical_eff_change" : -0.08169       # field_optical_eff_pct_change
     }
 
     return live_data

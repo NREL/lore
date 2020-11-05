@@ -57,7 +57,7 @@ class Mediator:
         model_name = "MSPTSingleOwner"
         tech_model = pysam.default(model_name)
         tech_model.SolarResource.solar_resource_file = weather_file
-        # NEED TO CHOOSE A SINGLE TIMESTEP INSTALL OF AN ANNUAL SIMULATION
+        # NEED TO CHOOSE A SINGLE TIMESTEP INSTEAD OF AN ANNUAL SIMULATION
         tech_model.execute(1) # 0 = verbosity level, or you can use 1 to show verbose output
         tech_outputs = tech_model.Outputs.export()
 
@@ -85,13 +85,13 @@ class Mediator:
         looping_call.start(update_interval)
         reactor.run()
 
-def MediateOnce():
-    """This will likely only be used for testing"""
-    mediator = Mediator()
-    mediator.RunOnce()
-    return False
+# def MediateOnce():
+#     """This will likely only be used for testing"""
+#     mediator = Mediator()
+#     mediator.RunOnce()
+#     return False
 
-def MediateContinuously(update_interval=5):
-    mediator = Mediator()
-    mediator.RunContinuously(update_interval=update_interval)
-    return False
+# def MediateContinuously(update_interval=5):
+#     mediator = Mediator()
+#     mediator.RunContinuously(update_interval=update_interval)
+#     return False
