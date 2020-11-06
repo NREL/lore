@@ -1,4 +1,5 @@
 from django.apps import AppConfig
+import multiprocessing
 
 class MediatorConfig(AppConfig):
     name = 'mediator'
@@ -6,14 +7,14 @@ class MediatorConfig(AppConfig):
     def ready(self):
         # startup code in here
         from mediator import mediator       # this needs to be down here, or you get the error "Apps aren't loaded yet"
+
+        # THIS IS ALSO BEING CALLED BY THE BOKEH SERVER, AND IT SHOULDN'T BE
+        # For testing, bypassing multiprocessing:
         mediator = mediator.Mediator()
+        result = mediator.RunOnce()
 
-        # 1. If the flux map file isn't already present, generate a new one
-        # 
-
-        # result = mediator.RunOnce()
-
-        # update_interval = 5     # seconds
+        # THIS IS ALSO BEING CALLED BY THE BOKEH SERVER, SO AN ADDITIONAL THREAD IS CREATED DOING THE SAME THING:
+        # update_interval = 10     # seconds
         # p = multiprocessing.Process(target=mediator.MediateContinuously, args=(update_interval,))
         # p.start()
 

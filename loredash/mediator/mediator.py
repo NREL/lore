@@ -1,25 +1,35 @@
+from django.conf import settings
 import sys, os
 sys.path.insert(1, os.path.join(sys.path[0], '..'))
 import time
-from datetime import datetime
+import datetime
 from twisted.internet.task import LoopingCall
 from twisted.internet import reactor
 import PySAM_DAOTk.TcsmoltenSalt as pysam
 from pathlib import Path
-from mediator import data_validator, nested_inputs, models
+from mediator import data_validator, nested_inputs, pysam_wrap
+# import models
 
 class Mediator:
+    pysam_wrap = None
+    update_interval = datetime.timedelta(seconds=5)
+    timestep_simulation = datetime.timedelta(minutes=5)
+
     def __init__(self):
-        # initialize submodels and external interfaces
-        pass
+        self.pysam_wrap = pysam_wrap.PysamWrap()
+        # Decide whether to preprocess efficiency and flux maps
+        if settings.DEBUG == True:
+            maps = self.pysam_wrap.ReadMaps()
+            if not all(maps.values()):
+                self.pysam_wrap.PreProcess()
+        else:
+            self.pysam_wrap.PreProcess()    # do this now so no simulation delay later
     
     def RunOnce(self):
         """For the current point in time, get data from external plant and weather interfaces and run
         entire set of submodels, saving data to database"""
-        # print(datetime.now())
-        # pass
 
-        # The real code:
+        # The planned code:
         # Step 1:
         #   Thread 1:
         #       a. If virtual plant, query database for needed inputs (or use cache from previous timestep)
@@ -52,25 +62,26 @@ class Mediator:
 
         # Step 3, Thread 1:
         # b. Call PySAM using inputs
-        parent_dir = str(Path(__file__).parents[1])
-        weather_file = parent_dir+"/data/daggett_ca_34.865371_-116.783023_psmv3_60_tmy.csv"
-        model_name = "MSPTSingleOwner"
-        tech_model = pysam.default(model_name)
-        tech_model.SolarResource.solar_resource_file = weather_file
-        # NEED TO CHOOSE A SINGLE TIMESTEP INSTEAD OF AN ANNUAL SIMULATION
-        tech_model.execute(1) # 0 = verbosity level, or you can use 1 to show verbose output
-        tech_outputs = tech_model.Outputs.export()
+        datetime_now = datetime.datetime.now()
+        datetime_start = RoundMinutes(datetime_now, 'down', self.timestep_simulation.seconds/60)    # the start of the time interval currently in
+        # datetime_end = RoundMinutes(datetime_now, 'up', self.timestep_simulation.seconds/60)        # the end of the time interval currently in
+        datetime_end = datetime_start + datetime.timedelta(hours=24)        # just to see some values while testing at night
+        tech_outputs = self.pysam_wrap.Simulate(datetime_start, datetime_end, self.timestep_simulation)
+        print("Annual Energy [kWh]= ", tech_outputs["annual_energy"])
 
         # c. Validate these data
         wanted_keys = ['P_out_net']
         wanted_outputs = dict((k, tech_outputs[k]) for k in wanted_keys if k in tech_outputs)
         schema = nested_inputs.schemas['pysam_daotk']
-        validated_outputs = data_validator.validate(wanted_outputs, schema)
+        # THIS IS VERY SLOW:
+        # validated_outputs = data_validator.validate(wanted_outputs, schema)
 
         # d. Store in database and add to current timestep cache
-        pysam_table = models.PysamTable()
+        # pysam_table = models.PysamTable()
         # pysam_table.P_out_net = validated_outputs['P_out_net']          # NOT CORRECT, NEED TO ADD ACCORDING TO THE TIMESTEP INDEX
         # pysam_table.save()
+
+        return 0
 
     def RunContinuously(self, update_interval=5):
         """Continuously get data from external plant and weather interfaces and run
@@ -79,11 +90,15 @@ class Mediator:
         Keyword arguments:
         update_interval -- [s] how frequently the interfaces and submodels are polled and run, respectively
         """
-
         looping_call = LoopingCall(self.RunOnce)
         time.sleep(update_interval - time.time() % update_interval)          # wait to start until it's an even clock interval
         looping_call.start(update_interval)
         reactor.run()
+
+def MediateContinuously(update_interval=5):
+    mediator = Mediator()
+    mediator.RunContinuously(update_interval=update_interval)
+    return False
 
 # def MediateOnce():
 #     """This will likely only be used for testing"""
@@ -91,7 +106,7 @@ class Mediator:
 #     mediator.RunOnce()
 #     return False
 
-# def MediateContinuously(update_interval=5):
-#     mediator = Mediator()
-#     mediator.RunContinuously(update_interval=update_interval)
-#     return False
+def RoundMinutes(dt, direction, minute_resolution):
+    new_minute = (dt.minute // minute_resolution + (1 if direction == 'up' else 0)) * minute_resolution
+    new_time_old_seconds = dt + datetime.timedelta(minutes=new_minute - dt.minute)
+    return new_time_old_seconds.replace(second=0, microsecond=0)
