@@ -12,9 +12,6 @@ from io import StringIO
 import pandas
 from ui import apps
 
-# pysam script
-from ui import mspt
-
 #global variables
 PROGRESS_BAR_WIDTH = 160
 
