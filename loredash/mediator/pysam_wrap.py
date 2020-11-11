@@ -1,15 +1,14 @@
 from django.conf import settings
 from pathlib import Path
 import datetime
-import csv
+import json
 import PySAM_DAOTk.TcsmoltenSalt as t
 #import PySAM_DAOTk.Grid as g
 import PySAM_DAOTk.Singleowner as s
 
 class PysamWrap:
     parent_dir = str(Path(__file__).parents[1])
-    eta_map_path = parent_dir+"/data/eta_map.csv"
-    flux_maps_path = parent_dir+"/data/flux_maps.csv"
+    design_path = parent_dir+"/data/field_design.json"
     model_name = "MSPTSingleOwner"
     weather_file = parent_dir+"/data/daggett_ca_34.865371_-116.783023_psmv3_60_tmy.csv"
     tech_model = None
@@ -20,10 +19,7 @@ class PysamWrap:
         self.tech_model.SolarResource.solar_resource_file = self.weather_file
 
         if self.enable_preprocessing and (__name__ == "__main__" or settings.DEBUG is True):
-            maps = self.ReadMaps()
-            if all(maps.values()):      # if all values not None
-                self.tech_model.HeliostatField.eta_map = maps["eta_map"]
-                self.tech_model.HeliostatField.flux_maps = maps["flux_maps"]
+            self.SetDesign(self.design_path)
 
     def Simulate(self, datetime_start, datetime_end, timestep, **kwargs):
         """
@@ -38,8 +34,7 @@ class PysamWrap:
                 self.PreProcess()                           # calculate and assign the above
 
             self.tech_model.HeliostatField.field_model_type = 3              # use preprocessed maps
-            self.tech_model.HeliostatField.eta_map_aod_format = 0
-            self.tech_model.HeliostatField.A_sf_in = 1269054.4919999996      # just setting here manually for now
+            self.tech_model.HeliostatField.eta_map_aod_format = False
         else:
             self.tech_model.HeliostatField.field_model_type = 2
 
@@ -53,10 +48,11 @@ class PysamWrap:
         timestep = datetime.timedelta(hours=1)
         tech_outputs = self.SimulatePartialYear(datetime_start, datetime_end, timestep)
         self.tech_model.HeliostatField.eta_map = tech_outputs["eta_map_out"]            # get maps and set for subsequent runs
-        self.tech_model.HeliostatField.flux_maps = tech_outputs["flux_maps_for_import"]
+        self.tech_model.HeliostatField.flux_maps = [r[2:] for r in tech_outputs['flux_maps_for_import']]    # Don't include first two columns
+        self.tech_model.HeliostatField.A_sf_in = tech_outputs["A_sf"]
 
         if __name__ == "__main__" or settings.DEBUG is True:
-            self.SaveMaps(tech_outputs["eta_map_out"], tech_outputs["flux_maps_for_import"])
+            self.SaveDesign()
 
     def SimulatePartialYear(self, datetime_start, datetime_end, timestep, **kwargs):
         """helper function"""
@@ -70,33 +66,41 @@ class PysamWrap:
         # tech_attributes = self.tech_model.export()
         return tech_outputs
 
-    def SaveMaps(self, eta_map, flux_maps):
+    def SaveDesign(self):
         """helper function"""
         try:
-            with open(self.eta_map_path, 'w', newline='') as eta_map_file:
-                wr = csv.writer(eta_map_file, quoting=csv.QUOTE_NONE)
-                wr.writerows(eta_map)
-            with open(self.flux_maps_path, 'w', newline='') as flux_maps_file:
-                wr = csv.writer(flux_maps_file, quoting=csv.QUOTE_NONE)
-                wr.writerows(flux_maps)
+            design = {
+                'eta_map' : self.tech_model.Outputs.eta_map_out,
+                'flux_maps' : self.tech_model.Outputs.flux_maps_for_import,  
+                'A_sf' : self.tech_model.Outputs.A_sf,
+                'rec_height' : self.tech_model.TowerAndReceiver.rec_height,
+                'D_rec' : self.tech_model.TowerAndReceiver.D_rec,
+                'h_tower' : self.tech_model.TowerAndReceiver.h_tower,
+            }
+            with open(self.design_path, 'w') as design_file:
+                json.dump(design, design_file)
         except Exception as err:
             return 1
         else:
             return 0
 
-    def ReadMaps(self):
+    def SetDesign(self, file_path):
         """helper function"""
         try:
-            with open(self.eta_map_path, 'r') as eta_map_file:
-                csv_reader = csv.reader(eta_map_file, quoting=csv.QUOTE_NONNUMERIC)
-                eta_map = tuple(map(tuple, csv_reader))
-            with open(self.flux_maps_path, 'r') as flux_maps_file:
-                csv_reader = csv.reader(flux_maps_file, quoting=csv.QUOTE_NONNUMERIC)
-                flux_maps = tuple(map(tuple, csv_reader))
+            with open(file_path, 'r') as design_file:
+                design = json.load(design_file)
         except Exception:
-            eta_map = flux_maps = None
-
-        return {"eta_map": eta_map, "flux_maps": flux_maps}
+            return 1
+        else:
+            self.tech_model.HeliostatField.eta_map = design['eta_map']
+            self.tech_model.HeliostatField.flux_maps = [r[2:] for r in design['flux_maps']]    # Don't include first two columns
+            self.tech_model.HeliostatField.A_sf_in = design['A_sf']
+            self.tech_model.TowerAndReceiver.rec_height = design['rec_height']
+            self.tech_model.TowerAndReceiver.D_rec = design['D_rec']
+            self.tech_model.TowerAndReceiver.h_tower = design['h_tower']
+            self.tech_model.HeliostatField.eta_map_aod_format = False
+            self.tech_model.HeliostatField.field_model_type = 3      # using user-defined flux and efficiency parameters
+            return 0
 
 if __name__ == "__main__":
     """Code for testing:"""
@@ -109,14 +113,14 @@ if __name__ == "__main__":
 
     pysam_wrap = PysamWrap()
     
-    # With no preprocessing of maps (for testing):
-    # pysam_wrap.enable_preprocessing = False
-    # tech_outputs = pysam_wrap.Simulate(datetime_start, datetime_end, timestep)
-    # annual_energy_kWh = tech_outputs["annual_energy"]       # full year = 563988036
+    # With no preprocessing of design info (for testing):
+    pysam_wrap.enable_preprocessing = False
+    tech_outputs = pysam_wrap.Simulate(datetime_start, datetime_end, timestep)
+    annual_energy_kWh = tech_outputs["annual_energy"]       # full year = 563988036
 
-    # With preprocessing of maps:
+    # With preprocessing of design info:
     pysam_wrap.enable_preprocessing = True
     tech_outputs = pysam_wrap.Simulate(datetime_start, datetime_end, timestep)
-    annual_energy_kWh = tech_outputs["annual_energy"]       # full year = 27077180
+    annual_energy_kWh_2 = tech_outputs["annual_energy"]       # full year = 563988036
 
     pass
