@@ -27,10 +27,11 @@ class PysamWrap:
         kwargs (pysam_state)
         """
         if self.enable_preprocessing:
-            try:
-                self.tech_model.HeliostatField.eta_map      # check if assigned
-                self.tech_model.HeliostatField.flux_maps    # check if assigned
-            except:
+            if not self.DesignIsSet():
+            # try:
+            #     self.tech_model.HeliostatField.eta_map      # check if assigned
+            #     self.tech_model.HeliostatField.flux_maps    # check if assigned
+            # except:
                 self.PreProcess()                           # calculate and assign the above
 
             self.tech_model.HeliostatField.field_model_type = 3              # use preprocessed maps
@@ -53,6 +54,16 @@ class PysamWrap:
 
         if __name__ == "__main__" or settings.DEBUG is True:
             self.SaveDesign()
+
+    def DesignIsSet(self):
+        try:
+            self.tech_model.HeliostatField.eta_map      # check if assigned
+            self.tech_model.HeliostatField.flux_maps    # check if assigned
+            self.tech_model.HeliostatField.A_sf_in      # check if assigned
+        except:
+            return False
+        else:
+            return True
 
     def SimulatePartialYear(self, datetime_start, datetime_end, timestep, **kwargs):
         """helper function"""
@@ -92,6 +103,7 @@ class PysamWrap:
         except Exception:
             return 1
         else:
+            # Verify if these are valid?
             self.tech_model.HeliostatField.eta_map = design['eta_map']
             self.tech_model.HeliostatField.flux_maps = [r[2:] for r in design['flux_maps']]    # Don't include first two columns
             self.tech_model.HeliostatField.A_sf_in = design['A_sf']
