@@ -19,8 +19,8 @@ class Mediator:
         self.pysam_wrap = pysam_wrap.PysamWrap()
         # Decide whether to preprocess efficiency and flux maps
         if settings.DEBUG == True:
-            maps = self.pysam_wrap.ReadMaps()
-            if not all(maps.values()):
+            result = self.pysam_wrap.SetDesign(self.pysam_wrap.design_path)
+            if result == 1:
                 self.pysam_wrap.PreProcess()
         else:
             self.pysam_wrap.PreProcess()    # do this now so no simulation delay later
