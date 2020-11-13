@@ -64,8 +64,8 @@ class Mediator:
         # b. Call PySAM using inputs
         datetime_now = datetime.datetime.now()
         datetime_start = RoundMinutes(datetime_now, 'down', self.timestep_simulation.seconds/60)    # the start of the time interval currently in
-        # datetime_end = RoundMinutes(datetime_now, 'up', self.timestep_simulation.seconds/60)        # the end of the time interval currently in
-        datetime_end = datetime_start + datetime.timedelta(hours=24)        # just to see some values while testing at night
+        datetime_end = RoundMinutes(datetime_now, 'up', self.timestep_simulation.seconds/60)        # the end of the time interval currently in
+        # datetime_end = datetime_start + datetime.timedelta(hours=24)        # just to see some values while testing at night
         tech_outputs = self.pysam_wrap.Simulate(datetime_start, datetime_end, self.timestep_simulation)
         print("Annual Energy [kWh]= ", tech_outputs["annual_energy"])
 
