@@ -75,6 +75,20 @@ class PysamWrap:
         self.tech_model.execute(1)
         tech_outputs = self.tech_model.Outputs.export()
         # tech_attributes = self.tech_model.export()
+
+        # remove trailing zeros
+        points_per_year = int(self.tech_model.SystemControl.time_steps_per_hour * 24 * 365)
+        points_in_simulation = int((self.tech_model.SystemControl.time_stop-self.tech_model.SystemControl.time_start)/ \
+            3600 * self.tech_model.SystemControl.time_steps_per_hour)
+        
+        import time
+        tic = time.process_time()
+        for k, v in tech_outputs.items():
+            if isinstance(v, (list, tuple)) and len(v) == points_per_year:
+                tech_outputs[k] = v[:points_in_simulation]
+        toc = time.process_time()
+        print("Stripping zeroes took {seconds:.2f} seconds".format(seconds=toc-tic))
+
         return tech_outputs
 
     def SaveDesign(self):
