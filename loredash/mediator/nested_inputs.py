@@ -28,12 +28,17 @@
 # OF THE POSSIBILITY OF SUCH DAMAGE.
 # *********************************************************************************
 
-big_number = 1.0e10
-epsilon = 1.0e-10
 
-# Alphabetize!
+# ==============================================================================================
+# ** The following is the schema format for the Cerebus validation package we are no longer using
+# ** BUT THESE HAVE NOT ALL BEEN MIGRATED TO THE NEW SCHEMA!
 # TODO discuss whether battery, PV, persistence parameters warrant separate sections
-schemas = {
+
+kBigNumber = 1.0e10
+kEpsilon = 1.0e-10
+
+
+schemas_old = {
     'power_plant': {},
     'weather': {
         'day': {
@@ -270,7 +275,7 @@ schemas = {
             'schema': {
                 'type': 'float',
                 'min': 0.0,
-                'max': big_number,
+                'max': kBigNumber,
                 },
             'required': True,
             'meta': {'label': 'Dispatch expected TES charge level [MWht]'}
@@ -280,7 +285,7 @@ schemas = {
             'schema': {
                 'type': 'float',
                 'min': 0.0,
-                'max': big_number,
+                'max': kBigNumber,
                 },
             'required': True,
             'meta': {'label': 'Dispatch expected power generation [MWe]'}
@@ -290,7 +295,7 @@ schemas = {
             'schema': {
                 'type': 'float',
                 'min': 0.0,
-                'max': big_number,
+                'max': kBigNumber,
                 },
             'required': True,
             'meta': {'label': 'TES charge state [MWht]'}
@@ -300,7 +305,7 @@ schemas = {
             'schema': {
                 'type': 'float',
                 'min': 0.0,
-                'max': big_number,
+                'max': kBigNumber,
                 },
             'required': True,
             'meta': {'label': 'Heliostat position table [matrix]'}
@@ -310,7 +315,7 @@ schemas = {
             'schema': {
                 'type': 'float',
                 'min': 0.0,
-                'max': big_number,
+                'max': kBigNumber,
                 },
             'required': True,
             'meta': {'label': 'PC electrical power output, gross [MWe]'}
@@ -319,8 +324,8 @@ schemas = {
             'type': 'list',
             'schema': {
                 'type': 'float',
-                'min': -big_number,
-                'max': big_number,
+                'min': -kBigNumber,
+                'max': kBigNumber,
                 },
             'required': True,
             'meta': {'label': 'Total electric power to grid [MWe]'}
@@ -330,7 +335,7 @@ schemas = {
             'schema': {
                 'type': 'float',
                 'min': 0.0,
-                'max': big_number,
+                'max': kBigNumber,
                 },
             'required': True,
             'meta': {'label': 'Receiver heat trace parasitic load [MWe]'}
@@ -340,7 +345,7 @@ schemas = {
             'schema': {
                 'type': 'float',
                 'min': 0.0,
-                'max': big_number,
+                'max': kBigNumber,
                 },
             'required': True,
             'meta': {'label': 'Receiver incident thermal power [MWt]'}
@@ -350,7 +355,7 @@ schemas = {
             'schema': {
                 'type': 'float',
                 'min': 0.0,
-                'max': big_number,
+                'max': kBigNumber,
                 },
             'required': True,
             'meta': {'label': 'PC startup thermal energy [MWht]'}
@@ -360,7 +365,7 @@ schemas = {
             'schema': {
                 'type': 'float',
                 'min': 0.0,
-                'max': big_number,
+                'max': kBigNumber,
                 },
             'required': True,
             'meta': {'label': 'Field incident thermal power [MWt]'}
@@ -370,7 +375,7 @@ schemas = {
             'schema': {
                 'type': 'float',
                 'min': 0.0,
-                'max': big_number,
+                'max': kBigNumber,
                 },
             'required': True,
             'meta': {'label': 'Receiver startup thermal energy consumed [MWt]'}
@@ -379,8 +384,8 @@ schemas = {
             'type': 'list',
             'schema': {
                 'type': 'float',
-                'min': -big_number,
-                'max': big_number,
+                'min': -kBigNumber,
+                'max': kBigNumber,
                 },
             'required': True,
             'meta': {'label': 'Receiver thermal power to HTF less piping loss [MWt]'}
@@ -410,161 +415,161 @@ schemas = {
         'A_V': {
             'type': 'float',
             'min': 0.0,
-            'max': big_number,
+            'max': kBigNumber,
             'required': False,
             'meta': {'label': 'Battery linear voltage model slope coeffifient'}
             }, 
         'alpha': {
             'type': 'float',
             'min': 0.0,
-            'max': big_number,
+            'max': kBigNumber,
             'required': True,
             'meta': {'label': 'Conversion factor between unitless and monetary values [$]'}
             }, 
         'alpha_n': {
             'type': 'float',
             'min': 0.0,
-            'max': big_number,
+            'max': kBigNumber,
             'required': False,
             'meta': {'label': 'i-directional converter slope-intercept parameter'}
             }, 
         'alpha_p': {
             'type': 'float',
             'min': 0.0,
-            'max': big_number,
+            'max': kBigNumber,
             'required': False,
             'meta': {'label': 'Bi-directional converter slope-intercept parameter'}
             }, 
         'alpha_pv': {
             'type': 'float',
             'min': 0.0,
-            'max': big_number,
+            'max': kBigNumber,
             'required': False,
             'meta': {'label': ''}
             }, 
         'B_V': {
             'type': 'float',
             'min': 0.0,
-            'max': big_number,
+            'max': kBigNumber,
             'required': False,
             'meta': {'label': 'Battery linear voltage model intercept coefficient'}
             }, 
         'beta_n': {
             'type': 'float',
             'min': 0.0,
-            'max': big_number,
+            'max': kBigNumber,
             'required': False,
             'meta': {'label': 'Bi-directional converter slope parameter'}
             }, 
         'beta_p': {
             'type': 'float',
             'min': 0.0,
-            'max': big_number,
+            'max': kBigNumber,
             'required': False,
             'meta': {'label': 'Bi-directional converter slope parameter'}
             }, 
         'beta_pv': {
             'type': 'float',
             'min': 0.0,
-            'max': big_number,
+            'max': kBigNumber,
             'required': False,
             'meta': {'label': ''}
             }, 
         'C_B': { 
             'type': 'float',
             'min': 0.0,
-            'max': big_number,
+            'max': kBigNumber,
             'required': False,
             'meta': {'label': 'Battery manufacturer-specified capacity [kAh]'}
             }, 
         'C_delta_w': {
             'type': 'float',
             'min': 0.0,
-            'max': big_number,
+            'max': kBigNumber,
             'required': True,
             'meta': {'label': 'Penalty for change in power cycle  production [\$/\Delta-kWe]'}
             }, 
         'C_v_w': {
             'type': 'float',
             'min': 0.0,
-            'max': big_number,
+            'max': kBigNumber,
             'required': True,
             'meta': {'label': 'Penalty for change in power cycle  production beyond designed limits [\$/\Delta-kWe]'}
             }, 
         'Cbc': {
             'type': 'float',
             'min': 0.0,
-            'max': big_number,
+            'max': kBigNumber,
             'required': False,
             'meta': {'label': 'Operating cost of charging battery [$/kWhe]'}
             }, 
         'Cbd': {
             'type': 'float',
             'min': 0.0,
-            'max': big_number,
+            'max': kBigNumber,
             'required': False,
             'meta': {'label': 'Operating cost of discharging battery [$/kWhe]'}
             }, 
         'Cbl': {
             'type': 'float',
             'min': 0.0,
-            'max': big_number,
+            'max': kBigNumber,
             'required': False,
             'meta': {'label': 'Lifecycle cost for battery [$/lifecycle]'}
             }, 
         'Cchsp': {
             'type': 'float',
             'min': 0.0,
-            'max': big_number,
+            'max': kBigNumber,
             'required': True,
             'meta': {'label': 'Penalty for power cycle hot start-up [$/start]'}
             }, 
         'Ccsb': {
             'type': 'float',
             'min': 0.0,
-            'max': big_number,
+            'max': kBigNumber,
             'required': True,
             'meta': {'label': 'Operating cost of power cycle standby operation [$/kWht]'}
             }, 
         'Ccsu': {
             'type': 'float',
             'min': 0.0,
-            'max': big_number,
+            'max': kBigNumber,
             'required': True,
             'meta': {'label': 'Penalty for power cycle cold start-up [$/start]'}
             }, 
         'Cpc': {
             'type': 'float',
             'min': 0.0,
-            'max': big_number,
+            'max': kBigNumber,
             'required': True,
             'meta': {'label': 'Operating cost of power cycle [$/kWhe]'}
             }, 
         'Cpv': {
             'type': 'float',
             'min': 0.0,
-            'max': big_number,
+            'max': kBigNumber,
             'required': False,
             'meta': {'label': 'Operating cost of photovoltaic field [$/kWhe]'}
             }, 
         'Crec': {
             'type': 'float',
             'min': 0.0,
-            'max': big_number,
+            'max': kBigNumber,
             'required': True,
             'meta': {'label': 'Operating cost of heliostat field and receiver [$/kWht]'}
             }, 
         'Crhsp': {
             'type': 'float',
             'min': 0.0,
-            'max': big_number,
+            'max': kBigNumber,
             'required': True,
             'meta': {'label': 'Penalty for receiver hot start-up [$/start]'}
             }, 
         'Crsu': {
             'type': 'float',
             'min': 0.0,
-            'max': big_number,
+            'max': kBigNumber,
             'required': True,
             'meta': {'label': 'Penalty for receiver cold start-up [$/start]'}
             }, 
@@ -608,28 +613,28 @@ schemas = {
         'Ec': {
             'type': 'float',
             'min': 0.0,
-            'max': big_number,
+            'max': kBigNumber,
             'required': True,
             'meta': {'label': 'Required energy expended to start cycle [kWh\sst]'}
             }, 
         'Ehs': {
             'type': 'float',
             'min': 0.0,
-            'max': big_number,
+            'max': kBigNumber,
             'required': True,
             'meta': {'label': 'Heliostat field startup or shut down parasitic loss [kWh\sse]'}
             }, 
         'Er': {
             'type': 'float',
             'min': 0.0,
-            'max': big_number,
+            'max': kBigNumber,
             'required': True,
             'meta': {'label': 'Required energy expended to start receiver [kWh\sst]'}
             }, 
         'eta_des': {
             'type': 'float',
             'min': 0.0,
-            'max': big_number,
+            'max': kBigNumber,
             'required': True,
             'meta': {'label': 'Cycle nominal efficiency [-]'}
             }, 
@@ -656,63 +661,63 @@ schemas = {
         'etap': {
             'type': 'float',
             'min': 0.0,
-            'max': big_number,
+            'max': kBigNumber,
             'required': True,
             'meta': {'label': 'Slope of linear approximation of power cycle performance curve [kW\sse/kW\sst]'}
             }, 
         'Eu': {
             'type': 'float',
             'min': 0.0,
-            'max': big_number,
+            'max': kBigNumber,
             'required': True,
             'meta': {'label': 'Thermal energy storage capacity [kWh\sst]'}
             }, 
         'I_avg': {
             'type': 'float',
             'min': 0.0,
-            'max': big_number,
+            'max': kBigNumber,
             'required': False,
             'meta': {'label': 'Assumed average current for linearization of battery model [A]'}
             }, 
         'I_lower_n': {
             'type': 'float',
             'min': 0.0,
-            'max': big_number,
+            'max': kBigNumber,
             'required': False,
             'meta': {'label': 'Battery min discharge current [A]'}
             }, 
         'I_upper_n': {
             'type': 'float',
             'min': 0.0,
-            'max': big_number,
+            'max': kBigNumber,
             'required': False,
             'meta': {'label': 'Battery max discharge current'}
             }, 
         'I_upper_p': {
             'type': 'float',
             'min': 0.0,
-            'max': big_number,
+            'max': kBigNumber,
             'required': False,
             'meta': {'label': 'Battery max charge current'}
             }, 
         'Lc': {
             'type': 'float',
             'min': 0.0,
-            'max': big_number,
+            'max': kBigNumber,
             'required': True,
             'meta': {'label': 'Cycle heat transfer fluid pumping power per unit energy expended [kW\sse/kW\sst]'}
             },
         'Lr': {
             'type': 'float',
             'min': 0.0,
-            'max': big_number,
+            'max': kBigNumber,
             'required': True,
             'meta': {'label': 'Receiver pumping power per unit power produced [kW\sse/kW\sst]'}
             },
         'N_csp': {
             'type': 'float',
             'min': 0.0,
-            'max': big_number,
+            'max': kBigNumber,
             'required': False,
             'meta': {'label': ''}
             }, 
@@ -728,7 +733,7 @@ schemas = {
             'schema': {
                 'type': 'float',
                 'min': 0.0,
-                'max': big_number,
+                'max': kBigNumber,
                 },
             'required': True,
             'meta': {'label': 'Electricity sales price in period [$/kWhe]'}
@@ -736,21 +741,21 @@ schemas = {
         'P_B_lower': {
             'type': 'float',
             'min': 0.0,
-            'max': big_number,
+            'max': kBigNumber,
             'required': False,
             'meta': {'label': 'Battery min power rating [kWe]'}
             }, 
         'P_B_upper': {
             'type': 'float',
             'min': 0.0,
-            'max': big_number,
+            'max': kBigNumber,
             'required': False,
             'meta': {'label': 'Battery max power rating [kWe]'}
             }, 
         'Qb': {
             'type': 'float',
             'min': 0.0,
-            'max': big_number,
+            'max': kBigNumber,
             'required': True,
             'meta': {'label': 'Cycle standby thermal power consumption per period [kW\sst]'}
             }, 
@@ -759,7 +764,7 @@ schemas = {
             'schema': {
                 'type': 'float',
                 'min': 0.0,
-                'max': big_number,
+                'max': kBigNumber,
                 },
             'required': True,
             'meta': {'label': 'Allowable power per period for cycle start-up in period [kWt]'}
@@ -769,7 +774,7 @@ schemas = {
             'schema': {
                 'type': 'float',
                 'min': 0.0,
-                'max': big_number,
+                'max': kBigNumber,
                 },
             'required': True,
             'meta': {'label': 'Available thermal power generated by the CSP heliostat field in period [kWt]'}
@@ -777,105 +782,105 @@ schemas = {
         'Ql': {
             'type': 'float',
             'min': 0.0,
-            'max': big_number,
+            'max': kBigNumber,
             'required': True,
             'meta': {'label': 'Minimum operational thermal power input to cycle [kW\sst]'}
             }, 
         'Qrl': {
             'type': 'float',
             'min': 0.0,
-            'max': big_number,
+            'max': kBigNumber,
             'required': True,
             'meta': {'label': 'Minimum operational thermal power delivered by receiver [kWh\sst]'}
             }, 
         'Qrsb': {
             'type': 'float',
             'min': 0.0,
-            'max': big_number,
+            'max': kBigNumber,
             'required': True,
             'meta': {'label': 'Required thermal power for receiver standby [kWh\sst]'}
             }, 
         'Qrsd': {
             'type': 'float',
             'min': 0.0,
-            'max': big_number,
+            'max': kBigNumber,
             'required': True,
             'meta': {'label': 'Required thermal power for receiver shut down [kWht]'}
             }, 
         'Qru': {
             'type': 'float',
             'min': 0.0,
-            'max': big_number,
+            'max': kBigNumber,
             'required': True,
             'meta': {'label': 'Allowable power per period for receiver start-up [kWht]'}
             },
         'Qu': {
             'type': 'float',
             'min': 0.0,
-            'max': big_number,
+            'max': kBigNumber,
             'required': True,
             'meta': {'label': 'Cycle thermal power capacity [kW\sst]'}
             },
         'R_int': {
             'type': 'float',
             'min': 0.0,
-            'max': big_number,
+            'max': kBigNumber,
             'required': False,
             'meta': {'label': 'Internal resistance of battery [Ohm]'}
             },
         'S_B_lower': {
             'type': 'float',
             'min': 0.0,
-            'max': big_number,
+            'max': kBigNumber,
             'required': False,
             'meta': {'label': 'Battery min state of charge'}
             }, 
         'S_B_upper': {
             'type': 'float',
             'min': 0.0,
-            'max': big_number,
+            'max': kBigNumber,
             'required': False,
             'meta': {'label': 'Battery max state of charge'}
             }, 
         's0': {
             'type': 'float',
             'min': 0.0,
-            'max': big_number,
+            'max': kBigNumber,
             'default': 0.0,
             'meta': {'label': 'Initial TES reserve quantity  [kWh\sst]'}
             }, 
         'soc0': {
             'type': 'float',
             'min': 0.0,
-            'max': big_number,
+            'max': kBigNumber,
             'required': False,
             'meta': {'label': 'Battery initial state of charge [kWhe]'}
             },
         'ucsu0': {
             'type': 'float',
             'min': 0.0,
-            'max': big_number,
+            'max': kBigNumber,
             'default': 0.0,
             'meta': {'label': 'Initial cycle start-up energy inventory  [kWh\sst]'}
             }, 
         'ursu0': {
             'type': 'float',
             'min': 0.0,
-            'max': big_number,
+            'max': kBigNumber,
             'default': 0.0,
             'meta': {'label': 'Initial receiver start-up energy inventory [kWh\sst]'}
             },
         'W_delta_minus': {
             'type': 'float',
             'min': 0.0,
-            'max': big_number,
+            'max': kBigNumber,
             'required': True,
             'meta': {'label': 'Power cycle ramp-down designed limit [kW\sse/h]'}
             }, 
         'W_delta_plus': {
             'type': 'float',
             'min': 0.0,
-            'max': big_number,
+            'max': kBigNumber,
             'required': True,
             'meta': {'label': 'Power cycle ramp-up designed limit [kW\sse/h]'}
             }, 
@@ -884,7 +889,7 @@ schemas = {
             'schema': {
                 'type': 'float',
                 'min': 0.0,
-                'max': big_number,
+                'max': kBigNumber,
                 },
             'required': True,
             'meta': {'label': 'Maximum power production in period t when stopping generation in period t+1  [kWe]'}
@@ -894,7 +899,7 @@ schemas = {
             'schema': {
                 'type': 'float',
                 'min': 0.0,
-                'max': big_number,
+                'max': kBigNumber,
                 },
             'required': True,
             'meta': {'label': 'Maximum power production when starting generation in period [kWe]'}
@@ -902,49 +907,49 @@ schemas = {
         'W_v_minus': {
             'type': 'float',
             'min': 0.0,
-            'max': big_number,
+            'max': kBigNumber,
             'required': True,
             'meta': {'label': 'Power cycle ramp-down violation limit [kW\sse/h]'}
             }, 
         'W_v_plus': {
             'type': 'float',
             'min': 0.0,
-            'max': big_number,
+            'max': kBigNumber,
             'required': True,
             'meta': {'label': 'Power cycle ramp-up violation limit [kW\sse/h]'}
             }, 
         'Wb': {
             'type': 'float',
             'min': 0.0,
-            'max': big_number,
+            'max': kBigNumber,
             'required': True,
             'meta': {'label': 'Power cycle standby operation parasitic load [kW\sse]'}
             }, 
         'wdot_s_pen': {
             'type': 'float',
             'min': 0.0,
-            'max': big_number,
+            'max': kBigNumber,
             'default': 0.0,
             'meta': {'label': 'penalty for difference between electrical power output vs. previous instances of the optimization model [$/kWhe]'}
             }, 
         'wdot_s_prev': {
             'type': 'float',
             'min': 0.0,
-            'max': big_number,
+            'max': kBigNumber,
             'default': 0.0,
             'meta': {'label': 'electrical power output from previous instances of the optimization model [kWhe]'}
             },
         'wdot0': {
             'type': 'float',
             'min': 0.0,
-            'max': big_number,
+            'max': kBigNumber,
             'default': 0.0,
             'meta': {'label': 'Initial power cycle electricity generation [kW\sse]'}
             },
         'Wdotl': {
             'type': 'float',
             'min': 0.0,
-            'max': big_number,
+            'max': kBigNumber,
             'required': True,
             'meta': {'label': 'Minimum cycle electric power output [kW\sse]'}
             }, 
@@ -953,7 +958,7 @@ schemas = {
             'schema': {
                 'type': 'float',
                 'min': 0.0,
-                'max': big_number,
+                'max': kBigNumber,
                 },
             'required': True,
             'meta': {'label': 'Net grid transmission upper limit in period [kWe]'}
@@ -961,42 +966,42 @@ schemas = {
         'Wdotu': {
             'type': 'float',
             'min': 0.0,
-            'max': big_number,
+            'max': kBigNumber,
             'required': True,
             'meta': {'label': 'Cycle electric power rated capacity [kW\sse]'}
             }, 
         'Wh': {
             'type': 'float',
             'min': 0.0,
-            'max': big_number,
+            'max': kBigNumber,
             'required': True,
             'meta': {'label': 'Heliostat field tracking parasitic loss [kWe]'}
             }, 
         'Wht': {
             'type': 'float',
             'min': 0.0,
-            'max': big_number,
+            'max': kBigNumber,
             'required': True,
             'meta': {'label': 'Tower piping heat trace parasitic loss [kWe]'}
             }, 
         'Winv_lim': {
             'type': 'float',
             'min': 0.0,
-            'max': big_number,
+            'max': kBigNumber,
             'required': False,
             'meta': {'label': 'Inverter max power (DC)'}
             }, 
         'Winvnt': {
             'type': 'float',
             'min': 0.0,
-            'max': big_number,
+            'max': kBigNumber,
             'required': False,
             'meta': {'label': ''}
             }, 
         'Wmax': {
             'type': 'float',
             'min': 0.0,
-            'max': big_number,
+            'max': kBigNumber,
             'required': False,
             'meta': {'label': 'Constant Max power to grid'}
             }, 
@@ -1005,7 +1010,7 @@ schemas = {
             'schema': {
                 'type': 'float',
                 'min': 0.0,
-                'max': big_number,
+                'max': kBigNumber,
                 },
             'required': False,
             'meta': {'label': 'maximum DC power production from PV system in period [kWe]'}
@@ -1028,14 +1033,14 @@ schemas = {
         'Yd': {
             'type': 'float',
             'min': 0.0,
-            'max': big_number,
+            'max': kBigNumber,
             'required': True,
             'meta': {'label': 'Minimum required power cycle downtime [h]'}
             }, 
         'Yd0': {
             'type': 'float',
             'min': 0.0,
-            'max': big_number,
+            'max': kBigNumber,
             'default': 8760.0,
             'meta': {'label': 'duration that cycle has not been generating power (i.e., shut down or in standby mode) [h]'}
             },
@@ -1057,14 +1062,14 @@ schemas = {
         'Yu': {
             'type': 'float',
             'min': 0.0,
-            'max': big_number,
+            'max': kBigNumber,
             'required': True,
             'meta': {'label': 'Minimum required power cycle uptime [h]'}
             }, 
         'Yu0': {
             'type': 'float',
             'min': 0.0,
-            'max': big_number,
+            'max': kBigNumber,
             'default': 0.0,
             'meta': {'label': 'duration that cycle has been generating electric power [h]'}
             }

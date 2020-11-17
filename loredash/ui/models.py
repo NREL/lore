@@ -2,7 +2,29 @@ from django.db import models
 from django.db import transaction
 import datetime
 
-# New plot tables:
+
+#--------------PySAM Data----------------------------------
+class PysamData(models.Model):                                                                              # SSC variables, pre unit conversion:
+    timestamp = models.DateTimeField(verbose_name="Timestep end", db_index=True)                            #   time_hr [hr]
+    E_tes_charged = models.FloatField(verbose_name="TES charge state [kWht]", default=None)                 #   e_ch_tes [MWht]
+    eta_tower_thermal = models.FloatField(verbose_name="Tower thermal efficiency [-]", default=None)        #   eta_therm [-]
+    eta_field_optical = models.FloatField(verbose_name="Field optical efficiency [-]", default=None)        #   eta_field [-]
+    W_grid_no_derate = models.FloatField(verbose_name="Power to grid without derate [kWe]", default=None)   #   P_out_net [MWe]
+    tou = models.FloatField(verbose_name="TOU value [-]", default=None)                                     #   tou_value [-]
+    W_grid_with_derate = models.FloatField(verbose_name="Power to grid with derate [kWe]", default=None)    #   gen [kWe]
+    Q_tower_incident = models.FloatField(verbose_name="Tower incident thermal power [kWt]", default=None)   #   q_dot_rec_inc [MWt]
+    Q_field_incident = models.FloatField(verbose_name="Field incident thermal power [kWt]", default=None)   #   q_sf_inc [MWt]
+    pricing_multiple = models.FloatField(verbose_name="Pricing multiple [-]", default=None)                 #   pricing_mult [-]
+    dni = models.FloatField(verbose_name="DNI [W/m2]", default=None)                                        #   beam [W/m2]
+
+    # shown when entry is generically queried
+    def __str__(self):
+        return str(self.timestamp)
+
+
+
+# THE BELOW TABLES ARE STILL USED BUT WILL BE REPLACED:
+
 #--------------Dashboard Data------------------------------
 class DashboardDataRTO(models.Model):
     timestamp = models.DateTimeField(verbose_name="Timestamp", db_index=True)
@@ -17,17 +39,17 @@ class DashboardDataRTO(models.Model):
         return str(self.timestamp)
 
 
-#----------Forcasts Market Data----------------------------
+#----------Forecasts Market Data----------------------------
 class ForecastsMarketData(models.Model):
     timestamp = models.DateTimeField(verbose_name="Timestamp", db_index=True)
-    market_forecast = models.FloatField(verbose_name="Market Forcast [-]", default=None)
+    market_forecast = models.FloatField(verbose_name="Market Forecast [-]", default=None)
     ci_plus = models.FloatField(verbose_name="CI+ [%]", default=None)
     ci_minus = models.FloatField(verbose_name="CI- [%]", default=None)
 
     def __str__(self):
         return str(self.timestamp)
 
-#-----------Forcasts Solar Data----------------------------
+#-----------Forecasts Solar Data----------------------------
 class ForecastsSolarData(models.Model):
     timestamp = models.DateTimeField(verbose_name="Timestamp", db_index=True)
     clear_sky = models.FloatField(verbose_name="Clear Sky [W/m2]", default=None)

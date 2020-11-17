@@ -15,9 +15,25 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
-
 from django.conf import settings
 from django.conf.urls.static import static
+from mediator import mediator
+import multiprocessing
+
+# ===Initialization code, put here so the Bokeh server django.setup() call doesn't execute it
+# For testing, bypassing multiprocessing:
+mediator = mediator.Mediator()
+result = mediator.RunOnce()
+
+# This is the main production code where the mediator runs continuously
+# update_interval = 10     # seconds
+# p = multiprocessing.Process(target=mediator.MediateContinuously, args=(update_interval,))
+# p.start()
+
+# This code adds another simultaneous mediate processes:
+# p = multiprocessing.Process(target=mediator.MediateContinuously, args=(1,))
+# p.start()
+# ===/initialization=========================================================================
 
 urlpatterns = [
     path('', include('ui.urls')),

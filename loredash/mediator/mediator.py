@@ -7,7 +7,7 @@ from twisted.internet.task import LoopingCall
 from twisted.internet import reactor
 import PySAM_DAOTk.TcsmoltenSalt as pysam
 from pathlib import Path
-from mediator import data_validator, nested_inputs, pysam_wrap
+from mediator import data_validator, pysam_wrap
 # import models
 
 class Mediator:
@@ -19,8 +19,8 @@ class Mediator:
         self.pysam_wrap = pysam_wrap.PysamWrap()
         # Decide whether to preprocess efficiency and flux maps
         if settings.DEBUG == True:
-            maps = self.pysam_wrap.ReadMaps()
-            if not all(maps.values()):
+            result = self.pysam_wrap.SetDesign(self.pysam_wrap.design_path)
+            if result == 1:
                 self.pysam_wrap.PreProcess()
         else:
             self.pysam_wrap.PreProcess()    # do this now so no simulation delay later
@@ -65,16 +65,21 @@ class Mediator:
         datetime_now = datetime.datetime.now()
         datetime_start = RoundMinutes(datetime_now, 'down', self.timestep_simulation.seconds/60)    # the start of the time interval currently in
         # datetime_end = RoundMinutes(datetime_now, 'up', self.timestep_simulation.seconds/60)        # the end of the time interval currently in
-        datetime_end = datetime_start + datetime.timedelta(hours=24)        # just to see some values while testing at night
+        datetime_end = datetime_start + datetime.timedelta(hours=1)        # just to see some values while testing at night
         tech_outputs = self.pysam_wrap.Simulate(datetime_start, datetime_end, self.timestep_simulation)
         print("Annual Energy [kWh]= ", tech_outputs["annual_energy"])
 
         # c. Validate these data
-        wanted_keys = ['P_out_net']
-        wanted_outputs = dict((k, tech_outputs[k]) for k in wanted_keys if k in tech_outputs)
-        schema = nested_inputs.schemas['pysam_daotk']
-        # THIS IS VERY SLOW:
-        # validated_outputs = data_validator.validate(wanted_outputs, schema)
+        wanted_keys = ['time_hr', 'e_ch_tes', 'eta_therm', 'eta_field', 'P_out_net', 'tou_value', 'gen', 'q_dot_rec_inc', 'q_sf_inc', 'pricing_mult', 'beam']
+        wanted_outputs = dict((k, list(tech_outputs[k])) for k in wanted_keys if k in tech_outputs)     # also converts tuples to lists so they can be edited
+
+        import time
+        tic = time.process_time()
+        validated_outputs = data_validator.validate(wanted_outputs, data_validator.pysam_schema)
+        toc = time.process_time()
+        print("Validation took {seconds:0.2f} seconds".format(seconds=toc-tic))
+        pass
+
 
         # d. Store in database and add to current timestep cache
         # pysam_table = models.PysamTable()

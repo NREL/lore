@@ -3,7 +3,7 @@ import re
 import csv
 import sqlite3
 import sys
-from PyInquirer import prompt
+# from PyInquirer import prompt
 
 #DEBUG
 import pdb
@@ -32,26 +32,26 @@ else:
 ## Set up connection
 
 # Select database
-
-db_match = re.compile(r'.*\.sqlite3') # Regex for available databses
 db_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 os.chdir(db_dir)
 
-available_databases = [filename for filename in os.listdir() if db_match.match(filename)]
+# db_match = re.compile(r'.*\.sqlite3') # Regex for available databses
+# available_databases = [filename for filename in os.listdir() if db_match.match(filename)]
 
-# Get database selection
+# # Get database selection
 
-questions = [
-  { 'type':'list',
-    'name':'database',
-    'message':"Select which SQLite3 database to import to:",
-    'choices': available_databases,
-            }
-]
-answers = prompt(questions)
+# questions = [
+#   { 'type':'list',
+#     'name':'database',
+#     'message':"Select which SQLite3 database to import to:",
+#     'choices': available_databases,
+#             }
+# ]
+# answers = prompt(questions)
 
 # Make database connection
-conn = sqlite3.connect(os.path.join(db_dir, answers['database']))
+# conn = sqlite3.connect(os.path.join(db_dir, answers['database']))
+conn = sqlite3.connect(os.path.join(db_dir, 'db.sqlite3'))
 cur = conn.cursor()
 
 # Change to users file directory
