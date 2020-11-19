@@ -96,23 +96,41 @@ pysam_schema = Schema( All(
         # },
         
         # Alphabetize!
+        # The current names, units and datatype are those directly from pysam
         {
+        Required('beam', default=[None]): [Any(And(Coerce(float), Range(min=0., max=1600.)), SetTo(None))],                     # DNI [W/m2]
         Required('defocus', default=[None]): [Any(And(Coerce(float), Range(min=0., max=1.)), SetTo(None))],                     # Field optical focus fraction [-]
         Required('disp_pceff_expected', default=[None]): [Any(And(Coerce(float), Range(min=0., max=1.)), SetTo(None))],         # Dispatch expected power cycle efficiency adj. [-]
         Required('disp_tes_expected', default=[None]): [Any(And(Coerce(float), Range(min=0., max=kBigNumber)), SetTo(None))],   # Dispatch expected TES charge level [MWht]
         Required('disp_wpb_expected', default=[None]): [Any(And(Coerce(float), Range(min=0., max=kBigNumber)), SetTo(None))],   # Dispatch expected power generation [MWe]
         Required('e_ch_tes', default=[None]): [Any(And(Coerce(float), Range(min=0., max=kBigNumber)), SetTo(None))],            # TES charge state [MWht]
+        Required('eta_field', default=[None]): [Any(And(Coerce(float), Range(min=0., max=1.)), SetTo(None))],                   # Field optical efficiency [-]
+        Required('eta_therm', default=[None]): [Any(And(Coerce(float), Range(min=0., max=1.)), SetTo(None))],                   # Tower thermal efficiency [-]
+        Required('gen', default=[None]): [Any(And(Coerce(float), Range(min=-kBigNumber, max=kBigNumber)), SetTo(None))],        # Power to grid with derate [kWe]
         Required('helio_positions', default=[None]): [Any(And(Coerce(float), Range(min=0., max=kBigNumber)), SetTo(None))],     # Heliostat position table [matrix]
+        Required('hot_tank_htf_percent_final', default=[None]): [Any(And(Coerce(float), Range(min=0, max=100)), SetTo(None))],  # Final percent of maximum hot tank mass [%]
+        Required('is_field_tracking_final', default=[None]): [Any(And(Coerce(float), Range(min=0, max=1)), SetTo(None))],       # Heliostat field tracking at end of timestep? (1 = true) [-]
         Required('P_cycle', default=[None]): [Any(And(Coerce(float), Range(min=0., max=kBigNumber)), SetTo(None))],             # PC electrical power output, gross [MWe]
         Required('P_out_net', default=[None]): [Any(And(Coerce(float), Range(min=-kBigNumber, max=kBigNumber)), SetTo(None))],  # Total electric power to grid [MWe]
         Required('P_rec_heattrace', default=[None]): [Any(And(Coerce(float), Range(min=0., max=kBigNumber)), SetTo(None))],     # Receiver heat trace parasitic load [MWe]
+        Required('pc_op_mode_final', default=[None]): [Any(And(Coerce(float), Range(min=0, max=4)), SetTo(None))],              # Final cycle operation mode 0:startup, 1:on, 2:standby, 3:off, 4:startup_controlled [-]
+        Required('pc_startup_energy_remain_final', default=[None]): [Any(And(Coerce(float), Range(min=0, max=kBigNumber)), SetTo(None))],   # Final cycle startup energy remaining [kWh]
+        Required('pc_startup_time_remain_final', default=[None]): [Any(And(Coerce(float), Range(min=0, max=kBigNumber)), SetTo(None))],     # Final cycle startup time remaining [hr]
+        Required('pricing_mult', default=[None]): [Any(And(Coerce(float), Range(min=-kBigNumber, max=kBigNumber)), SetTo(None))], # Pricing multiple [-]
         Required('q_dot_rec_inc', default=[None]): [Any(And(Coerce(float), Range(min=0., max=kBigNumber)), SetTo(None))],       # Receiver incident thermal power [MWt]
         Required('q_pc_startup', default=[None]): [Any(And(Coerce(float), Range(min=0., max=kBigNumber)), SetTo(None))],        # PC startup thermal energy [MWht]
         Required('q_sf_inc', default=[None]): [Any(And(Coerce(float), Range(min=0., max=kBigNumber)), SetTo(None))],            # Field incident thermal power [MWt]
         Required('q_startup', default=[None]): [Any(And(Coerce(float), Range(min=0., max=kBigNumber)), SetTo(None))],           # Receiver startup thermal energy consumed [MWt]
         Required('Q_thermal', default=[None]): [Any(And(Coerce(float), Range(min=-kBigNumber, max=kBigNumber)), SetTo(None))],  # Receiver thermal power to HTF less piping loss [MWt]
+        Required('rec_op_mode_final', default=[None]): [Any(And(Coerce(float), Range(min=0, max=2)), SetTo(None))],             # Final receiver operating mode 0: off, 1: startup, 2: on [-]
+        Required('rec_startup_energy_remain_final', default=[None]): [Any(And(Coerce(float), Range(min=0, max=kBigNumber)), SetTo(None))],  # Final receiver startup energy remaining [W-hr]
+        Required('rec_startup_time_remain_final', default=[None]): [Any(And(Coerce(float), Range(min=0, max=kBigNumber)), SetTo(None))],    # Final receiver startup time remaining [hr]
         Required('sf_adjust_out', default=[None]): [Any(And(Coerce(float), Range(min=0., max=1.)), SetTo(None))],               # Field availability adjustment factor [-]
         Required('T_pc_in', default=[None]): [Any(And(Coerce(float), Range(min=-50., max=1000.)), SetTo(None))],                # PC HTF inlet temperature [C]
+        Required('T_tes_cold', default=[None]): [Any(And(Coerce(float), Range(min=-273.15, max=800)), SetTo(None))],            # TES cold temperature at end of timestep [C]
+        Required('T_tes_hot', default=[None]): [Any(And(Coerce(float), Range(min=-273.15, max=800)), SetTo(None))],             # TES hot temperature at end of timestep [C]
+        Required('time_hr', default=[None]): [Any(And(Coerce(float), Range(min=0., max=kBigNumber)), SetTo(None))],             # Timestep end [hr]
+        Required('tou_value', default=[None]): [Any(And(Coerce(float), Range(min=0., max=kBigNumber)), SetTo(None))],           # Time-of-use value [-]
         },
     ),
         extra=ALLOW_EXTRA,          # ALLOW_EXTRA = undefined keys in data won't cause exception

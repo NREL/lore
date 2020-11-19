@@ -2,6 +2,7 @@ from django.conf import settings
 import sys, os
 sys.path.insert(1, os.path.join(sys.path[0], '..'))
 import time
+import copy
 import datetime
 from twisted.internet.task import LoopingCall
 from twisted.internet import reactor
@@ -12,6 +13,7 @@ from mediator import data_validator, pysam_wrap
 
 class Mediator:
     pysam_wrap = None
+    validated_outputs_prev = None
     update_interval = datetime.timedelta(seconds=5)
     timestep_simulation = datetime.timedelta(minutes=5)
 
@@ -34,7 +36,7 @@ class Mediator:
         #   Thread 1:
         #       a. If virtual plant, query database for needed inputs (or use cache from previous timestep)
         #       b. Call virtual/real plant to get plant operating state and any local weather data
-        #       b. Validate these data
+        #       c. Validate these data
         #       d. Store in database and add to current timestep cache
         #   Thread 2:
         #       a. Call module to retrieve weather data(s)
@@ -50,10 +52,10 @@ class Mediator:
         #
         # Step 3:
         #   Thread 1:
-        #       a. Get PySAM inputs from data cache of current and/or previous timestep
+        #       a. Set plant state and weather values in PySAM
         #       b. Call PySAM using inputs
         #       c. Validate these data
-        #       d. Store in database and add to current timestep cache
+        #       d. Add data to cache and store in database
         #
         # Step 4:
         #   Thread 1:
@@ -61,27 +63,33 @@ class Mediator:
 
 
         # Step 3, Thread 1:
+        # a. Set plant state and weather values in PySAM
+        plant_state = self.pysam_wrap.GetSimulatedPlantState(self.validated_outputs_prev)      # for initializing next simulation from a prior one
+        if plant_state is None:
+            plant_state = self.pysam_wrap.GetDefaultPlantState()
+        result = self.pysam_wrap.SetPlantState(plant_state)
+        
         # b. Call PySAM using inputs
         datetime_now = datetime.datetime.now()
         datetime_start = RoundMinutes(datetime_now, 'down', self.timestep_simulation.seconds/60)    # the start of the time interval currently in
         # datetime_end = RoundMinutes(datetime_now, 'up', self.timestep_simulation.seconds/60)        # the end of the time interval currently in
-        datetime_end = datetime_start + datetime.timedelta(hours=1)        # just to see some values while testing at night
+        datetime_end = datetime_start + datetime.timedelta(minutes=60)        # just to see some values while testing at night
         tech_outputs = self.pysam_wrap.Simulate(datetime_start, datetime_end, self.timestep_simulation)
         print("Annual Energy [kWh]= ", tech_outputs["annual_energy"])
 
         # c. Validate these data
-        wanted_keys = ['time_hr', 'e_ch_tes', 'eta_therm', 'eta_field', 'P_out_net', 'tou_value', 'gen', 'q_dot_rec_inc', 'q_sf_inc', 'pricing_mult', 'beam']
-        wanted_outputs = dict((k, list(tech_outputs[k])) for k in wanted_keys if k in tech_outputs)     # also converts tuples to lists so they can be edited
-
-        import time
+        # wanted_keys = ['time_hr', 'e_ch_tes', 'eta_therm', 'eta_field', 'P_out_net', 'tou_value', 'gen', 'q_dot_rec_inc', 'q_sf_inc', 'pricing_mult', 'beam']
+        # wanted_keys = list(set(tech_outputs.keys()))       # all keys are wanted
+        # wanted_outputs = dict((k, tech_outputs[k]) for k in wanted_keys if k in tech_outputs)
+        wanted_outputs = tech_outputs
+        wanted_outputs = {k:(list(v) if isinstance(v, tuple) else v) for (k,v) in wanted_outputs.items()}     # converts tuples to lists so they can be edited
         tic = time.process_time()
         validated_outputs = data_validator.validate(wanted_outputs, data_validator.pysam_schema)
         toc = time.process_time()
         print("Validation took {seconds:0.2f} seconds".format(seconds=toc-tic))
-        pass
 
-
-        # d. Store in database and add to current timestep cache
+        # d. Add data to cache and store in database
+        self.validated_outputs_prev = copy.deepcopy(validated_outputs)
         # pysam_table = models.PysamTable()
         # pysam_table.P_out_net = validated_outputs['P_out_net']          # NOT CORRECT, NEED TO ADD ACCORDING TO THE TIMESTEP INDEX
         # pysam_table.save()
