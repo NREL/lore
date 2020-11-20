@@ -1,5 +1,5 @@
 from django.apps import AppConfig
 
-class MediatorConfig(AppConfig):
-    name = 'mediator'
-    verbose_name = "Mediator"
+class MediationConfig(AppConfig):
+    name = 'mediation'
+    verbose_name = "Mediation App"

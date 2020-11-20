@@ -1,1 +1,1 @@
-default_app_config = 'mediator.apps.MediatorConfig'
+default_app_config = 'mediation.apps.MediationConfig'
