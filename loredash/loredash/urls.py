@@ -17,7 +17,7 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
-from mediator import mediator
+from mediation import mediator
 import multiprocessing
 
 # ===Initialization code, put here so the Bokeh server django.setup() call doesn't execute it
