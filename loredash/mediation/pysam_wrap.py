@@ -13,7 +13,7 @@ class PysamWrap:
     design_path = parent_dir+"/data/field_design.json"
 
     def __init__(self, plant_config, model_name="MSPTSingleOwner", load_defaults=True, weather_file=None,
-                 enable_preprocessing=True):
+                 enable_preprocessing=True, preprocess_on_init=True):
         if load_defaults == True:
             self.tech_model = t.default(model_name)
         else:
@@ -29,7 +29,7 @@ class PysamWrap:
             design_not_set = True
             if (__name__ == "__main__" or settings.DEBUG) == True:
                 design_not_set = self._SetDesign(self.design_path)   # _SetDesign() only used for debugging
-            if design_not_set:
+            if design_not_set and preprocess_on_init:
                 self.PreProcess()                                   # do this now so no simulation delay later
 
     def PreProcess(self):

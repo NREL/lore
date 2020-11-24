@@ -17,12 +17,13 @@ class Mediator:
     default_pysam_model = "MSPTSingleOwner"
 
     def __init__(self, plant_config={'design': None, 'location': None}, override_with_weather_file_location=True,
-                 weather_file=None, preprocess_pysam=True,
+                 weather_file=None, preprocess_pysam=True, preprocess_pysam_on_init=True,
                  update_interval=datetime.timedelta(seconds=5), simulation_timestep=datetime.timedelta(minutes=5)):
         self.plant_config = plant_config
         self.override_with_weather_file_location = override_with_weather_file_location
         self.weather_file = weather_file
         self.preprocess_pysam = preprocess_pysam
+        self.preprocess_pysam_on_init = preprocess_pysam_on_init
         self.update_interval = update_interval
         self.simulation_timestep = simulation_timestep
 
@@ -31,7 +32,8 @@ class Mediator:
 
         self.pysam_wrap = pysam_wrap.PysamWrap(plant_config=self.plant_config, model_name=self.default_pysam_model,
                                                load_defaults=True, weather_file=None,
-                                               enable_preprocessing=self.preprocess_pysam)
+                                               enable_preprocessing=self.preprocess_pysam,
+                                               preprocess_on_init=self.preprocess_pysam_on_init)
     
     def RunOnce(self):
         """For the current point in time, get data from external plant and weather interfaces and run
@@ -71,7 +73,7 @@ class Mediator:
         # Step 3, Thread 1:
         datetime_now = datetime.datetime.now()
         datetime_start = RoundMinutes(datetime_now, 'down', self.simulation_timestep.seconds/60)    # the start of the time interval currently in
-        # datetime_end = RoundMinutes(datetime_now, 'up', self.timestep_simulation.seconds/60)        # the end of the time interval currently in
+        # datetime_end = RoundMinutes(datetime_now, 'up', self.simulation_timestep.seconds/60)        # the end of the time interval currently in
         datetime_end = datetime_start + datetime.timedelta(minutes=60)        # just to see some values while testing at night
 
         # a. Set weather values and plant state for PySAM

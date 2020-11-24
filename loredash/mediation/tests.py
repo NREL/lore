@@ -83,7 +83,6 @@ def test_pysam_preprocessing():
 
         return design
 
-
     parent_dir = str(Path(__file__).parents[1])
 
     #---test 1--------

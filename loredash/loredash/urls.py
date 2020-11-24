@@ -29,6 +29,7 @@ default_weather_file = parent_dir+"/data/daggett_ca_34.865371_-116.783023_psmv3_
 
 mediator = mediator.Mediator(override_with_weather_file_location=True,
                              weather_file=default_weather_file, preprocess_pysam=True,
+                             preprocess_pysam_on_init=True,
                              update_interval=datetime.timedelta(seconds=5),
                              simulation_timestep=datetime.timedelta(minutes=5))
 result = mediator.RunOnce()
