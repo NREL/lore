@@ -17,12 +17,20 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
+from pathlib import Path
 from mediation import mediator
 import multiprocessing
+import datetime
 
 # ===Initialization code, put here so the Bokeh server django.setup() call doesn't execute it
 # For testing, bypassing multiprocessing:
-mediator = mediator.Mediator()
+parent_dir = str(Path(__file__).parents[1])
+default_weather_file = parent_dir+"/data/daggett_ca_34.865371_-116.783023_psmv3_60_tmy.csv"
+
+mediator = mediator.Mediator(override_with_weather_file_location=True,
+                             weather_file=default_weather_file, preprocess_pysam=True,
+                             update_interval=datetime.timedelta(seconds=5),
+                             simulation_timestep=datetime.timedelta(minutes=5))
 result = mediator.RunOnce()
 
 # This is the main production code where the mediator runs continuously
