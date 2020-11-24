@@ -21,6 +21,13 @@
             "cwd": "${workspaceFolder}\\loredash"
         },
         {
+            "name": "Python: Pytest",
+            "type": "python",
+            "request": "launch",
+            "module": "pytest",
+            "cwd": "${workspaceFolder}\\loredash"
+        },
+        {
             "name": "Python: Bokeh Server",
             "type": "python",
             "request": "launch",
