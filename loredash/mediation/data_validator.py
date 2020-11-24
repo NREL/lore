@@ -1,7 +1,7 @@
 from django.conf import settings
 
-from mediator import nested_inputs
-from voluptuous import Schema, Required, Optional, Range, And, Or, DefaultTo, SetTo, Any, Coerce, Maybe, ALLOW_EXTRA, All
+from mediation import nested_inputs
+from voluptuous import Schema, Required, Optional, Range, And, Or, DefaultTo, SetTo, Any, Coerce, Maybe, ALLOW_EXTRA, All, REMOVE_EXTRA, Number, Invalid
 
 kBigNumber = 1.0e10
 kEpsilon = 1.0e-10
@@ -25,14 +25,22 @@ def validate(values, schema, **kwargs):
         - There is a missing required value and no default is specified (see default=)
         - A value fails validation and no respective default is specified (see SetTo=)
 
+    Background:
+        - Cerebus has the best and most comprehensive features and syntax, but is unbelievably slow.
+          It doesn't appear speed is an issue with any other validators, see: https://validx.readthedocs.io/en/latest/benchmarks.html
+          However, it makes me hesistant to create my own validator.
+        - Some other validators have similarly good syntax, but lack the needed features.
+        - Voluptuous has all the needed features, is relatively fast, second biggest community, very flexible (even more so than Cerebus) but
+          has a more difficult to read programming syntax compared to a markup-like one
+
     Notes:
-    - See documentation: https://alecthomas.github.io/voluptuous/docs/_build/html/voluptuous.html
-    - Designated invalid values for the candidate databases:
-        PostgreSQL = NaN or NULL    # NaN is a special numerical value, NULL is a missing value
-        SQLite3 = NULL              # Use NULL, as NaN are converted to NULL anyway
-                                    #  (NULLs may be returned as 0's, so always type checking is recommended)
-    - Python does not have NULL, rather it uses the None object.
-    - Python NaN is created by float("NaN") and can be tested for using math.isnan()
+        - See documentation: https://alecthomas.github.io/voluptuous/docs/_build/html/voluptuous.html
+        - Designated invalid values for the candidate databases:
+            PostgreSQL = NaN or NULL    # NaN is a special numerical value, NULL is a missing value
+            SQLite3 = NULL              # Use NULL, as NaN are converted to NULL anyway
+                                        #  (NULLs may be returned as 0's, so always type checking is recommended)
+        - Python does not have NULL, rather it uses the None object.
+        - Python NaN is created by float("NaN") and can be tested for using math.isnan()
     """
 
     update = settings.DEBUG    # don't let missing required variables cause a failure while debugging
@@ -133,7 +141,41 @@ pysam_schema = Schema( All(
         Required('tou_value', default=[None]): [Any(And(Coerce(float), Range(min=0., max=kBigNumber)), SetTo(None))],           # Time-of-use value [-]
         },
     ),
-        extra=ALLOW_EXTRA,          # ALLOW_EXTRA = undefined keys in data won't cause exception
-                                    # REMOVE_EXTRA = undefined keys in data will be removed
-        required=False              # False = data without defined keys in schema will be kept
-    )
+        extra=ALLOW_EXTRA,          # ALLOW_EXTRA = keys in data that are undefined in schema won't cause exception--overrides default behavior of triggering an exception
+                                    # REMOVE_EXTRA = keys in data that are undefined in schema will be removed--no exception will be thrown
+        required=False              # False = data is not required for all defined schema keys, but this can be overridden per schema key using Required()
+                                    # THIS DOESN'T SEEM TO WORK: True = data is required for all defined schema keys unless overriden using Optional()
+)
+
+
+def list_lengths_must_match(data_dict):
+    list_lengths = [len(data_dict[key]) for key in data_dict if isinstance(data_dict[key], list)]
+    if len(set(list_lengths)) > 1:
+        raise Invalid('list lengths must match')
+    return data_dict
+
+weather_schema = Schema( All(
+        # An exception will be thrown if any value is missing or invalid
+        # Number(scale=0) throws exception if number has a non-zero decimal
+        {
+        Required('tz'): And(Number(scale=0), Coerce(int), Range(min=-12, max=12)),        # timezone [hr]
+        Required('elev'): And(Coerce(float), Range(min=-500, max=9000)),                  # elevation [m]
+        Required('lat'): And(Coerce(float), Range(min=-90, max=90)),                      # latitude [deg]
+        Required('lon'): And(Coerce(float), Range(min=-180, max=180)),                    # longitude [deg]
+        Required('year'): [And(Number(scale=0), Coerce(int), Range(min=0, max=3000))],    # year [-]
+        Required('month'): [And(Number(scale=0), Coerce(int), Range(min=0, max=12))],     # month [-]
+        Required('day'): [And(Number(scale=0), Coerce(int), Range(min=0, max=31))],       # day [-]
+        Required('hour'): [And(Number(scale=0), Coerce(int), Range(min=0, max=24))],      # hour [hr]
+        Required('minute'): [And(Number(scale=0), Coerce(int), Range(min=0, max=60))],    # minute [minute]
+        Required('dn'): [And(Coerce(float), Range(min=0, max=1800))],                     # timezone [W/m2]
+        Required('df'): [And(Coerce(float), Range(min=0, max=1000))],                     # timezone [W/m2]
+        Required('gh'): [And(Coerce(float), Range(min=0, max=1800))],                     # timezone [W/m2]
+        Required('wspd'): [And(Coerce(float), Range(min=0, max=110))],                    # timezone [m/s]
+        Required('tdry'): [And(Coerce(float), Range(min=-100, max=150))],                 # timezone [C]
+        },
+        list_lengths_must_match
+    ),
+        extra=REMOVE_EXTRA,         # REMOVE_EXTRA = keys in data that are undefined in schema will be removed--no exception will be thrown
+        required=True,              # THIS DOESN'T SEEM TO WORK: True = data is required for all defined schema keys unless overriden using
+                                    #   Optional(), if not present will throw exception
+)
