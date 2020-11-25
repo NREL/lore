@@ -32,6 +32,8 @@ mediator = mediator.Mediator(override_with_weather_file_location=True,
                              preprocess_pysam_on_init=True,
                              update_interval=datetime.timedelta(seconds=5),
                              simulation_timestep=datetime.timedelta(minutes=5))
+
+result = mediator.ModelPreviousDayAndAddToDb()
 result = mediator.RunOnce()
 
 # This is the main production code where the mediator runs continuously
@@ -39,7 +41,7 @@ result = mediator.RunOnce()
 # p = multiprocessing.Process(target=mediator.MediateContinuously, args=(update_interval,))
 # p.start()
 
-# This code adds another simultaneous mediate processes:
+# This code adds another simultaneous mediate process (although likely not needed):
 # p = multiprocessing.Process(target=mediator.MediateContinuously, args=(1,))
 # p.start()
 # ===/initialization=========================================================================

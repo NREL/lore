@@ -34,10 +34,8 @@ class Mediator:
                                                load_defaults=True, weather_file=None,
                                                enable_preprocessing=self.preprocess_pysam,
                                                preprocess_on_init=self.preprocess_pysam_on_init)
-
-        # ModelPreviousDayAndAddToDb()
     
-    def RunOnce(self):
+    def RunOnce(self, datetime_start=None, datetime_end=None):
         """For the current point in time, get data from external plant and weather interfaces and run
         entire set of submodels, saving data to database"""
 
@@ -73,10 +71,21 @@ class Mediator:
 
 
         # Step 3, Thread 1:
+        # Normalize timesteps to even intervals, even if they are given
         datetime_now = datetime.datetime.now()
-        datetime_start = RoundMinutes(datetime_now, 'down', self.simulation_timestep.seconds/60)    # the start of the time interval currently in
-        # datetime_end = RoundMinutes(datetime_now, 'up', self.simulation_timestep.seconds/60)        # the end of the time interval currently in
-        datetime_end = datetime_start + datetime.timedelta(minutes=60)        # just to see some values while testing at night
+        if isinstance(datetime_start, datetime.datetime):
+            datetime_start = RoundMinutes(datetime_start, 'down', self.simulation_timestep.seconds/60)
+            if isinstance(datetime_end, datetime.datetime):
+                datetime_end = RoundMinutes(datetime_end, 'up', self.simulation_timestep.seconds/60)
+            else:
+                datetime_end = datetime_start + self.simulation_timestep
+        else:
+            datetime_start = RoundMinutes(datetime_now, 'down', self.simulation_timestep.seconds/60)    # the start of the time interval currently in
+            datetime_end = datetime_start + self.simulation_timestep        # disregard a given datetime_end if there is no given datetime_start
+        
+        print("Datetime now = {datetime}".format(datetime=datetime_now))
+        print("Start datetime = {datetime}".format(datetime=datetime_start))
+        print("End datetime = {datetime}".format(datetime=datetime_end))
 
         # a. Set weather values and plant state for PySAM
         weather_dataframe = self.GetWeatherDataframe(datetime_start, datetime_end, tmy3_path=self.weather_file)
@@ -100,7 +109,7 @@ class Mediator:
 
         # d. Add data to cache and store in database
         self.validated_outputs_prev = copy.deepcopy(validated_outputs)
-        self.BulkAddToPysamTable(validated_outputs)
+        # self.BulkAddToPysamTable(validated_outputs)
 
         return 0
 
@@ -114,6 +123,15 @@ class Mediator:
         time.sleep(update_interval - time.time() % update_interval)          # wait to start until it's an even clock interval
         looping_call.start(update_interval)
         reactor.run()
+
+    def ModelPreviousDayAndAddToDb(self):
+        datetime_now = datetime.datetime.now()
+        datetime_now_rounded_down = RoundMinutes(datetime_now, 'down', self.simulation_timestep.seconds/60)    # the start of the time interval currently in
+        datetime_start_prev_day = datetime_now_rounded_down - datetime.timedelta(days=1)
+        datetime_end_prev_day = datetime_now_rounded_down                   # end of the last timestep
+                                                                            # (as noted for "time_stop" on line 1004 in cmod_tcsmolten_salt.cpp)
+        self.RunOnce(datetime_start_prev_day, datetime_end_prev_day)
+        return 0
 
     def BulkAddToPysamTable(self, records):
         n_records = len(records['time_hr'])

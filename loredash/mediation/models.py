@@ -2,7 +2,8 @@ from django.db import models
 
 #--------------PySAM Data----------------------------------
 class PysamData(models.Model):                                                                              # SSC variables, pre unit conversion:
-    timestamp = models.DateTimeField(verbose_name="Timestep end", db_index=True, primary_key=True)          #   time_hr (end of timestep) [hr]
+    timestamp = models.DateTimeField(verbose_name="Timestep end", primary_key=True)                         #   time_hr (end of timestep) [hr]
+                                                                                                            #    (db_index=True is likely redundant to primary_key=True)
     E_tes_charged = models.FloatField(verbose_name="TES charge state [kWht]", default=None)                 #   e_ch_tes [MWht]
     eta_tower_thermal = models.FloatField(verbose_name="Tower thermal efficiency [-]", default=None)        #   eta_therm [-]
     eta_field_optical = models.FloatField(verbose_name="Field optical efficiency [-]", default=None)        #   eta_field [-]
