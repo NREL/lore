@@ -6,7 +6,7 @@ from twisted.internet.task import LoopingCall
 from twisted.internet import reactor
 import PySAM_DAOTk.TcsmoltenSalt as pysam
 from pathlib import Path
-from mediation import data_validator, pysam_wrap
+from mediation import data_validator, pysam_wrap, models
 import pandas as pd
 # import models
 
@@ -34,6 +34,8 @@ class Mediator:
                                                load_defaults=True, weather_file=None,
                                                enable_preprocessing=self.preprocess_pysam,
                                                preprocess_on_init=self.preprocess_pysam_on_init)
+
+        # ModelPreviousDayAndAddToDb()
     
     def RunOnce(self):
         """For the current point in time, get data from external plant and weather interfaces and run
@@ -94,12 +96,11 @@ class Mediator:
         validated_outputs = data_validator.validate(wanted_outputs, data_validator.pysam_schema)
         toc = time.process_time()
         print("Validation took {seconds:0.2f} seconds".format(seconds=toc-tic))
+        validated_outputs['year_start'] = datetime_start.year       # add this so date can be determined from time_hr
 
         # d. Add data to cache and store in database
         self.validated_outputs_prev = copy.deepcopy(validated_outputs)
-        # pysam_table = models.PysamTable()
-        # pysam_table.P_out_net = validated_outputs['P_out_net']          # NOT CORRECT, NEED TO ADD ACCORDING TO THE TIMESTEP INDEX
-        # pysam_table.save()
+        self.BulkAddToPysamTable(validated_outputs)
 
         return 0
 
@@ -113,6 +114,29 @@ class Mediator:
         time.sleep(update_interval - time.time() % update_interval)          # wait to start until it's an even clock interval
         looping_call.start(update_interval)
         reactor.run()
+
+    def BulkAddToPysamTable(self, records):
+        n_records = len(records['time_hr'])
+        newyears = datetime.datetime(records['year_start'], 1, 1, 0, 0, 0)
+
+        instances = [
+            models.PysamData(
+                timestamp =             newyears + datetime.timedelta(hours=records['time_hr'][i]),
+                E_tes_charged =         records['e_ch_tes'][i],
+                eta_tower_thermal =     records['eta_therm'][i],
+                eta_field_optical =     records['eta_field'][i],
+                W_grid_no_derate =      records['P_out_net'][i],
+                tou =                   records['tou_value'][i],
+                W_grid_with_derate =    records['gen'][i],
+                Q_tower_incident =      records['q_dot_rec_inc'][i],
+                Q_field_incident =      records['q_sf_inc'][i],
+                pricing_multiple =      records['pricing_mult'][i],
+                dni =                   records['beam'][i],
+            )
+            for i in range(n_records)
+        ]
+
+        models.PysamData.objects.bulk_create(instances)
 
     def GetWeatherDataframe(self, datetime_start, datetime_end, **kwargs):
         """put the weather forecast call here instead"""
