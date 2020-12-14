@@ -273,20 +273,20 @@ class RealTimeDispatchModel(object):
         ##--------- Variables ------------------------
         self.model.drsu = pe.Var(self.model.T, domain=pe.NonNegativeReals)  #Receiver start-up time inventory at period t [h]
         self.model.drsd = pe.Var(self.model.T, domain=pe.NonNegativeReals)  #Receiver shut down time inventory at period t [h]
-        self.model.frsd = pe.Var(self.model.T, domain=pe.NonNegativeReals)  #Fraction of period used for receiver shut down at period $t [-]
-        self.model.frsu = pe.Var(self.model.T_nl, domain=pe.NonNegativeReals)  #Fraction of period used for receiver start-up at period $t [-]
+        self.model.frsd = pe.Var(self.model.T, domain=pe.NonNegativeReals, bounds = (0,1))  #Fraction of period used for receiver shut down at period $t [-]
+        self.model.frsu = pe.Var(self.model.T_nl, domain=pe.NonNegativeReals, bounds = (0,1))  #Fraction of period used for receiver start-up at period $t [-]
         self.model.lr = pe.Var(self.model.T_nl, domain=pe.NonNegativeReals)  #Salt pumping power to receiver in period t [kW\sse]
         self.model.lc = pe.Var(self.model.T_nl, domain=pe.NonNegativeReals)  #Salt pumping power to SGS in period t [kW\sse]
         self.model.lfw = pe.Var(self.model.T_nl, domain=pe.NonNegativeReals)  #Feed water pumping power to SGS in period t [kW\sse]
-        self.model.mass_cs = pe.Var(self.model.T_nl, domain=pe.NonNegativeReals)  #Mass of htf in cold storage in period t [kg]
-        self.model.mass_hs = pe.Var(self.model.T_nl, domain=pe.NonNegativeReals)  #Mass of htf in hot storage in period t [kg]
+        self.model.mass_cs = pe.Var(self.model.T_nl, domain=pe.NonNegativeReals, bounds = (self.model.mass_cs_min,self.model.mass_cs_max))  #Mass of htf in cold storage in period t [kg]
+        self.model.mass_hs = pe.Var(self.model.T_nl, domain=pe.NonNegativeReals, bounds = (self.model.mass_hs_min,self.model.mass_hs_max))  #Mass of htf in hot storage in period t [kg]
         self.model.mdot_c = pe.Var(self.model.T_nl, domain=pe.NonNegativeReals)  #Mass flow rate of htf to the cycle in period t [kg/s]
         self.model.mdot_r_cs = pe.Var(self.model.T_nl, domain=pe.NonNegativeReals)  #Mass flow rate of htf to the rec to cold in period t [kg/s]
         self.model.mdot_r_cs = pe.Var(self.model.T_nl, domain=pe.NonNegativeReals)  #Mass flow rate of htf to the rec to hot in period t [kg/s]
         self.model.s = pe.Var(self.model.T_l, domain=pe.NonNegativeReals, bounds = (0,self.model.Eu))                      #TES reserve quantity at period $t$  [kWh\sst]
         self.model.T_cout = pe.Var(self.model.T_nl, domain=pe.NonNegativeReals)  #Temperature of heat transfer fluid at the cycle outlet in period $t$ & $^{\circ} C$
-        self.model.T_cs = pe.Var(self.model.T_nl, domain=pe.NonNegativeReals)  #Temperature of heat transfer fluid in cold storage in period $t$  & $^{\circ} C$
-        self.model.T_hs = pe.Var(self.model.T_nl, domain=pe.NonNegativeReals)  #Temperature of heat transfer fluid in hot storage in period $t$  & $^{\circ} C$
+        self.model.T_cs = pe.Var(self.model.T_nl, domain=pe.NonNegativeReals, bounds = (self.model.T_cs_min,self.model.T_cs_max)))  #Temperature of heat transfer fluid in cold storage in period $t$  & $^{\circ} C$
+        self.model.T_hs = pe.Var(self.model.T_nl, domain=pe.NonNegativeReals, bounds = (self.model.T_hs_min,self.model.T_hs_max)))  #Temperature of heat transfer fluid in hot storage in period $t$  & $^{\circ} C$
         self.model.T_rout = pe.Var(self.model.T_nl, domain=pe.NonNegativeReals)  #Temperature of heat transfer fluid at the receiver outlet in period $t$  & $^{\circ} C$
         self.model.ucsu = pe.Var(self.model.T, domain=pe.NonNegativeReals)   #Cycle start-up energy inventory at period $t$ [kWh
         self.model.ucsd = pe.Var(self.model.T, domain=pe.NonNegativeReals)                         #Cycle shutdown energy inventory at period $t$ [kWh\sst]
