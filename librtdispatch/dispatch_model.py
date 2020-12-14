@@ -285,8 +285,8 @@ class RealTimeDispatchModel(object):
         self.model.mdot_r_cs = pe.Var(self.model.T_nl, domain=pe.NonNegativeReals)  #Mass flow rate of htf to the rec to hot in period t [kg/s]
         self.model.s = pe.Var(self.model.T_l, domain=pe.NonNegativeReals, bounds = (0,self.model.Eu))                      #TES reserve quantity at period $t$  [kWh\sst]
         self.model.T_cout = pe.Var(self.model.T_nl, domain=pe.NonNegativeReals)  #Temperature of heat transfer fluid at the cycle outlet in period $t$ & $^{\circ} C$
-        self.model.T_cs = pe.Var(self.model.T_nl, domain=pe.NonNegativeReals, bounds = (self.model.T_cs_min,self.model.T_cs_max)))  #Temperature of heat transfer fluid in cold storage in period $t$  & $^{\circ} C$
-        self.model.T_hs = pe.Var(self.model.T_nl, domain=pe.NonNegativeReals, bounds = (self.model.T_hs_min,self.model.T_hs_max)))  #Temperature of heat transfer fluid in hot storage in period $t$  & $^{\circ} C$
+        self.model.T_cs = pe.Var(self.model.T_nl, domain=pe.NonNegativeReals, bounds = (self.model.T_cs_min,self.model.T_cs_max))  #Temperature of heat transfer fluid in cold storage in period $t$  & $^{\circ} C$
+        self.model.T_hs = pe.Var(self.model.T_nl, domain=pe.NonNegativeReals, bounds = (self.model.T_hs_min,self.model.T_hs_max))  #Temperature of heat transfer fluid in hot storage in period $t$  & $^{\circ} C$
         self.model.T_rout = pe.Var(self.model.T_nl, domain=pe.NonNegativeReals)  #Temperature of heat transfer fluid at the receiver outlet in period $t$  & $^{\circ} C$
         self.model.ucsu = pe.Var(self.model.T, domain=pe.NonNegativeReals)   #Cycle start-up energy inventory at period $t$ [kWh
         self.model.ucsd = pe.Var(self.model.T, domain=pe.NonNegativeReals)                         #Cycle shutdown energy inventory at period $t$ [kWh\sst]
@@ -365,22 +365,32 @@ class RealTimeDispatchModel(object):
         self.model.pr = lambda t: self.model.Lr*(self.model.xr[t] + self.model.Qin[t]*self.model.frsu[t] + self.model.Qrl*self.model.yrsb[t])
         self.model.pc = lambda t: self.model.Lc*(self.model.x[t] + self.model.Qc*self.model.ycsu[t]);# + Qb*ycsb[t])
 
+        self.model.obj_end_incentive = (
+                self.model.D[self.model.stop] * self.model.disp_time_weighting * self.model.avg_price *
+                (self.model.eta_des) * (
+                    self.model.s_calc[self.model.stop] if self.model.stop == self.model.transition
+                        else self.model.sself.model[self.model.stop]
+                )
+            )
+
                 
     def addObjective(self):
         def objectiveRule(model):
             return (
                     sum( model.D[t] * 
                     #obj_profit
-                    model.Delta[t]*model.P[t]*0.1*(model.wdot_s[t] - model.wdot_p[t])
+                    model.Delta[t]*model.P[t]*(model.wdot_s[t] - model.wdot_p[t])
                     #obj_cost_cycle_su_hs_sd
-                    - (model.Ccsu*model.ycsup[t] + 0.1*model.Cchsp*model.ychsp[t] + model.alpha*model.ycsd[t])
+                    - (model.Ccsu*model.ycsup[t] + model.Cchsp*model.ychsp[t] + model.alpha*model.ycsdp[t])
                     #obj_cost_cycle_ramping
                     - (model.C_delta_w*(model.wdot_delta_plus[t]+model.wdot_delta_minus[t])+model.C_v_w*(model.wdot_v_plus[t] + model.wdot_v_minus[t]))
                     #obj_cost_rec_su_hs_sd
-                    - (model.Crsu*model.yrsup[t] + model.Crhsp*model.yrhsp[t] + model.alpha*model.yrsd[t])
+                    - (model.Crsu*model.yrsup[t] + model.Crhsp*model.yrhsp[t] + model.alpha*(model.yrsb[t]+model.yrsdp[t]))
                     #obj_cost_ops
                     - model.Delta[t]*(model.Cpc*model.wdot[t] + model.Ccsb*model.Qb*model.ycsb[t] + model.Crec*model.xr[t] )
-                    for t in model.T) 
+                    for t in model.T)
+                    #obj_end_incentive
+                    + model.obj_end_incentive
                     )
         def objectiveRuleForceCycle(model):
             return (
@@ -388,16 +398,18 @@ class RealTimeDispatchModel(object):
                     #obj_profit
                     model.Delta[t]*model.P[t]*0.1*(model.wdot_s[t] - model.wdot_p[t])
                     #obj_cost_cycle_su_hs_sd
-                    - (model.Ccsu*model.ycsup[t] + 0.1*model.Cchsp*model.ychsp[t] + model.alpha*model.ycsd[t])
+                    - (model.Ccsu*model.ycsup[t] + 0.1*model.Cchsp*model.ychsp[t] + model.alpha*model.ycsdp[t])
                     #obj_cost_cycle_ramping
                     - (model.C_delta_w*(model.wdot_delta_plus[t]+model.wdot_delta_minus[t])+model.C_v_w*(model.wdot_v_plus[t] + model.wdot_v_minus[t]))
                     #obj_cost_rec_su_hs_sd
-                    - (model.Crsu*model.yrsup[t] + model.Crhsp*model.yrhsp[t] + model.alpha*model.yrsd[t])
+                    - (model.Crsu*model.yrsup[t] + model.Crhsp*model.yrhsp[t] + model.alpha*(model.yrsb[t]+model.yrsdp[t]))
                     #obj_cost_ops
                     - model.Delta[t]*(model.Cpc*model.wdot[t] + model.Ccsb*model.Qb*model.ycsb[t] + model.Crec*model.xr[t] )
                     #obj_force_cycle
                     + model.cycle_incent * (model.ycgb[t] + model.ycge[t])
-                    for t in model.T) 
+                    for t in model.T)
+                    #obj_end_incentive
+                    + model.obj_end_incentive
                     )
         if self.include["force_cycle"]:
             self.model.OBJ = pe.Objective(rule=objectiveRuleForceCycle, sense = pe.maximize)
