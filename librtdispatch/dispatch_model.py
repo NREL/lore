@@ -426,15 +426,15 @@ class RealTimeDispatchModel(object):
 
     def addPumpConstraints(self):
         def receiver_pump_rule(model,t,i):
-            return self.model.lr[t] == self.model.Pr * (self.model.mdot_r_cs[t] + self.model.mdot_r_hs[t])
+            return model.lr[t] == model.Pr * (model.mdot_r_cs[t] + model.mdot_r_hs[t])
         def convex_cycle_pump1_rule(model,t,i):
-            return self.model.lc[t] >= self.model.Pc[i] * self.model.mdot_c[t] + self.model.Bc[i] * self.model.y[t]
+            return model.lc[t] >= model.Pc[i] * model.mdot_c[t] + model.Bc[i] * model.y[t]
         def convex_cycle_pump2_rule(model,t,i):
-            return self.model.lc[t] >= self.model.Pc[i] * self.model.mdot_c[t] + self.model.Bc[i] * self.model.ycsu[t]
+            return model.lc[t] >= model.Pc[i] * model.mdot_c[t] + self.model.Bc[i] * model.ycsu[t]
         def convex_feedwater_pump1_rule(model,t,i):
-            return self.model.lfw[t] >= self.model.Pfw[i] * self.model.mdot_c[t] + self.model.Bfw[i] * self.model.y[t]
+            return model.lfw[t] >= model.Pfw[i] * model.mdot_c[t] + model.Bfw[i] * model.y[t]
         def convex_feedwater_pump2_rule(model,t,i):
-            return self.model.lfw[t] >= self.model.Pfw[i] * self.model.mdot_c[t] + self.model.Bfw[i] * self.model.ycsu[t]
+            return model.lfw[t] >= model.Pfw[i] * model.mdot_c[t] + model.Bfw[i] * model.ycsu[t]
 
         self.model.receiver_pump_con = pe.Constraint(self.model.T_nl * self.model.htf_segments, rule=receiver_pump_rule)
         self.model.convex_cycle_pump1_con = pe.Constraint(self.model.T_nl * self.model.htf_segments, rule=convex_cycle_pump1_rule)
@@ -442,8 +442,8 @@ class RealTimeDispatchModel(object):
         self.model.convex_feedwater_pump1_con = pe.Constraint(self.model.T_nl * self.model.fw_segments, rule=convex_feedwater_pump1_rule)
         self.model.convex_feedwater_pump2_con = pe.Constraint(self.model.T_nl * self.model.fw_segments, rule=convex_feedwater_pump2_rule)
 
-       
-    def addReceiverStartupConstraints(self):
+
+    def addReceiverStartupConstraintsLinear(self):
         def rec_inventory_rule(model,t):
             if t == 1:
                 return model.ursu[t] <= model.ursu0 + model.Delta[t]*model.xrsu[t]
@@ -468,6 +468,48 @@ class RealTimeDispatchModel(object):
         self.model.rec_su_persist_con = pe.Constraint(self.model.T,rule=rec_su_persist_rule)
         self.model.ramp_limit_con = pe.Constraint(self.model.T,rule=ramp_limit_rule)
         self.model.nontrivial_solar_con = pe.Constraint(self.model.T,rule=nontrivial_solar_rule)
+
+    def addReceiverStartupConstraints(self):
+        ### time inventory
+        def rec_su_time_inv_rule(model,t):
+            if t == self.model.start:
+                return model.drsu[t] <= model.drsu0 + model.Delta[t]*model.xrsu[t]
+            return model.drsu[t] <= model.drsu[t-1] + model.Delta[t]*model.xrsu[t]
+        def rec_su_time_nonzero_rule(model,t):
+            return model.drsu[t] <= model.Drsu * model.yrsu[t]
+        def rec_startup_time_rule(model,t):
+            if t == 1:
+                return model.yr[t] <= model.ursu[t]/model.Er + model.yr0 + model.yrsb0
+            return model.yr[t] <= model.ursu[t]/model.Er + model.yr[t-1] + model.yrsb[t-1]
+        ### energy inventory
+        def rec_su_eng_inv1_rule(model,t):
+            if t == 1:
+                return model.ursu[t] <= model.ursu0 + model.Delta[t]*model.Qin[t]*model.frsu[t]
+            return model.ursu[t] <= model.ursu[t-1] + model.Delta[t]*model.Qin[t]*model.frsu[t]
+        def rec_su_eng_inv2_rule(model,t):
+            if t == 1:
+                return model.ursu[t] <= model.ursu0 + model.Delta[t]*model.Qru
+            return model.ursu[t] <= model.ursu[t-1] + model.Delta[t]*model.Qru
+        def rec_su_eng_nonzero_rule(model,t):
+            return model.ursu[t] <= model.Er * model.yrsu[t];
+        def rec_startup_eng_rule(model,t):
+            if t == 1:
+                return model.Er*model.yr[t] <= model.ursu[t] + (model.Er*(model.yr0 + model.yrsb0))
+            return model.Er*model.yr[t] <= model.ursu[t] + (model.Er*(model.yr[t-1] + model.yrsb[t-1]))
+        #binary logic
+        def rec_startup_frac_nonzero_rule(model, t):
+            return model.frsu[t] <= model.yrsu[t]
+        def rec_force_startup_frac_rule(model, t):
+            return model.frsu[t] >= model.yrsu[t] - model.yr[t]
+        self.model.rec_su_time_inv_con = pe.Constraint(self.model.T,rule=rec_su_time_inv_rule)
+        self.model.rec_su_time_nonzero_con = pe.Constraint(self.model.T,rule=rec_su_time_nonzero_rule)
+        self.model.rec_startup_time_con = pe.Constraint(self.model.T,rule=rec_startup_time_rule)
+        self.model.rec_su_eng_inv1_con = pe.Constraint(self.model.T,rule=rec_su_eng_inv1_rule)
+        self.model.rec_su_eng_inv2_con = pe.Constraint(self.model.T,rule=rec_su_eng_inv2_rule)
+        self.model.rec_su_eng_nonzero_con = pe.Constraint(self.model.T,rule=rec_su_eng_nonzero_rule)
+        self.model.rec_startup_eng_con = pe.Constraint(self.model.T,rule=rec_startup_eng_rule)
+        self.model.rec_startup_frac_nonzero_con = pe.Constraint(self.model.T,rule=rec_startup_frac_nonzero_rule)
+        self.model.rec_force_startup_frac_con = pe.Constraint(self.model.T,rule=rec_force_startup_frac_rule)
         
     def addReceiverSupplyAndDemandConstraints(self):
         def rec_production_rule(model,t):
