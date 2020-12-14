@@ -271,8 +271,25 @@ class RealTimeDispatchModel(object):
     def generateVariables(self):
         ### Decision Variables ###
         ##--------- Variables ------------------------
-        self.model.s = pe.Var(self.model.T, domain=pe.NonNegativeReals, bounds = (0,self.model.Eu))                      #TES reserve quantity at period $t$  [kWh\sst]
-        self.model.ucsu = pe.Var(self.model.T, domain=pe.NonNegativeReals)                         #Cycle start-up energy inventory at period $t$ [kWh\sst]
+        self.model.drsu = pe.Var(self.model.T, domain=pe.NonNegativeReals)  #Receiver start-up time inventory at period t [h]
+        self.model.drsd = pe.Var(self.model.T, domain=pe.NonNegativeReals)  #Receiver shut down time inventory at period t [h]
+        self.model.frsd = pe.Var(self.model.T, domain=pe.NonNegativeReals)  #Fraction of period used for receiver shut down at period $t [-]
+        self.model.frsu = pe.Var(self.model.T_nl, domain=pe.NonNegativeReals)  #Fraction of period used for receiver start-up at period $t [-]
+        self.model.lr = pe.Var(self.model.T_nl, domain=pe.NonNegativeReals)  #Salt pumping power to receiver in period t [kW\sse]
+        self.model.lc = pe.Var(self.model.T_nl, domain=pe.NonNegativeReals)  #Salt pumping power to SGS in period t [kW\sse]
+        self.model.lfw = pe.Var(self.model.T_nl, domain=pe.NonNegativeReals)  #Feed water pumping power to SGS in period t [kW\sse]
+        self.model.mass_cs = pe.Var(self.model.T_nl, domain=pe.NonNegativeReals)  #Mass of htf in cold storage in period t [kg]
+        self.model.mass_hs = pe.Var(self.model.T_nl, domain=pe.NonNegativeReals)  #Mass of htf in hot storage in period t [kg]
+        self.model.mdot_c = pe.Var(self.model.T_nl, domain=pe.NonNegativeReals)  #Mass flow rate of htf to the cycle in period t [kg/s]
+        self.model.mdot_r_cs = pe.Var(self.model.T_nl, domain=pe.NonNegativeReals)  #Mass flow rate of htf to the rec to cold in period t [kg/s]
+        self.model.mdot_r_cs = pe.Var(self.model.T_nl, domain=pe.NonNegativeReals)  #Mass flow rate of htf to the rec to hot in period t [kg/s]
+        self.model.s = pe.Var(self.model.T_l, domain=pe.NonNegativeReals, bounds = (0,self.model.Eu))                      #TES reserve quantity at period $t$  [kWh\sst]
+        self.model.T_cout = pe.Var(self.model.T_nl, domain=pe.NonNegativeReals)  #Temperature of heat transfer fluid at the cycle outlet in period $t$ & $^{\circ} C$
+        self.model.T_cs = pe.Var(self.model.T_nl, domain=pe.NonNegativeReals)  #Temperature of heat transfer fluid in cold storage in period $t$  & $^{\circ} C$
+        self.model.T_hs = pe.Var(self.model.T_nl, domain=pe.NonNegativeReals)  #Temperature of heat transfer fluid in hot storage in period $t$  & $^{\circ} C$
+        self.model.T_rout = pe.Var(self.model.T_nl, domain=pe.NonNegativeReals)  #Temperature of heat transfer fluid at the receiver outlet in period $t$  & $^{\circ} C$
+        self.model.ucsu = pe.Var(self.model.T, domain=pe.NonNegativeReals)   #Cycle start-up energy inventory at period $t$ [kWh
+        self.model.ucsd = pe.Var(self.model.T, domain=pe.NonNegativeReals)                         #Cycle shutdown energy inventory at period $t$ [kWh\sst]
         self.model.ursu = pe.Var(self.model.T, domain=pe.NonNegativeReals)                         #Receiver start-up energy inventory at period $t$ [kWh\sst]
         self.model.wdot = pe.Var(self.model.T, domain=pe.NonNegativeReals)                         #Power cycle electricity generation at period $t$ [kW\sse]
         self.model.wdot_delta_plus = pe.Var(self.model.T, domain=pe.NonNegativeReals)	             #Power cycle ramp-up in period $t$ [kW\sse]
@@ -281,7 +298,7 @@ class RealTimeDispatchModel(object):
         self.model.wdot_v_minus = pe.Var(self.model.T, domain=pe.NonNegativeReals, bounds = (0,self.model.W_v_minus)) 	 #Power cycle ramp-down beyond designed limit in period $t$ [kW\sse]
         self.model.wdot_s = pe.Var(self.model.T, domain=pe.NonNegativeReals)	                     #Energy sold to grid in time t
         self.model.wdot_p = pe.Var(self.model.T, domain=pe.NonNegativeReals)	                     #Energy purchased from the grid in time t
-        self.model.x = pe.Var(self.model.T, domain=pe.NonNegativeReals)                            #Cycle thermal power utilization at period $t$ [kW\sst]
+        self.model.x = pe.Var(self.model.T_l, domain=pe.NonNegativeReals)                            #Cycle thermal power utilization at period $t$ [kW\sst]
         self.model.xr = pe.Var(self.model.T, domain=pe.NonNegativeReals)	                         #Thermal power delivered by the receiver at period $t$ [kW\sst]
         self.model.xrsu = pe.Var(self.model.T, domain=pe.NonNegativeReals)                         #Receiver start-up power consumption at period $t$ [kW\sst]
         
@@ -311,22 +328,25 @@ class RealTimeDispatchModel(object):
         self.model.yrhsp = pe.Var(self.model.T, domain=pe.Binary)	    #1 if receiver hot start-up penalty is incurred at period $t$ (from standby); 0 otherwise
         self.model.yrsb = pe.Var(self.model.T, domain=pe.Binary)	    #1 if receiver is in standby mode at period $t$; 0 otherwise
         self.model.yrsd = pe.Var(self.model.T, domain=pe.Binary)	    #1 if receiver is shut down at period $t$; 0 otherwise
+        self.model.yrsdp = pe.Var(self.model.T, domain=pe.Binary)  # 1 if receiver cold shut-down penalty is incurred at period $t$ (from off); 0 oth
         self.model.yrsu = pe.Var(self.model.T, domain=pe.Binary)      #1 if receiver is starting up at period $t$; 0 otherwise
         self.model.yrsup = pe.Var(self.model.T, domain=pe.Binary)     #1 if receiver cold start-up penalty is incurred at period $t$ (from off); 0 otherwise
         self.model.y = pe.Var(self.model.T, domain=pe.Binary)         #1 if cycle is generating electric power at period $t$; 0 otherwise
         self.model.ychsp = pe.Var(self.model.T, domain=pe.Binary)     #1 if cycle hot start-up penalty is incurred at period $t$ (from standby); 0 otherwise
         self.model.ycsb = pe.Var(self.model.T, domain=pe.Binary)      #1 if cycle is in standby mode at period $t$; 0 otherwise
         self.model.ycsd = pe.Var(self.model.T, domain=pe.Binary)	    #1 if cycle is shutting down at period $t$; 0 otherwise
+        self.model.yrsdp = pe.Var(self.model.T, domain=pe.Binary)  # 1 if cycle cold shut-down penalty is incurred at time period $t$; 0 otherwise
         self.model.ycsu = pe.Var(self.model.T, domain=pe.Binary)      #1 if cycle is starting up at period $t$; 0 otherwise
         self.model.ycsup = pe.Var(self.model.T, domain=pe.Binary)     #1 if cycle cold start-up penalty is incurred at period $t$ (from off); 0 otherwise
         self.model.ycgb = pe.Var(self.model.T, domain=pe.NonNegativeReals, bounds=(0,1))      #1 if cycle begins electric power generation at period $t$; 0 otherwise
         self.model.ycge = pe.Var(self.model.T, domain=pe.NonNegativeReals, bounds=(0,1))      #1 if cycle stops electric power generation at period $t$; 0 otherwise
-        
+        self.model.ycoff = pe.Var(self.model.T, domain=pe.Binary)  #1 if cycle is not operating in period $t$; 0 otherwise
+
         #--------------- Persistence Variables ----------------------
         if self.include["persistence"]:
             self.model.wdot_s_prev_delta_plus = pe.Var(self.model.T, domain=pe.NonNegativeReals)
             self.model.wdot_s_prev_delta_minus = pe.Var(self.model.T, domain=pe.NonNegativeReals)           
-            self.model.ycoff = pe.Var(self.model.T, domain=pe.Binary)     #1 if power cycle is off at period $t$; 0 otherwise
+            #self.model.ycoff = pe.Var(self.model.T, domain=pe.Binary)     #1 if power cycle is off at period $t$; 0 otherwise
         
         #----------Binary Battery Variables---------------------
         if self.include["battery"]:
@@ -336,7 +356,15 @@ class RealTimeDispatchModel(object):
         #----------Binary PV Variables---------------------
         if self.include["pv"]:
             self.model.ypv = pe.Var(self.model.T, domain=pe.Binary)    #1 if PV is feeding the AC system in t, 0 o.w.
-           
+
+        #------ Expressions for existing parameters and variables
+        self.model.x_calc = lambda t: self.model.Cp * self.model.mdot_c[t] * (self.model.T_hs[t] - self.model.T_cout[t])
+        self.model.s_calc = lambda t: (self.model.Cp/60) * (self.model.mass_hs[t] - self.model.mass_hs_min) * (self.model.T_hs[t] - self.model.T_cs_min)
+        self.model.eta1 = lambda t: self.model.wdot[t]/self.model.x_calc[t] if self.model.x_calc[t] == 0 else 0
+        self.model.eta2 = lambda t: self.model.wdot[t]/self.model.x[t] if self.model.x[t] == 0 else 0
+        self.model.pr = lambda t: self.model.Lr*(self.model.xr[t] + self.model.Qin[t]*self.model.frsu[t] + self.model.Qrl*self.model.yrsb[t])
+        self.model.pc = lambda t: self.model.Lc*(self.model.x[t] + self.model.Qc*self.model.ycsu[t]);# + Qb*ycsb[t])
+
                 
     def addObjective(self):
         def objectiveRule(model):
