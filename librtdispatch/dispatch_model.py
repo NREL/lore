@@ -423,7 +423,26 @@ class RealTimeDispatchModel(object):
             return model.wdot_s_prev_delta_minus[t] >= model.wdot_s_prev[t] - model.wdot_s[t]
         self.model.persist_pos_con = pe.Constraint(self.model.T,rule=wdot_s_persist_pos_rule)
         self.model.persist_neg_con = pe.Constraint(self.model.T,rule=wdot_s_persist_neg_rule)
-    
+
+    def addPumpConstraints(self):
+        def receiver_pump_rule(model,t,i):
+            return self.model.lr[t] == self.model.Pr * (self.model.mdot_r_cs[t] + self.model.mdot_r_hs[t])
+        def convex_cycle_pump1_rule(model,t,i):
+            return self.model.lc[t] >= self.model.Pc[i] * self.model.mdot_c[t] + self.model.Bc[i] * self.model.y[t]
+        def convex_cycle_pump2_rule(model,t,i):
+            return self.model.lc[t] >= self.model.Pc[i] * self.model.mdot_c[t] + self.model.Bc[i] * self.model.ycsu[t]
+        def convex_feedwater_pump1_rule(model,t,i):
+            return self.model.lfw[t] >= self.model.Pfw[i] * self.model.mdot_c[t] + self.model.Bfw[i] * self.model.y[t]
+        def convex_feedwater_pump2_rule(model,t,i):
+            return self.model.lfw[t] >= self.model.Pfw[i] * self.model.mdot_c[t] + self.model.Bfw[i] * self.model.ycsu[t]
+
+        self.model.receiver_pump_con = pe.Constraint(self.model.T_nl * self.model.htf_segments, rule=receiver_pump_rule)
+        self.model.convex_cycle_pump1_con = pe.Constraint(self.model.T_nl * self.model.htf_segments, rule=convex_cycle_pump1_rule)
+        self.model.convex_cycle_pump2_con = pe.Constraint(self.model.T_nl * self.model.htf_segments, rule=convex_cycle_pump2_rule)
+        self.model.convex_feedwater_pump1_con = pe.Constraint(self.model.T_nl * self.model.fw_segments, rule=convex_feedwater_pump1_rule)
+        self.model.convex_feedwater_pump2_con = pe.Constraint(self.model.T_nl * self.model.fw_segments, rule=convex_feedwater_pump2_rule)
+
+       
     def addReceiverStartupConstraints(self):
         def rec_inventory_rule(model,t):
             if t == 1:
