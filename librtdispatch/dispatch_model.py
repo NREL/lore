@@ -473,8 +473,8 @@ class RealTimeDispatchModel(object):
         ### time inventory
         def rec_su_time_inv_rule(model,t):
             if t == self.model.start:
-                return model.drsu[t] <= model.drsu0 + model.Delta[t]*model.xrsu[t]
-            return model.drsu[t] <= model.drsu[t-1] + model.Delta[t]*model.xrsu[t]
+                return model.drsu[t] <= model.drsu0 + model.Delta[t]*model.frsu[t]
+            return model.drsu[t] <= model.drsu[t-1] + model.Delta[t]*model.frsu[t]
         def rec_su_time_nonzero_rule(model,t):
             return model.drsu[t] <= model.Drsu * model.yrsu[t]
         def rec_startup_time_rule(model,t):
@@ -491,7 +491,7 @@ class RealTimeDispatchModel(object):
                 return model.ursu[t] <= model.ursu0 + model.Delta[t]*model.Qru
             return model.ursu[t] <= model.ursu[t-1] + model.Delta[t]*model.Qru
         def rec_su_eng_nonzero_rule(model,t):
-            return model.ursu[t] <= model.Er * model.yrsu[t];
+            return model.ursu[t] <= model.Er * model.yrsu[t]
         def rec_startup_eng_rule(model,t):
             if t == 1:
                 return model.Er*model.yr[t] <= model.ursu[t] + (model.Er*(model.yr0 + model.yrsb0))
@@ -510,22 +510,80 @@ class RealTimeDispatchModel(object):
         self.model.rec_startup_eng_con = pe.Constraint(self.model.T,rule=rec_startup_eng_rule)
         self.model.rec_startup_frac_nonzero_con = pe.Constraint(self.model.T,rule=rec_startup_frac_nonzero_rule)
         self.model.rec_force_startup_frac_con = pe.Constraint(self.model.T,rule=rec_force_startup_frac_rule)
-        
+
+    #Receiver Collection
     def addReceiverSupplyAndDemandConstraints(self):
         def rec_production_rule(model,t):
-            return model.xr[t] + model.xrsu[t] + model.Qrsd*model.yrsd[t] <= model.Qin[t]
+            #return model.xr[t] + model.xrsu[t] + model.Qrsd*model.yrsd[t] <= model.Qin[t]
+            return model.xr[t] <= model.Qin[t] * (1 - model.frsu[t] - model.frsd[t])
         def rec_generation_rule(model,t):
             return model.xr[t] <= model.Qin[t] * model.yr[t]
         def min_generation_rule(model,t):
-            return model.xr[t] >= model.Qrl * model.yr[t]
-        def rec_gen_persist_rule(model,t):
-            return model.yr[t] <= model.Qin[t]/model.Qrl
+            return model.xr[t] >= model.Qrl * (model.yr[t] - model.frsu[t] - model.frsd[t])
         self.model.rec_production_con = pe.Constraint(self.model.T,rule=rec_production_rule)
         self.model.rec_generation_con = pe.Constraint(self.model.T,rule=rec_generation_rule)
         self.model.min_generation_con = pe.Constraint(self.model.T,rule=min_generation_rule)
-        self.model.rec_gen_persist_con = pe.Constraint(self.model.T,rule=rec_gen_persist_rule)
-        
-    def addReceiverNodeLogicConstraints(self):
+
+    # Receiver Shutdown
+    def addReceiverShutdownConstraints(self):
+        ### time inventory
+        def rec_sd_time_inv_rule(model,t):
+            if t == model.start:
+                return model.drsd[t] <= model.drsd0 + model.Delta[t]*model.frsd[t]
+            return model.drsd[t] <= model.drsd[t-1] + model.Delta[t]*model.frsd[t]
+        def rec_sd_time_nonzero_rule(model,t):
+            return model.drsd[t] <= model.Drsd * model.yrsd[t]
+        def rec_shutdown_time_rule(model,t):
+            if t == model.start:
+                return model.Drsd*model.yrsd[t] >= model.yrsd0*model.Drsd - model.drsd0
+            return model.Drsd*model.yrsd[t] >= model.yrsd[t-1]*model.Drsd - model.drsd[t-1]
+        ### energy inventory
+        def rec_sd_eng_inv_rule(model,t):
+            if t == 1:
+                return model.ursd[t] <= model.ursd0 + model.Delta[t]*model.Qin[t]*model.frsd[t]
+            return model.ursd[t] <= model.ursd[t-1] + model.Delta[t]*model.Qin[t]*model.frsd[t]
+        def rec_sd_eng_nonzero_rule(model,t):
+            return model.ursd[t] <= model.Qrsd * model.yrsd[t];
+        def rec_shutdown_eng_rule(model,t):
+            if t == model.start:
+                return model.Qrsd*model.yrsd[t] >= model.yrsd0*model.Qrsd - model.ursd0
+            return model.Qrsd*model.yrsd[t] >= model.yrsd[t-1]*model.Qrsd - model.ursd0[t-1]
+        #binary logic
+        def rec_sd_frac_nonzero_rule(model, t):
+            return model.frsd[t] <= model.yrsd[t]
+        def rec_sd_frac_force_rule(model, t):
+            return model.frsd[t] >= model.yrsd[t] - model.yr[t]
+        def rec_shutdown_rule(model, t):
+            return model.frsd[t] >= model.yrsd[t] - model.yr[t]
+        self.model.rec_sd_time_inv_con = pe.Constraint(self.model.T,rule=rec_sd_time_inv_rule)
+        self.model.rec_sd_time_nonzero_con = pe.Constraint(self.model.T,rule=rec_sd_time_nonzero_rule)
+        self.model.rec_shutdown_time_con = pe.Constraint(self.model.T,rule=rec_shutdown_time_rule)
+        self.model.rec_sd_eng_inv_con = pe.Constraint(self.model.T,rule=rec_sd_eng_inv_rule)
+        self.model.rec_sd_eng_nonzero_con = pe.Constraint(self.model.T,rule=rec_sd_eng_nonzero_rule)
+        self.model.rec_shutdown_eng_con = pe.Constraint(self.model.T,rule=rec_shutdown_eng_rule)
+        self.model.rec_sd_frac_nonzero_con = pe.Constraint(self.model.T,rule=rec_sd_frac_nonzero_rule)
+        self.model.rec_sd_frac_force_con = pe.Constraint(self.model.T,rule=rec_sd_frac_force_rule)
+        self.model.rec_shutdown_con = pe.Constraint(self.model.T,rule=rec_shutdown_rule)
+
+    def addReceiverPenaltyConstraints(self):
+        def rec_su_pen_rule(model, t):
+            if t == model.start:
+                return self.model.yrsup[t] >= self.model.yrsu[t] - self.model.yrsu0
+            return self.model.yrsup[t] >= self.model.yrsu[t] - self.model.yrsu[t-1]
+        def rec_hs_pen_rule(model, t):
+            if t == model.start:
+                return self.model.yrhsp[t] >= self.model.yr[t] - (1 - self.model.yrsb0)
+            return self.model.yrhsp[t] >= self.model.yr[t] - (1 - self.model.yrsb[t-1])
+        def rec_sd_pen_rule(model, t):
+            if t == model.start:
+                return self.model.yrsdp[t] >= self.model.yrsd0 - self.model.yrsd[t]
+            return self.model.yrsdp[t] >= self.model.yrsd[t-1] - self.model.yrsd[t]
+
+        self.model.rec_su_pen_con = pe.Constraint(self.model.T,rule=rec_su_pen_rule)
+        self.model.rec_hs_pen_con = pe.Constraint(self.model.T,rule=rec_hs_pen_rule)
+        self.model.rec_sd_pen_con = pe.Constraint(self.model.T,rule=rec_sd_pen_rule)
+
+    def addReceiverModeLogicConstraints(self):
         def rec_su_sb_persist_rule(model,t):
             return model.yrsu[t] + model.yrsb[t] <= 1
         def rec_sb_persist_rule(model,t):
@@ -551,7 +609,9 @@ class RealTimeDispatchModel(object):
                 return model.yrsd[t] >= model.yr0  - model.yr[t] + model.yrsb0 - model.yrsb[t]
             # only case remaining: Delta[t]<1, t>1
             return model.yrsd[t] >= model.yr[t-1] - model.yr[t] + model.yrsb[t-1] - model.yrsb[t]
-        
+        def rec_gen_persist_rule(model,t):
+           return model.yr[t] <= model.Qin[t]/model.Qrl
+        self.model.rec_gen_persist_con = pe.Constraint(self.model.T,rule=rec_gen_persist_rule)
         self.model.rec_su_sb_persist_con = pe.Constraint(self.model.T,rule=rec_su_sb_persist_rule)
         self.model.rec_sb_persist_con = pe.Constraint(self.model.T,rule=rec_sb_persist_rule)
         self.model.rsb_persist_con = pe.Constraint(self.model.T,rule=rsb_persist_rule)
@@ -875,7 +935,9 @@ class RealTimeDispatchModel(object):
             self.addPersistenceConstraints()
         self.addReceiverStartupConstraints()
         self.addReceiverSupplyAndDemandConstraints()
-        self.addReceiverNodeLogicConstraints()
+        self.addReceiverShutdownConstraints()
+        self.addReceiverPenaltyConstraints()
+        self.addReceiverModeLogicConstraints()
         self.addTESEnergyBalanceConstraints()
         self.addCycleStartupConstraints()
         self.addPiecewiseLinearEfficiencyConstraints()
