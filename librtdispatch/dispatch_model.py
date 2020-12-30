@@ -611,14 +611,62 @@ class RealTimeDispatchModel(object):
             return model.yrsd[t] >= model.yr[t-1] - model.yr[t] + model.yrsb[t-1] - model.yrsb[t]
         def rec_gen_persist_rule(model,t):
            return model.yr[t] <= model.Qin[t]/model.Qrl
-        self.model.rec_gen_persist_con = pe.Constraint(self.model.T,rule=rec_gen_persist_rule)
-        self.model.rec_su_sb_persist_con = pe.Constraint(self.model.T,rule=rec_su_sb_persist_rule)
-        self.model.rec_sb_persist_con = pe.Constraint(self.model.T,rule=rec_sb_persist_rule)
-        self.model.rsb_persist_con = pe.Constraint(self.model.T,rule=rsb_persist_rule)
-        self.model.rec_su_pen_con = pe.Constraint(self.model.T,rule=rec_su_pen_rule)
-        self.model.rec_hs_pen_con = pe.Constraint(self.model.T,rule=rec_hs_pen_rule)
-        self.model.rec_shutdown_con = pe.Constraint(self.model.T,rule=rec_shutdown_rule)
-        
+
+        self.model.rec_gen_persist_con = pe.Constraint(self.model.T, rule=rec_gen_persist_rule)
+        self.model.rec_su_sb_persist_con = pe.Constraint(self.model.T, rule=rec_su_sb_persist_rule)
+        self.model.rec_sb_persist_con = pe.Constraint(self.model.T, rule=rec_sb_persist_rule)
+        self.model.rsb_persist_con = pe.Constraint(self.model.T, rule=rsb_persist_rule)
+        self.model.rec_su_pen_con = pe.Constraint(self.model.T, rule=rec_su_pen_rule)
+        self.model.rec_hs_pen_con = pe.Constraint(self.model.T, rule=rec_hs_pen_rule)
+        self.model.rec_shutdown_con = pe.Constraint(self.model.T, rule=rec_shutdown_rule)
+
+    def addReceiverMassFlowRateConstraints(self):
+        def mdot_r_upper1_rule(model, t):
+            return model.mdot_r_cs[t] + model.mdot_r_hs[t] <= model.mdot_r_max*(model.yrsu[t] + model.yr[t] + model.yrsb[t])
+        def mdot_r_upper2_rule(model, t):
+            return model.mdot_r_cs[t] + model.mdot_r_hs[t] <= model.mdot_r_max
+        def mdot_r_lower1_rule(model, t):
+            return model.mdot_r_cs[t] + model.mdot_r_hs[t] >= model.mdot_r_min*(model.yr[t] + model.rsb[t] - model.frsd[t])
+        def mdot_r_lower2_rule(model, t):
+            return model.mdot_r_cs[t] + model.mdot_r_hs[t] >= model.mdot_r_min*(model.frsu[t])
+        def mdot_r_upper3_rule(model, t):
+            return model.mdot_r_cs[t] <= model.mdot_r_max * (model.yrsu[t] + model.yrsb[t])
+        def mdot_r_upper4_rule(model, t):
+            return model.mdot_r_hs[t] <= model.mdot_r_max * (model.yr[t])
+
+        self.model.mdot_r_upper1_con = pe.Constraint(self.model.T_nl, rule=mdot_r_upper1_rule)
+        self.model.mdot_r_upper2_con = pe.Constraint(self.model.T_nl, rule=mdot_r_upper2_rule)
+        self.model.mdot_r_lower1_con = pe.Constraint(self.model.T_nl, rule=mdot_r_lower1_rule)
+        self.model.mdot_r_lower1_con = pe.Constraint(self.model.T_nl, rule=mdot_r_lower2_rule)
+        self.model.mdot_r_upper3_con = pe.Constraint(self.model.T_nl, rule=mdot_r_upper3_rule)
+        self.model.mdot_r_upper4_con = pe.Constraint(self.model.T_nl, rule=mdot_r_upper4_rule)
+
+    def addReceiverTemperatureConstraints(self):
+        def T_rout_lower1_rule(model, t):
+            return model.T_rout[t] >= model.T_cs_min*(model.yr[t] + model.yrsb[t])
+        def T_rout_lower2_rule(model, t):
+            return model.T_rout[t] >= model.T_cs_min*model.yrsu[t]
+        def T_rout_upper1_rule(model, t):
+            return model.T_rout[t] <= model.T_rout_max*(model.yrsu[t] + model.yr[t] + model.yrsb[t])
+        def T_rout_upper2_rule(model, t):
+            return model.T_rout[t] <= model.T_rout_max
+        self.model.T_rout_lower1_con = pe.Constraint(self.model.T_nl, rule=T_rout_lower1_rule)
+        self.model.T_rout_lower2_con = pe.Constraint(self.model.T_nl, rule=T_rout_lower2_rule)
+        self.model.T_rout_upper1_con = pe.Constraint(self.model.T_nl, rule=T_rout_upper1_rule)
+        self.model.T_rout_upper2_con = pe.Constraint(self.model.T_nl, rule=T_rout_upper2_rule)
+
+    def addReceiverPowerBalanceConstraints(self):
+        def rec_power_bal_rule(model, t):
+            return model.xr[t] - model.Qrsb*model.yrsb[t] == model.Cp*(model.mdot_r_hs[t]*model.T_rout[t] +
+                    model.mdot_r_cs[t]*model.T_rout[t] - model.mdot_r_hs[t]*model.T_cs[t] -
+                    model.mdot_r_cs[t]*model.T_cs[t])
+        def rec_clr_sky_control_rule(model, t):
+            return model.xr[t] <= model.F[t]*model.Cp*(model.mdot_r_hs[t]*model.T_rout_max +
+                    model.mdot_r_cs[t]*model.T_rout_max  - model.mdot_r_hs[t]*model.T_cs[t] -
+                    model.mdot_r_cs[t]*model.T_cs[t])
+        self.model.rec_power_bal_con = pe.Constraint(self.model.T_nl, rule=rec_power_bal_rule)
+        self.model.rec_clr_sky_control_con = pe.Constraint(self.model.T_nl, rule=rec_clr_sky_control_rule)
+
     def addTESEnergyBalanceConstraints(self):
         def tes_balance_rule(model, t):
             if t == 1:
@@ -938,6 +986,9 @@ class RealTimeDispatchModel(object):
         self.addReceiverShutdownConstraints()
         self.addReceiverPenaltyConstraints()
         self.addReceiverModeLogicConstraints()
+        self.addReceiverMassFlowRateConstraints()
+        self.addReceiverTemperatureConstraints()
+        self.addReceiverPowerBalanceConstraints()
         self.addTESEnergyBalanceConstraints()
         self.addCycleStartupConstraints()
         self.addPiecewiseLinearEfficiencyConstraints()
