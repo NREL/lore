@@ -808,6 +808,21 @@ class RealTimeDispatchModel(object):
         self.model.cycle_temp_prod_lower_con = pe.Constraint(self.model.T, rule=cycle_temp_prod_lower_rule)
         self.model.cycle_temp_prod_upper_con = pe.Constraint(self.model.T, rule=cycle_temp_prod_upper_rule)
 
+    def addPowerCycleMassFlowRateConstraints(self):
+        pass
+
+    def addPowerCycleTemperatureConstraints(self):
+        pass
+
+    def addPowerCycleEnergyOutputConstraints(self):
+        pass
+
+    def addPowerCycleOutputRampingConstraints(self):
+        pass
+
+    def addElectricBalanceConstraints(self):
+        pass
+
     def addPiecewiseLinearEfficiencyConstraints(self):
         def power_rule(model, t):
             return model.wdot[t] == (model.etaamb[t]/model.eta_des)*(model.etap*model.x[t] + model.y[t]*(model.Wdotu - model.etap*model.Qu))
@@ -1084,6 +1099,12 @@ class RealTimeDispatchModel(object):
         self.addTESEnergyBalanceConstraints()
         self.addThemalStorageMassTempConstraints()
         self.addCycleStartupConstraints()
+        self.addPowerCycleThermalInputConstraints()
+        self.addPowerCycleMassFlowRateConstraints()
+        self.addPowerCycleTemperatureConstraints()
+        self.addPowerCycleEnergyOutputConstraints()
+        self.addPowerCycleOutputRampingConstraints()
+        self.addElectricBalanceConstraints()
         self.addPiecewiseLinearEfficiencyConstraints()
         self.addMinUpAndDowntimeConstraints()
         self.addCycleLogicConstraints()
