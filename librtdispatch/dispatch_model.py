@@ -676,14 +676,55 @@ class RealTimeDispatchModel(object):
         #    if t == 1:
         #        return model.s0 >= model.Delta[t]*model.delta_rs[t]*( (model.Qu + model.Qb)*( -3 + model.yrsu[t] + model.y0 + model.y[t] + model.ycsb0 + model.ycsb[t] ) + model.x[t] + model.Qb*model.ycsb[t] )
         #    return model.s[t-1] >= model.Delta[t]*model.delta_rs[t]*( (model.Qu + model.Qb)*( -3 + model.yrsu[t] + model.y[t-1] + model.y[t] + model.ycsb[t-1] + model.ycsb[t] ) + model.x[t] + model.Qb*model.ycsb[t] )
+
         def maintain_tes_rule(model):
             return model.s[model.num_periods] >= model.s0
         
-        self.model.tes_balance_con = pe.Constraint(self.model.T,rule=tes_balance_rule)
-        self.model.tes_upper_con = pe.Constraint(self.model.T,rule=tes_upper_rule)
+        self.model.tes_balance_con = pe.Constraint(self.model.T_l, rule=tes_balance_rule)
         #self.model.tes_start_up_con = pe.Constraint(self.model.T,rule=tes_start_up_rule)
         self.model.maintain_tes_con = pe.Constraint(rule=maintain_tes_rule)
-        
+
+    def addThemalStorageMassTempConstraints(self):
+        def cold_side_mass_rule(model, t):
+            if t == 1:
+                return model.mass_cs[t] - model.mass_cs0 == model.Delta[t]*3600*(model.mdot_c[t] - model.mdot_r_hs[t])
+            return model.mass_cs[t] - model.mass_cs[t-1] == model.Delta[t]*3600*(model.mdot_c[t] - model.mdot_r_hs[t])
+
+        def hot_side_mass_rule(model, t):
+            if t == 1:
+                return model.mass_hs[t] - model.mass_hs0 == model.Delta[t]*3600*(model.mdot_r_hs[t] - model.mdot_c[t])
+            return model.mass_hs[t] - model.mass_hs[t-1] == model.Delta[t]*3600*(model.mdot_r_hs[t] - model.mdot_c[t])
+
+        def cold_side_energy_balance_rule(model, t):
+            if t == 1:
+                return (
+                model.mass_cs[t] * model.T_cs[t] - (model.mass_cs0 * model.T_cs0) ==
+                model.Delta[t] * 3600 * (model.mdot_r_cs[t] * model.T_rout[t] + model.mdot_c[t] * model.T_cout[t] - (
+                            model.mdot_r_cs[t] * model.T_cs[t] + model.mdot_r_hs[t] * model.T_cs[t]))
+                )
+            return (
+                model.mass_cs[t] * model.T_cs[t] - (model.mass_cs[t-1] * model.T_cs[t-1]) ==
+                model.Delta[t] * 3600 * (model.mdot_r_cs[t] * model.T_rout[t] + model.mdot_c[t] * model.T_cout[t] - (
+                        model.mdot_r_cs[t] * model.T_cs[t] + model.mdot_r_hs[t] * model.T_cs[t]))
+            )
+
+        def hot_side_energy_balance_rule(model, t):
+            if t == 1:
+                return (
+                    model.mass_hs[t] * model.T_hs[t] - (model.mass_hs0 * model.T_hs0)  ==
+                    model.Delta[t] * 3600 * (model.mdot_r_hs[t] * model.T_rout[t] - model.mdot_c[t] * model.T_hs[t])
+                )
+            return (
+                model.mass_hs[t] * model.T_hs[t] - (model.mass_hs[t-1] * model.T_hs[t-1]) ==
+                model.Delta[t] * 3600 * (model.mdot_r_hs[t] * model.T_rout[t] - model.mdot_c[t] * model.T_hs[t])
+            )
+
+        self.model.cold_side_mass_con = pe.Constraint(self.model.T_nl, rule=cold_side_mass_rule)
+        self.model.hot_side_mass_con = pe.Constraint(self.model.T_nl, rule=hot_side_mass_rule)
+        self.model.cold_side_energy_balance_con = pe.Constraint(self.model.T_nl, rule=cold_side_energy_balance_rule)
+        self.model.hot_side_energy_balance_con = pe.Constraint(self.model.T_nl, rule=hot_side_energy_balance_rule)
+
+
     def addCycleStartupConstraints(self):
         def pc_inventory_rule(model, t):
             if t == 1:
@@ -988,6 +1029,7 @@ class RealTimeDispatchModel(object):
         self.addReceiverTemperatureConstraints()
         self.addReceiverPowerBalanceConstraints()
         self.addTESEnergyBalanceConstraints()
+        self.addThemalStorageMassTempConstraints()
         self.addCycleStartupConstraints()
         self.addPiecewiseLinearEfficiencyConstraints()
         self.addMinUpAndDowntimeConstraints()
