@@ -758,12 +758,11 @@ class RealTimeDispatchModel(object):
         def cycle_temp_su_lower_rule(model, t):
             return model.Qc*model.ycsu[t] >= model.Cp*(model.mdot_c[t]*model.T_hs[t] - model.mdot_c[t]*model.T_cout[t]) - model.Qu * (1 - model.ycsu[t])
 
-        def pc_production_rule(model, t):
-            return model.x[t] + model.Qc[t]*model.ycsu[t] <= model.Qu
-        def pc_generation_rule(model, t):
-            return model.x[t] <= model.Qu * model.y[t]
-        def pc_min_gen_rule(model, t):
-            return model.x[t] >= model.Ql * model.y[t]
+        """replaced by penalty rules within addPowerCycleThermalInputConstraints"""
+        # def pc_production_rule(model, t):
+        #     return model.x[t] + model.Qc[t]*model.ycsu[t] <= model.Qu
+        # def pc_min_gen_rule(model, t):
+        #     return model.x[t] >= model.Ql * model.y[t]
         
         # self.model.pc_inventory_con = pe.Constraint(self.model.T, rule=pc_inventory_rule)
         self.model.pc_su_eng_inv_con = pe.Constraint(self.model.T, rule=pc_su_eng_inv_rule)
@@ -772,10 +771,43 @@ class RealTimeDispatchModel(object):
         self.model.cycle_temp_su_upper_con = pe.Constraint(self.model.T_nl, rule=cycle_temp_su_upper_rule)
         self.model.cycle_temp_su_lower_con = pe.Constraint(self.model.T_nl, rule=cycle_temp_su_lower_rule)
 
-        self.model.pc_production_con = pe.Constraint(self.model.T,rule=pc_production_rule)
-        self.model.pc_generation_con = pe.Constraint(self.model.T,rule=pc_generation_rule)
-        self.model.pc_min_gen_con = pe.Constraint(self.model.T,rule=pc_min_gen_rule)
-        
+
+    def addPowerCycleThermalInputConstraints(self):
+        def pc_input_nonzero_rule(model, t):
+            return model.x[t] <= model.Qu * model.y[t]
+
+        def pc_upper_input_pen_rule(model, t):
+            if model.t_transition == 0:
+                return model.x[t] <= model.Qu - model.ku * (model.T_cin_design - model.T_hs0)
+            return model.x[t] <= model.Qu - model.ku * (model.T_cin_design - model.T_hs[model.t_transition])
+
+        def pc_lower_input_pen_nonzero_rule(model, t):
+            if model.t_transition == 0:
+                return model.x[t] >= model.Ql * model.y[t] - model.kl * (model.T_cin_design - model.T_hs0)
+            return model.x[t] >= model.Ql * model.y[t] - model.kl * (model.T_cin_design - model.T_hs[model.t_transition])
+
+        def cycle_temp_prod_lower_rule(model, t):
+            return (
+                    model.T_hs[t] - model.T_cout[t] >= model.delta_T_design * (model.alpha_b +
+                        model.alpha_T * model.T_hs[t] / model.T_cin_design +
+                        model.alpha_m * model.mdot_c[t] / model.mdot_c_design)
+                    - model.delta_T_max * (1 - model.y[t])
+            )
+
+        def cycle_temp_prod_upper_rule(model, t):
+            return (
+                    model.T_hs[t] - model.T_cout[t] <= model.delta_T_design * (
+                        model.alpha_b + model.alpha_T * model.T_hs[t] / model.T_cin_design
+                        + model.alpha_m*model.mdot_c[t] / model.mdot_c_design
+                    ) + model.delta_T_max * (1 - model.y[t])
+            )
+
+        self.model.pc_input_nonzero_con = pe.Constraint(self.model.T, rule=pc_input_nonzero_rule)
+        self.model.pc_upper_input_pen_con = pe.Constraint(self.model.T, rule=pc_upper_input_pen_rule)
+        self.model.pc_lower_input_pen_nonzero_con = pe.Constraint(self.model.T, rule=pc_lower_input_pen_nonzero_rule)
+        self.model.cycle_temp_prod_lower_con = pe.Constraint(self.model.T, rule=cycle_temp_prod_lower_rule)
+        self.model.cycle_temp_prod_upper_con = pe.Constraint(self.model.T, rule=cycle_temp_prod_upper_rule)
+
     def addPiecewiseLinearEfficiencyConstraints(self):
         def power_rule(model, t):
             return model.wdot[t] == (model.etaamb[t]/model.eta_des)*(model.etap*model.x[t] + model.y[t]*(model.Wdotu - model.etap*model.Qu))
