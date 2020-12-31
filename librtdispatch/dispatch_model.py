@@ -682,7 +682,7 @@ class RealTimeDispatchModel(object):
         
         self.model.tes_balance_con = pe.Constraint(self.model.T_l, rule=tes_balance_rule)
         #self.model.tes_start_up_con = pe.Constraint(self.model.T,rule=tes_start_up_rule)
-        self.model.maintain_tes_con = pe.Constraint(rule=maintain_tes_rule)
+        #self.model.maintain_tes_con = pe.Constraint(rule=maintain_tes_rule)  Used?
 
     def addThemalStorageMassTempConstraints(self):
         def cold_side_mass_rule(model, t):
@@ -730,17 +730,34 @@ class RealTimeDispatchModel(object):
             if t == 1:
                 return model.ucsu[t] <= model.ucsu0 + model.Delta[t] * model.Qc[t] * model.ycsu[t]
             return model.ucsu[t] <= model.ucsu[t-1] + model.Delta[t] * model.Qc[t] * model.ycsu[t]
-        def pc_inv_nonzero_rule(model, t):
+
+        def pc_su_eng_inv_rule(model, t):
+            if t == 1:
+                return model.ucsu[t] <= model.ucsu0 + model.Delta[t] * model.Qc[t] * model.ycsu[t] + (model.Ec - model.Ew) * model.ycsb0
+            return model.ucsu[t] <= model.ucsu[t-1] + model.Delta[t] * model.Qc[t] * model.ycsu[t] + (model.Ec - model.Ew) * model.ycsb[t-1]
+
+        def pc_su_eng_nonzero_rule(model, t):
             return model.ucsu[t] <= model.Ec * model.ycsu[t]
+
         def pc_startup_rule(model, t):
-            if model.Delta[t] >= 1 and t == 1:
-                return model.y[t] <= model.ucsu[t]/model.Ec + model.y0 + model.ycsb0
-            elif model.Delta[t] >= 1 and t > 1:
-                return model.y[t] <= model.ucsu[t]/model.Ec + model.y[t-1] + model.ycsb[t-1]
-            elif model.Delta[t] < 1 and t == 1:
-                return model.y[t] <= model.ucsu0/model.Ec + model.y0 + model.ycsb0
-            # only case remaining: Delta[t]<1, t>1
-            return model.y[t] <= model.ucsu[t-1]/model.Ec + model.y[t-1] + model.ycsb[t-1]
+            if t == 1:
+                return model.Ec*model.y[t] <= model.ucsu0 + (model.Ec*model.y0)
+            return model.Ec*model.y[t] <= model.ucsu[t-1] + (model.Ec*model.y[t-1])
+            # if model.Delta[t] >= 1 and t == 1:
+            #     return model.y[t] <= model.ucsu[t]/model.Ec + model.y0 + model.ycsb0
+            # elif model.Delta[t] >= 1 and t > 1:
+            #     return model.y[t] <= model.ucsu[t]/model.Ec + model.y[t-1] + model.ycsb[t-1]
+            # elif model.Delta[t] < 1 and t == 1:
+            #     return model.y[t] <= model.ucsu0/model.Ec + model.y0 + model.ycsb0
+            # # only case remaining: Delta[t]<1, t>1
+            # return model.y[t] <= model.ucsu[t-1]/model.Ec + model.y[t-1] + model.ycsb[t-1]
+
+        def cycle_temp_su_upper_rule(model, t):
+            return model.Qc*model.ycsu[t] <= model.Cp*(model.mdot_c[t]*model.T_hs[t] - model.mdot_c[t]*model.T_cout[t]) + model.Qu * (1 - model.ycsu[t])
+
+        def cycle_temp_su_lower_rule(model, t):
+            return model.Qc*model.ycsu[t] >= model.Cp*(model.mdot_c[t]*model.T_hs[t] - model.mdot_c[t]*model.T_cout[t]) - model.Qu * (1 - model.ycsu[t])
+
         def pc_production_rule(model, t):
             return model.x[t] + model.Qc[t]*model.ycsu[t] <= model.Qu
         def pc_generation_rule(model, t):
@@ -748,9 +765,13 @@ class RealTimeDispatchModel(object):
         def pc_min_gen_rule(model, t):
             return model.x[t] >= model.Ql * model.y[t]
         
-        self.model.pc_inventory_con = pe.Constraint(self.model.T,rule=pc_inventory_rule)
-        self.model.pc_inv_nonzero_con = pe.Constraint(self.model.T,rule=pc_inv_nonzero_rule)
-        self.model.pc_startup_con = pe.Constraint(self.model.T,rule=pc_startup_rule)
+        # self.model.pc_inventory_con = pe.Constraint(self.model.T, rule=pc_inventory_rule)
+        self.model.pc_su_eng_inv_con = pe.Constraint(self.model.T, rule=pc_su_eng_inv_rule)
+        self.model.pc_su_eng_nonzero_con = pe.Constraint(self.model.T, rule=pc_su_eng_nonzero_rule)
+        self.model.pc_startup_con = pe.Constraint(self.model.T, rule=pc_startup_rule)
+        self.model.cycle_temp_su_upper_con = pe.Constraint(self.model.T_nl, rule=cycle_temp_su_upper_rule)
+        self.model.cycle_temp_su_lower_con = pe.Constraint(self.model.T_nl, rule=cycle_temp_su_lower_rule)
+
         self.model.pc_production_con = pe.Constraint(self.model.T,rule=pc_production_rule)
         self.model.pc_generation_con = pe.Constraint(self.model.T,rule=pc_generation_rule)
         self.model.pc_min_gen_con = pe.Constraint(self.model.T,rule=pc_min_gen_rule)
