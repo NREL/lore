@@ -419,20 +419,26 @@ class RealTimeDispatchModel(object):
     def addPersistenceConstraints(self):
         def wdot_s_persist_pos_rule(model,t):
             return model.wdot_s_prev_delta_plus[t] >= model.wdot_s[t] - model.wdot_s_prev[t]
+
         def wdot_s_persist_neg_rule(model,t):
             return model.wdot_s_prev_delta_minus[t] >= model.wdot_s_prev[t] - model.wdot_s[t]
+
         self.model.persist_pos_con = pe.Constraint(self.model.T,rule=wdot_s_persist_pos_rule)
         self.model.persist_neg_con = pe.Constraint(self.model.T,rule=wdot_s_persist_neg_rule)
 
     def addPumpConstraints(self):
         def receiver_pump_rule(model,t,i):
             return model.lr[t] == model.Pr * (model.mdot_r_cs[t] + model.mdot_r_hs[t])
+
         def convex_cycle_pump1_rule(model,t,i):
             return model.lc[t] >= model.Pc[i] * model.mdot_c[t] + model.Bc[i] * model.y[t]
+
         def convex_cycle_pump2_rule(model,t,i):
             return model.lc[t] >= model.Pc[i] * model.mdot_c[t] + self.model.Bc[i] * model.ycsu[t]
+
         def convex_feedwater_pump1_rule(model,t,i):
             return model.lfw[t] >= model.Pfw[i] * model.mdot_c[t] + model.Bfw[i] * model.y[t]
+
         def convex_feedwater_pump2_rule(model,t,i):
             return model.lfw[t] >= model.Pfw[i] * model.mdot_c[t] + model.Bfw[i] * model.ycsu[t]
 
@@ -448,20 +454,26 @@ class RealTimeDispatchModel(object):
             if t == 1:
                 return model.ursu[t] <= model.ursu0 + model.Delta[t]*model.xrsu[t]
             return model.ursu[t] <= model.ursu[t-1] + model.Delta[t]*model.xrsu[t]
+
         def rec_inv_nonzero_rule(model,t):
             return model.ursu[t] <= model.Er * model.yrsu[t]
+
         def rec_startup_rule(model,t):
             if t == 1:
                 return model.yr[t] <= model.ursu[t]/model.Er + model.yr0 + model.yrsb0
             return model.yr[t] <= model.ursu[t]/model.Er + model.yr[t-1] + model.yrsb[t-1]
+
         def rec_su_persist_rule(model,t):
             if t == 1: 
                 return model.yrsu[t] + model.yr0 <= 1
             return model.yrsu[t] +  model.yr[t-1] <= 1
+
         def ramp_limit_rule(model,t):
             return model.xrsu[t] <= model.Qru*model.yrsu[t]
+
         def nontrivial_solar_rule(model,t):
             return model.yrsu[t] <= model.Qin[t]
+
         self.model.rec_inventory_con = pe.Constraint(self.model.T,rule=rec_inventory_rule)
         self.model.rec_inv_nonzero_con = pe.Constraint(self.model.T,rule=rec_inv_nonzero_rule)
         self.model.rec_startup_con = pe.Constraint(self.model.T,rule=rec_startup_rule)
@@ -475,32 +487,41 @@ class RealTimeDispatchModel(object):
             if t == self.model.start:
                 return model.drsu[t] <= model.drsu0 + model.Delta[t]*model.frsu[t]
             return model.drsu[t] <= model.drsu[t-1] + model.Delta[t]*model.frsu[t]
+
         def rec_su_time_nonzero_rule(model,t):
             return model.drsu[t] <= model.Drsu * model.yrsu[t]
+
         def rec_startup_time_rule(model,t):
             if t == 1:
                 return model.yr[t] <= model.ursu[t]/model.Er + model.yr0 + model.yrsb0
             return model.yr[t] <= model.ursu[t]/model.Er + model.yr[t-1] + model.yrsb[t-1]
+
         ### energy inventory
         def rec_su_eng_inv1_rule(model,t):
             if t == 1:
                 return model.ursu[t] <= model.ursu0 + model.Delta[t]*model.Qin[t]*model.frsu[t]
             return model.ursu[t] <= model.ursu[t-1] + model.Delta[t]*model.Qin[t]*model.frsu[t]
+
         def rec_su_eng_inv2_rule(model,t):
             if t == 1:
                 return model.ursu[t] <= model.ursu0 + model.Delta[t]*model.Qru
             return model.ursu[t] <= model.ursu[t-1] + model.Delta[t]*model.Qru
+
         def rec_su_eng_nonzero_rule(model,t):
             return model.ursu[t] <= model.Er * model.yrsu[t]
+
         def rec_startup_eng_rule(model,t):
             if t == 1:
                 return model.Er*model.yr[t] <= model.ursu[t] + (model.Er*(model.yr0 + model.yrsb0))
             return model.Er*model.yr[t] <= model.ursu[t] + (model.Er*(model.yr[t-1] + model.yrsb[t-1]))
+
         #binary logic
         def rec_startup_frac_nonzero_rule(model, t):
             return model.frsu[t] <= model.yrsu[t]
+
         def rec_force_startup_frac_rule(model, t):
             return model.frsu[t] >= model.yrsu[t] - model.yr[t]
+
         self.model.rec_su_time_inv_con = pe.Constraint(self.model.T,rule=rec_su_time_inv_rule)
         self.model.rec_su_time_nonzero_con = pe.Constraint(self.model.T,rule=rec_su_time_nonzero_rule)
         self.model.rec_startup_time_con = pe.Constraint(self.model.T,rule=rec_startup_time_rule)
@@ -516,10 +537,13 @@ class RealTimeDispatchModel(object):
         def rec_production_rule(model,t):
             #return model.xr[t] + model.xrsu[t] + model.Qrsd*model.yrsd[t] <= model.Qin[t]
             return model.xr[t] <= model.Qin[t] * (1 - model.frsu[t] - model.frsd[t])
+
         def rec_generation_rule(model,t):
             return model.xr[t] <= model.Qin[t] * model.yr[t]
+
         def min_generation_rule(model,t):
             return model.xr[t] >= model.Qrl * (model.yr[t] - model.frsu[t] - model.frsd[t])
+
         self.model.rec_production_con = pe.Constraint(self.model.T,rule=rec_production_rule)
         self.model.rec_generation_con = pe.Constraint(self.model.T,rule=rec_generation_rule)
         self.model.min_generation_con = pe.Constraint(self.model.T,rule=min_generation_rule)
@@ -531,30 +555,39 @@ class RealTimeDispatchModel(object):
             if t == model.start:
                 return model.drsd[t] <= model.drsd0 + model.Delta[t]*model.frsd[t]
             return model.drsd[t] <= model.drsd[t-1] + model.Delta[t]*model.frsd[t]
+
         def rec_sd_time_nonzero_rule(model,t):
             return model.drsd[t] <= model.Drsd * model.yrsd[t]
+
         def rec_shutdown_time_rule(model,t):
             if t == model.start:
                 return model.Drsd*model.yrsd[t] >= model.yrsd0*model.Drsd - model.drsd0
             return model.Drsd*model.yrsd[t] >= model.yrsd[t-1]*model.Drsd - model.drsd[t-1]
+
         ### energy inventory
         def rec_sd_eng_inv_rule(model,t):
             if t == 1:
                 return model.ursd[t] <= model.ursd0 + model.Delta[t]*model.Qin[t]*model.frsd[t]
             return model.ursd[t] <= model.ursd[t-1] + model.Delta[t]*model.Qin[t]*model.frsd[t]
+
         def rec_sd_eng_nonzero_rule(model,t):
             return model.ursd[t] <= model.Qrsd * model.yrsd[t];
+
         def rec_shutdown_eng_rule(model,t):
             if t == model.start:
                 return model.Qrsd*model.yrsd[t] >= model.yrsd0*model.Qrsd - model.ursd0
             return model.Qrsd*model.yrsd[t] >= model.yrsd[t-1]*model.Qrsd - model.ursd0[t-1]
+
         #binary logic
         def rec_sd_frac_nonzero_rule(model, t):
             return model.frsd[t] <= model.yrsd[t]
+
         def rec_sd_frac_force_rule(model, t):
             return model.frsd[t] >= model.yrsd[t] - model.yr[t]
+
         def rec_shutdown_rule(model, t):
             return model.frsd[t] >= model.yrsd[t] - model.yr[t]
+
         self.model.rec_sd_time_inv_con = pe.Constraint(self.model.T,rule=rec_sd_time_inv_rule)
         self.model.rec_sd_time_nonzero_con = pe.Constraint(self.model.T,rule=rec_sd_time_nonzero_rule)
         self.model.rec_shutdown_time_con = pe.Constraint(self.model.T,rule=rec_shutdown_time_rule)
@@ -570,10 +603,12 @@ class RealTimeDispatchModel(object):
             if t == model.start:
                 return self.model.yrsup[t] >= self.model.yrsu[t] - self.model.yrsu0
             return self.model.yrsup[t] >= self.model.yrsu[t] - self.model.yrsu[t-1]
+
         def rec_hs_pen_rule(model, t):
             if t == model.start:
                 return self.model.yrhsp[t] >= self.model.yr[t] - (1 - self.model.yrsb0)
             return self.model.yrhsp[t] >= self.model.yr[t] - (1 - self.model.yrsb[t-1])
+
         def rec_sd_pen_rule(model, t):
             if t == model.start:
                 return self.model.yrsdp[t] >= self.model.yrsd0 - self.model.yrsd[t]
@@ -586,20 +621,25 @@ class RealTimeDispatchModel(object):
     def addReceiverModeLogicConstraints(self):
         def rec_su_sb_persist_rule(model,t):
             return model.yrsu[t] + model.yrsb[t] <= 1
+
         def rec_sb_persist_rule(model,t):
             return model.yr[t] + model.yrsb[t] <= 1
+
         def rsb_persist_rule(model,t):
             if t == 1:
                 return model.yrsb[t] <= (model.yr0 + model.yrsb0) 
             return model.yrsb[t] <= model.yr[t-1] + model.yrsb[t-1]
+
         def rec_su_pen_rule(model,t):
             if t == 1:
                 return model.yrsup[t] >= model.yrsu[t] - model.yrsu0 
             return model.yrsup[t] >= model.yrsu[t] - model.yrsu[t-1]
+
         def rec_hs_pen_rule(model,t):
             if t == 1:
                 return model.yrhsp[t] >= model.yr[t] - (1 - model.yrsb0)
             return model.yrhsp[t] >= model.yr[t] - (1 - model.yrsb[t-1])
+
         def rec_shutdown_rule(model,t):
             if model.Delta[t] >= 1 and t == 1:
                 return 0 >= model.yr0 - model.yr[t] +  model.yrsb0 - model.yrsb[t]
@@ -609,6 +649,7 @@ class RealTimeDispatchModel(object):
                 return model.yrsd[t] >= model.yr0  - model.yr[t] + model.yrsb0 - model.yrsb[t]
             # only case remaining: Delta[t]<1, t>1
             return model.yrsd[t] >= model.yr[t-1] - model.yr[t] + model.yrsb[t-1] - model.yrsb[t]
+
         def rec_gen_persist_rule(model,t):
            return model.yr[t] <= model.Qin[t]/model.Qrl
 
@@ -623,14 +664,19 @@ class RealTimeDispatchModel(object):
     def addReceiverMassFlowRateConstraints(self):
         def mdot_r_upper1_rule(model, t):
             return model.mdot_r_cs[t] + model.mdot_r_hs[t] <= model.mdot_r_max*(model.yrsu[t] + model.yr[t] + model.yrsb[t])
+
         def mdot_r_upper2_rule(model, t):
             return model.mdot_r_cs[t] + model.mdot_r_hs[t] <= model.mdot_r_max
+
         def mdot_r_lower1_rule(model, t):
             return model.mdot_r_cs[t] + model.mdot_r_hs[t] >= model.mdot_r_min*(model.yr[t] + model.rsb[t] - model.frsd[t])
+
         def mdot_r_lower2_rule(model, t):
             return model.mdot_r_cs[t] + model.mdot_r_hs[t] >= model.mdot_r_min*(model.frsu[t])
+
         def mdot_r_upper3_rule(model, t):
             return model.mdot_r_cs[t] <= model.mdot_r_max * (model.yrsu[t] + model.yrsb[t])
+
         def mdot_r_upper4_rule(model, t):
             return model.mdot_r_hs[t] <= model.mdot_r_max * (model.yr[t])
 
@@ -644,12 +690,16 @@ class RealTimeDispatchModel(object):
     def addReceiverTemperatureConstraints(self):
         def T_rout_lower1_rule(model, t):
             return model.T_rout[t] >= model.T_cs_min*(model.yr[t] + model.yrsb[t])
+
         def T_rout_lower2_rule(model, t):
             return model.T_rout[t] >= model.T_cs_min*model.yrsu[t]
+
         def T_rout_upper1_rule(model, t):
             return model.T_rout[t] <= model.T_rout_max*(model.yrsu[t] + model.yr[t] + model.yrsb[t])
+
         def T_rout_upper2_rule(model, t):
             return model.T_rout[t] <= model.T_rout_max
+
         self.model.T_rout_lower1_con = pe.Constraint(self.model.T_nl, rule=T_rout_lower1_rule)
         self.model.T_rout_lower2_con = pe.Constraint(self.model.T_nl, rule=T_rout_lower2_rule)
         self.model.T_rout_upper1_con = pe.Constraint(self.model.T_nl, rule=T_rout_upper1_rule)
@@ -660,6 +710,7 @@ class RealTimeDispatchModel(object):
             return model.xr[t] - model.Qrsb*model.yrsb[t] == model.Cp*(model.mdot_r_hs[t]*model.T_rout[t] +
                     model.mdot_r_cs[t]*model.T_rout[t] - model.mdot_r_hs[t]*model.T_cs[t] -
                     model.mdot_r_cs[t]*model.T_cs[t])
+
         def rec_clr_sky_control_rule(model, t):
             return model.xr[t] <= model.F[t]*model.Cp*(model.mdot_r_hs[t]*model.T_rout_max +
                     model.mdot_r_cs[t]*model.T_rout_max  - model.mdot_r_hs[t]*model.T_cs[t] -
@@ -826,30 +877,38 @@ class RealTimeDispatchModel(object):
     def addPiecewiseLinearEfficiencyConstraints(self):
         def power_rule(model, t):
             return model.wdot[t] == (model.etaamb[t]/model.eta_des)*(model.etap*model.x[t] + model.y[t]*(model.Wdotu - model.etap*model.Qu))
+
         def power_ub_rule(model, t):
             return model.wdot[t] <= model.Wdotu*(model.etaamb[t]/model.eta_des)*model.y[t]
+
         def power_lb_rule(model, t):
             return model.wdot[t] >= model.Wdotl*(model.etaamb[t]/model.eta_des)*model.y[t]
+
         def change_in_w_pos_rule(model, t):
             if t == 1:
                 return model.wdot_delta_plus[t] >= model.wdot[t] - model.wdot0
             return model.wdot_delta_plus[t] >= model.wdot[t] - model.wdot[t-1]
+
         def change_in_w_neg_rule(model, t):
             if t == 1:
                 return model.wdot_delta_minus[t] >= model.wdot0 - model.wdot[t]
             return model.wdot_delta_minus[t] >= model.wdot[t-1] - model.wdot[t]
+
         def cycle_ramp_rate_pos_rule(model, t):
             return (
                     model.wdot_delta_plus[t] - model.wdot_v_plus[t] <= model.W_delta_plus*model.Delta[t] 
                     + ((model.etaamb[t]/model.eta_des)*model.W_u_plus[t] - model.W_delta_plus*model.Delta[t])
             )
+
         def cycle_ramp_rate_neg_rule(model, t):
             return (
                     model.wdot_delta_minus[t] - model.wdot_v_minus[t] <= model.W_delta_minus*model.Delta[t] 
                     + ((model.etaamb[t]/model.eta_des)*model.W_u_minus[t] - model.W_delta_minus*model.Delta[t])
             )
+
         def grid_max_rule(model, t):
             return model.wdot_s[t] <= model.Wdotnet[t]
+
         def grid_sun_rule(model, t):
             return (
                     model.wdot_s[t] - model.wdot_p[t] == (1-model.etac[t])*model.wdot[t]
@@ -874,14 +933,17 @@ class RealTimeDispatchModel(object):
             if pe.value(model.Delta_e[t] > (model.Yu - model.Yu0) * model.y0):
                 return sum(model.ycgb[tp] for tp in model.T if pe.value(model.Delta_e[t]-model.Delta_e[tp] < model.Yu) and pe.value(model.Delta_e[t] - model.Delta_e[tp] >= 0)) <= model.y[t]
             return pe.Constraint.Feasible
+
         def min_cycle_downtime_rule(model,t):
             if pe.value(model.Delta_e[t] > ((model.Yd - model.Yd0)*(1-model.y0))):
                 return sum( model.ycge[tp] for tp in model.T if pe.value(model.Delta_e[t]-model.Delta_e[tp] < model.Yd) and pe.value(model.Delta_e[t] - model.Delta_e[tp] >= 0))  <= (1 - model.y[t])
             return pe.Constraint.Feasible
+
         def cycle_start_end_gen_rule(model,t):
             if t == 1:
                 return model.ycgb[t] - model.ycge[t] == model.y[t] - model.y0
             return model.ycgb[t] - model.ycge[t] == model.y[t] - model.y[t-1]
+
         def cycle_min_updown_init_rule(model,t):
             if model.Delta_e[t] <= max(pe.value(model.y0*(model.Yu-model.Yu0)), pe.value((1-model.y0)*(model.Yd-model.Yd0))):
                 return model.y[t] == model.y0
@@ -897,26 +959,33 @@ class RealTimeDispatchModel(object):
             if t == 1:
                 return model.ycsu[t] + model.y0 <= 1
             return model.ycsu[t] + model.y[t-1] <= 1
+
         def pc_su_subhourly_rule(model, t):
             if model.Delta[t] < 1:
                 return model.y[t] + model.ycsu[t] <= 1
             return pe.Constraint.Feasible  #no analogous constraint for hourly or longer time steps
+
         def pc_sb_start_rule(model, t):
             if t == 1:
                 return model.ycsb[t] <= model.y0 + model.ycsb0
             return model.ycsb[t] <= model.y[t-1] + model.ycsb[t-1]
+
         def pc_sb_part1_rule(model, t):
             return model.ycsu[t] + model.ycsb[t] <= 1
+
         def pc_sb_part2_rule(model, t):
             return model.y[t] + model.ycsb[t] <= 1
+
         def cycle_sb_pen_rule(model, t):
             if t == 1:
                  return model.ychsp[t] >= model.y[t] - (1 - model.ycsb0)
             return model.ychsp[t] >= model.y[t] - (1 - model.ycsb[t-1])
+
         def cycle_shutdown_rule(model, t):
             if t == 1:
                 return model.ycsd[t] >= model.y0 - model.y[t] + model.ycsb0 - model.ycsb[t]
             return model.ycsd[t] >= model.y[t-1] - model.y[t] + model.ycsb[t-1] - model.ycsb[t]
+
         def cycle_start_pen_rule(model, t):
             if t == 1: 
                 return model.ycsup[t] >= model.ycsu[t] - model.ycsu0 
@@ -934,8 +1003,10 @@ class RealTimeDispatchModel(object):
     def addPVConstraints(self):
         def pv_batt_lim_rule(model, t):
             return model.wbc_pv[t] <= model.wpv[t]
+
         def pv_DC_lim_rule(model, t):
             return model.wpv[t] <= model.wpv_dc[t]*model.ypv[t]
+
         def inv_clipping_DC_rule(model, t):
             return model.wpv[t] - model.wbc_pv[t] <= model.Winv_lim*model.ypv[t]
         
@@ -949,38 +1020,53 @@ class RealTimeDispatchModel(object):
             if t == 1:
                 return model.soc[t] == model.soc0 + model.Delta[t]*(model.i_p[t] - model.i_n[t])/model.C_B
             return model.soc[t] == model.soc[t-1] + model.Delta[t]*(model.i_p[t] - model.i_n[t])/model.C_B
+
         def soc_lim_1_rule(model, t):
             return model.S_B_lower <= model.soc[t]
+
         def soc_lim_2_rule(model, t):
             return model.soc[t] <= model.S_B_upper
+
         def power_lim_n_1_rule(model, t):
             return model.P_B_lower*model.ybd[t] <= model.wbd[t]
+
         def power_lim_n_2_rule(model, t):
             return model.wbd[t] <= model.P_B_upper*model.ybd[t]
+
         def power_lim_p_1_rule(model, t):
             return model.P_B_lower*model.ybc[t] <= model.wbc_csp[t] + model.wbc_pv[t]
+
         def power_lim_p_2_rule(model, t):
             return model.wbc_pv[t] + model.wbc_csp[t] <= model.P_B_upper*model.ybc[t]
+
         def curr_lim_rule(model, t):
             if t == 1:
                 return model.i_n[t] <= model.I_upper_n*model.soc0 
             return model.i_n[t] <= model.I_upper_n*model.soc[t-1]
+
         def gradient_rule(model, t):
             if t == 1:
                 return model.i_p[t] <= model.C_B*(1-model.soc0)/model.Delta[t]
             return model.i_p[t] <= model.C_B*(1-model.soc[t-1])/model.Delta[t]
+
         def curr_lim_n_1_rule(model, t):
             return model.I_lower_n*model.ybd[t] <= model.i_n[t]
+
         def curr_lim_n_2_rule(model, t):
             return model.i_n[t] <= model.I_upper_n*model.ybd[t]
+
         def curr_lim_p_1_rule(model, t):
             return model.I_lower_p*model.ybc[t] <= model.i_p[t]
+
         def curr_lim_p_2_rule(model, t):
             return model.i_p[t] <= model.I_upper_p*model.ybc[t]
+
         def one_state_rule(model, t):
             return model.ybc[t] + model.ybd[t] <= 1
+
         def pow_lim_p_sun_rule(model, t):
             return model.wbc_pv[t] + model.wbc_csp[t] == model.A_V*model.z_p[t] + (model.B_V + model.I_avg*model.R_int)*model.x_p[t]
+
         def pow_lim_n_rule(model, t):
             return model.wbd[t] == model.A_V*model.z_n[t] + (model.B_V - model.I_avg*model.R_int)*model.x_n[t]
  
@@ -1005,85 +1091,100 @@ class RealTimeDispatchModel(object):
         
     def addAuxiliaryBatteryConstraints(self):
         def aux_lim_n_1_rule(model, t):
-            return model.I_lower_n*model.ybd[t] <= model.x_n[t]      
+            return model.I_lower_n*model.ybd[t] <= model.x_n[t]
+
         def aux_lim_n_2_rule(model, t):
             return model.x_n[t] <= model.I_upper_n*model.ybd[t]        
+
         def aux_lim_p_1_rule(model, t):
             return model.I_lower_p*model.ybc[t] <= model.x_p[t]        
+
         def aux_lim_p_2_rule(model, t):
             return model.x_p[t] <= model.I_upper_p*model.ybc[t]        
+
         def aux_lim_rule(model, t):
             if t == 1:
                 return model.x_n[t] <= model.I_upper_n*model.soc0
             return model.x_n[t] <= model.I_upper_n*model.soc[t-1]  
+
         def aux_relate_p_1_rule(model, t):
             return -model.I_upper_p*(1-model.ybc[t]) <= model.i_p[t] - model.x_p[t]
+
         def aux_relate_p_2_rule(model, t):
             return model.i_p[t] - model.x_p[t] <= model.I_upper_p*(1-model.ybc[t]) 
+
         def aux_relate_n_1_rule(model, t):
             return -model.I_upper_n*(1-model.ybd[t]) <= model.i_n[t] - model.x_n[t] 
+
         def aux_relate_n_2_rule(model, t):
             return model.i_n[t] - model.x_n[t] <= model.I_upper_n*(1-model.ybd[t])
         
-        self.model.aux_lim_n_1_con = pe.Constraint(self.model.T,rule=aux_lim_n_1_rule)
-        self.model.aux_lim_n_2_con = pe.Constraint(self.model.T,rule=aux_lim_n_2_rule)
-        self.model.aux_lim_p_1_con = pe.Constraint(self.model.T,rule=aux_lim_p_1_rule)
-        self.model.aux_lim_p_2_con = pe.Constraint(self.model.T,rule=aux_lim_p_2_rule)
-        self.model.aux_lim_con = pe.Constraint(self.model.T,rule=aux_lim_rule)
-        self.model.aux_relate_p_1_con = pe.Constraint(self.model.T,rule=aux_relate_p_1_rule)
-        self.model.aux_relate_p_2_con = pe.Constraint(self.model.T,rule=aux_relate_p_2_rule)
-        self.model.aux_relate_n_1_con = pe.Constraint(self.model.T,rule=aux_relate_n_1_rule)
-        self.model.aux_relate_n_2_con = pe.Constraint(self.model.T,rule=aux_relate_n_2_rule)
+        self.model.aux_lim_n_1_con = pe.Constraint(self.model.T, rule=aux_lim_n_1_rule)
+        self.model.aux_lim_n_2_con = pe.Constraint(self.model.T, rule=aux_lim_n_2_rule)
+        self.model.aux_lim_p_1_con = pe.Constraint(self.model.T, rule=aux_lim_p_1_rule)
+        self.model.aux_lim_p_2_con = pe.Constraint(self.model.T, rule=aux_lim_p_2_rule)
+        self.model.aux_lim_con = pe.Constraint(self.model.T, rule=aux_lim_rule)
+        self.model.aux_relate_p_1_con = pe.Constraint(self.model.T, rule=aux_relate_p_1_rule)
+        self.model.aux_relate_p_2_con = pe.Constraint(self.model.T, rule=aux_relate_p_2_rule)
+        self.model.aux_relate_n_1_con = pe.Constraint(self.model.T, rule=aux_relate_n_1_rule)
+        self.model.aux_relate_n_2_con = pe.Constraint(self.model.T, rule=aux_relate_n_2_rule)
 
     def addBatteryLinearizationConstraints(self):
         def cc_1_rule(model, t):
             if t == 1:
                 return model.z_p[t] >= model.I_upper_p*model.soc0 + model.S_B_upper*model.i_p[t] - model.S_B_upper*model.I_upper_p
             return model.z_p[t] >= model.I_upper_p*model.soc[t-1] + model.S_B_upper*model.i_p[t] - model.S_B_upper*model.I_upper_p
+
         def cc_2_rule(model, t):
             if t == 1:
                  return model.z_p[t] >= model.I_lower_p*model.soc0 + model.S_B_lower*model.i_p[t] - model.S_B_lower*model.I_lower_p
             return model.z_p[t] >= model.I_lower_p*model.soc[t-1] + model.S_B_lower*model.i_p[t] - model.S_B_lower*model.I_lower_p
+
         def cc_3_rule(model, t):
             if t == 1:
                 return model.z_p[t] <= model.I_upper_p*model.soc0 + model.S_B_lower*model.i_p[t] - model.S_B_lower*model.I_upper_p
             return model.z_p[t] <= model.I_upper_p*model.soc[t-1] + model.S_B_lower*model.i_p[t] - model.S_B_lower*model.I_upper_p
+
         def cc_4_rule(model, t):
             if t == 1:
                 return model.z_p[t] <= model.I_lower_p*model.soc0 + model.S_B_upper*model.i_p[t] - model.S_B_upper*model.I_lower_p
             return model.z_p[t] <= model.I_lower_p*model.soc[t-1] + model.S_B_upper*model.i_p[t] - model.S_B_upper*model.I_lower_p
+
         def cc_5_rule(model, t):
             if t == 1:
                 return model.z_n[t] >= model.I_upper_n*model.soc0 + model.S_B_upper*model.i_n[t] - model.S_B_upper*model.I_upper_n
             return model.z_n[t] >= model.I_upper_n*model.soc[t-1] + model.S_B_upper*model.i_n[t] - model.S_B_upper*model.I_upper_n
+
         def cc_6_rule(model, t):
             if t == 1:
                 return model.z_n[t] >= model.I_lower_n*model.soc0 + model.S_B_lower*model.i_n[t] - model.S_B_lower*model.I_lower_n
             return model.z_n[t] >= model.I_lower_n*model.soc[t-1] + model.S_B_lower*model.i_n[t] - model.S_B_lower*model.I_lower_n
+
         def cc_7_rule(model, t):
             if t == 1:
                 return model.z_n[t] <= model.I_upper_n*model.soc0 + model.S_B_lower*model.i_n[t] - model.S_B_lower*model.I_upper_n
             return model.z_n[t] <= model.I_upper_n*model.soc[t-1] + model.S_B_lower*model.i_n[t] - model.S_B_lower*model.I_upper_n
+
         def cc_8_rule(model, t):
             if t == 1:
                 return model.z_n[t] <= model.I_lower_n*model.soc0 + model.S_B_upper*model.i_n[t] - model.S_B_upper*model.I_lower_n
             return model.z_n[t] <= model.I_lower_n*model.soc[t-1] + model.S_B_upper*model.i_n[t] - model.S_B_upper*model.I_lower_n
         
-        self.model.cc_1_con = pe.Constraint(self.model.T,rule=cc_1_rule)
-        self.model.cc_2_con = pe.Constraint(self.model.T,rule=cc_2_rule)
-        self.model.cc_3_con = pe.Constraint(self.model.T,rule=cc_3_rule)
-        self.model.cc_4_con = pe.Constraint(self.model.T,rule=cc_4_rule)
-        self.model.cc_5_con = pe.Constraint(self.model.T,rule=cc_5_rule)
-        self.model.cc_6_con = pe.Constraint(self.model.T,rule=cc_6_rule)
-        self.model.cc_7_con = pe.Constraint(self.model.T,rule=cc_7_rule)
-        self.model.cc_8_con = pe.Constraint(self.model.T,rule=cc_8_rule)
+        self.model.cc_1_con = pe.Constraint(self.model.T, rule=cc_1_rule)
+        self.model.cc_2_con = pe.Constraint(self.model.T, rule=cc_2_rule)
+        self.model.cc_3_con = pe.Constraint(self.model.T, rule=cc_3_rule)
+        self.model.cc_4_con = pe.Constraint(self.model.T, rule=cc_4_rule)
+        self.model.cc_5_con = pe.Constraint(self.model.T, rule=cc_5_rule)
+        self.model.cc_6_con = pe.Constraint(self.model.T, rule=cc_6_rule)
+        self.model.cc_7_con = pe.Constraint(self.model.T, rule=cc_7_rule)
+        self.model.cc_8_con = pe.Constraint(self.model.T, rule=cc_8_rule)
         
     def addSubhourlyCliqueConstraints(self):
         def clique_rule(model, t):
             if self.model.Delta[t] < 1:
                 return model.y[t] + model.ycsu[t] + model.ycsb[t] <= 1
             return pe.Constraint.Feasible
-        self.model.clique_con = pe.Constraint(self.model.T,rule=clique_rule)
+        self.model.clique_con = pe.Constraint(self.model.T, rule=clique_rule)
     
     def generateConstraints(self):
         if self.include["persistence"]:
@@ -1126,16 +1227,16 @@ class RealTimeDispatchModel(object):
     def printCycleOutput(self):
         for t in self.model.T:
             if self.model.ycge[t].value > 1e-3:
-                print("Cycle off at period ",t," - Time = ",self.model.Delta_e[t])
+                print("Cycle off at period ", t, " - Time = ", self.model.Delta_e[t])
             if self.model.ycgb[t].value > 1e-3:
-                print("Cycle on at period ",t," - Time = ",self.model.Delta_e[t])
+                print("Cycle on at period ", t, " - Time = ", self.model.Delta_e[t])
     
 if __name__ == "__main__": 
     import dispatch_params
     import dispatch_outputs
     params = dispatch_params.buildParamsFromAMPLFile("./input_files/data_energy.dat")
-    include = {"pv":False,"battery":False,"persistence":False,"force_cycle":True}
-    rt = RealTimeDispatchModel(params,include)
+    include = {"pv": False, "battery": False, "persistence": False, "force_cycle": True}
+    rt = RealTimeDispatchModel(params, include)
     rt_results = rt.solveModel()
     outputs = dispatch_outputs.RTDispatchOutputs(rt.model)
     outputs.print_outputs()
