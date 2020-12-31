@@ -674,16 +674,16 @@ class RealTimeDispatchModel(object):
             return model.s[t] - model.s[t-1] == model.Delta[t] * (model.xr[t] - (model.Qc[t]*model.ycsu[t] + model.Qb*model.ycsb[t] + model.x[t] + model.Qrsb*model.yrsb[t]))
         def tes_upper_rule(model, t):
             return model.s[t] <= model.Eu
-        def tes_start_up_rule(model, t):
-            if t == 1:
-                return model.s0 >= model.Delta[t]*model.delta_rs[t]*( (model.Qu + model.Qb)*( -3 + model.yrsu[t] + model.y0 + model.y[t] + model.ycsb0 + model.ycsb[t] ) + model.x[t] + model.Qb*model.ycsb[t] )
-            return model.s[t-1] >= model.Delta[t]*model.delta_rs[t]*( (model.Qu + model.Qb)*( -3 + model.yrsu[t] + model.y[t-1] + model.y[t] + model.ycsb[t-1] + model.ycsb[t] ) + model.x[t] + model.Qb*model.ycsb[t] )
+        #def tes_start_up_rule(model, t):
+        #    if t == 1:
+        #        return model.s0 >= model.Delta[t]*model.delta_rs[t]*( (model.Qu + model.Qb)*( -3 + model.yrsu[t] + model.y0 + model.y[t] + model.ycsb0 + model.ycsb[t] ) + model.x[t] + model.Qb*model.ycsb[t] )
+        #    return model.s[t-1] >= model.Delta[t]*model.delta_rs[t]*( (model.Qu + model.Qb)*( -3 + model.yrsu[t] + model.y[t-1] + model.y[t] + model.ycsb[t-1] + model.ycsb[t] ) + model.x[t] + model.Qb*model.ycsb[t] )
         def maintain_tes_rule(model):
             return model.s[model.num_periods] <= model.s0
         
         self.model.tes_balance_con = pe.Constraint(self.model.T,rule=tes_balance_rule)
         self.model.tes_upper_con = pe.Constraint(self.model.T,rule=tes_upper_rule)
-        self.model.tes_start_up_con = pe.Constraint(self.model.T,rule=tes_start_up_rule)
+        #self.model.tes_start_up_con = pe.Constraint(self.model.T,rule=tes_start_up_rule)
         self.model.maintain_tes_con = pe.Constraint(rule=maintain_tes_rule)
         
     def addCycleStartupConstraints(self):
