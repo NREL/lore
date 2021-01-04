@@ -940,12 +940,6 @@ class RealTimeDispatchModel(object):
         def power_rule(model, t):
             return model.wdot[t] == (model.etaamb[t]/model.eta_des)*(model.etap*model.x[t] + model.y[t]*(model.Wdotu - model.etap*model.Qu))
 
-        def power_ub_rule(model, t):
-            return model.wdot[t] <= model.Wdotu*(model.etaamb[t]/model.eta_des)*model.y[t]
-
-        def power_lb_rule(model, t):
-            return model.wdot[t] >= model.Wdotl*(model.etaamb[t]/model.eta_des)*model.y[t]
-
         def change_in_w_pos_rule(model, t):
             if t == 1:
                 return model.wdot_delta_plus[t] >= model.wdot[t] - model.wdot0
