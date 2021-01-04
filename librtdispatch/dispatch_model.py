@@ -874,10 +874,18 @@ class RealTimeDispatchModel(object):
         self.model.mdot_c_lower1_con = pe.Constraint(self.model.T_nl, rule=mdot_c_lower1_rule)
 
     def addPowerCycleTemperatureConstraints(self):
-        def _rule(model, t):
-            return
+        def T_cout_upper1_rule(model, t):
+            return model.T_cout[t] <= model.T_cs_max * (model.ycsu[t] + model.y[t])
 
-        self.model._con = pe.Constraint(self.model.T, rule=_rule)
+        def T_cout_lower1_rule(model, t):
+            return model.T_cout[t] >= model.T_cs_min * model.y[t]
+
+        def T_cout_lower2_rule(model, t):
+            return model.T_cout[t] >= model.T_cs_min * model.ycsu[t]
+
+        self.model.T_cout_upper1_con = pe.Constraint(self.model.T, rule=T_cout_upper1_rule)
+        self.model.T_cout_lower1_con = pe.Constraint(self.model.T, rule=T_cout_lower1_rule)
+        self.model.T_cout_lower2_con = pe.Constraint(self.model.T, rule=T_cout_lower2_rule)
 
     def addPowerCycleEnergyOutputConstraints(self):
         def _rule(model, t):
@@ -897,7 +905,7 @@ class RealTimeDispatchModel(object):
             return
 
         self.model._con = pe.Constraint(self.model.T, rule=_rule)
-        
+
 
     def addPiecewiseLinearEfficiencyConstraints(self):
         def power_rule(model, t):
