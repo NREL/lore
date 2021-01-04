@@ -853,26 +853,51 @@ class RealTimeDispatchModel(object):
                     ) + model.delta_T_max * (1 - model.y[t])
             )
 
-        self.model.pc_input_nonzero_con = pe.Constraint(self.model.T, rule=pc_input_nonzero_rule)
-        self.model.pc_upper_input_pen_con = pe.Constraint(self.model.T, rule=pc_upper_input_pen_rule)
-        self.model.pc_lower_input_pen_nonzero_con = pe.Constraint(self.model.T, rule=pc_lower_input_pen_nonzero_rule)
-        self.model.cycle_temp_prod_lower_con = pe.Constraint(self.model.T, rule=cycle_temp_prod_lower_rule)
-        self.model.cycle_temp_prod_upper_con = pe.Constraint(self.model.T, rule=cycle_temp_prod_upper_rule)
+        self.model.pc_input_nonzero_con = pe.Constraint(self.model.T_l, rule=pc_input_nonzero_rule)
+        self.model.pc_upper_input_pen_con = pe.Constraint(self.model.T_l, rule=pc_upper_input_pen_rule)
+        self.model.pc_lower_input_pen_nonzero_con = pe.Constraint(self.model.T_l, rule=pc_lower_input_pen_nonzero_rule)
+        self.model.cycle_temp_prod_lower_con = pe.Constraint(self.model.T_nl, rule=cycle_temp_prod_lower_rule)
+        self.model.cycle_temp_prod_upper_con = pe.Constraint(self.model.T_nl, rule=cycle_temp_prod_upper_rule)
 
     def addPowerCycleMassFlowRateConstraints(self):
-        pass
+        def mdot_c_upper1_rule(model, t):
+            return model.mdot_c[t] <= model.mdot_c_max*(model.y[t] + model.ycsu[t])
+
+        def mdot_c_upper2_rule(model, t):
+            return model.mdot_c[t] <= model.mdot_c_max
+
+        def mdot_c_lower1_rule(model, t):
+            return model.mdot_c[t] >= model.mdot_c_min*(model.y[t])
+
+        self.model.mdot_c_upper1_con = pe.Constraint(self.model.T_nl, rule=mdot_c_upper1_rule)
+        self.model.mdot_c_upper2_con = pe.Constraint(self.model.T_nl, rule=mdot_c_upper2_rule)
+        self.model.mdot_c_lower1_con = pe.Constraint(self.model.T_nl, rule=mdot_c_lower1_rule)
 
     def addPowerCycleTemperatureConstraints(self):
-        pass
+        def _rule(model, t):
+            return
+
+        self.model._con = pe.Constraint(self.model.T, rule=_rule)
 
     def addPowerCycleEnergyOutputConstraints(self):
-        pass
+        def _rule(model, t):
+            return
+
+        self.model._con = pe.Constraint(self.model.T, rule=_rule)
+
 
     def addPowerCycleOutputRampingConstraints(self):
-        pass
+        def _rule(model, t):
+            return
+
+        self.model._con = pe.Constraint(self.model.T, rule=_rule)
 
     def addElectricBalanceConstraints(self):
-        pass
+        def _rule(model, t):
+            return
+
+        self.model._con = pe.Constraint(self.model.T, rule=_rule)
+        
 
     def addPiecewiseLinearEfficiencyConstraints(self):
         def power_rule(model, t):
