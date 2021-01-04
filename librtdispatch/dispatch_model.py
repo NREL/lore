@@ -888,11 +888,40 @@ class RealTimeDispatchModel(object):
         self.model.T_cout_lower2_con = pe.Constraint(self.model.T, rule=T_cout_lower2_rule)
 
     def addPowerCycleEnergyOutputConstraints(self):
-        def _rule(model, t):
-            return
+        ### linear power relation
+        def cycle_output_linear_rule(model, t):
+            return model.wdot[t] = (model.etaamb[t]/model.eta_des) * (model.etap*model.x[t] + model.y[t]*(model.Wdotu - model.etap*model.Qu))
 
-        self.model._con = pe.Constraint(self.model.T, rule=_rule)
+        ### variable bounds, nonzero, and wdot ramping
+        def power_ub_rule(model, t):
+            return model.wdot[t] <= model.Wdotu*(model.etaamb[t]/model.eta_des)*model.y[t]
 
+        def power_lb_rule(model, t):
+            return model.wdot[t] >= model.Wdotl*(model.etaamb[t]/model.eta_des)*model.y[t]
+
+        ### non-linear power regression
+        def cycle_power_nonlinear_upper_rule(model, t):
+            return model.wdot[t] <= (model.etaamb[t]/model.eta_des) * (
+                    (model.beta_b + model.beta_T*model.T_hs[t] / model.T_cin_design  +
+                    model.beta_m*model.mdot_c[t] / model.mdot_c_design + model.beta_mT*model.mdot_c[t]*model.T_hs[t] /
+                    (model.mdot_c_design * model.T_cin_design)
+                    ) * model.Wdot_design +
+                    model.Wdot_design * (1 - model.y[t]))
+
+        def cycle_power_nonlinear_lower_rule(model, t):
+            return model.wdot[t] >= (model.etaamb[t]/model.eta_des) * (
+                    (model.beta_b + model.beta_T*model.T_hs[t] / model.T_cin_design  +
+                    model.beta_m*model.mdot_c[t] / model.mdot_c_design + model.beta_mT*model.mdot_c[t]*model.T_hs[t] /
+                    (model.mdot_c_design * model.T_cin_design)
+                     ) * model.Wdot_design -
+                    model.Wdot_design * (1 - model.y[t])
+                )
+
+        self.model.cycle_output_linear_con = pe.Constraint(self.model.T, rule=cycle_output_linear_rule)
+        self.model.power_ub_con = pe.Constraint(self.model.T, rule=power_ub_rule)
+        self.model.power_lb_con = pe.Constraint(self.model.T, rule=power_lb_rule)
+        self.model.cycle_power_nonlinear_upper_con = pe.Constraint(self.model.T, rule=cycle_power_nonlinear_upper_rule)
+        self.model.cycle_power_nonlinear_lower_con = pe.Constraint(self.model.T, rule=cycle_power_nonlinear_lower_rule)
 
     def addPowerCycleOutputRampingConstraints(self):
         def _rule(model, t):
