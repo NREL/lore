@@ -924,22 +924,6 @@ class RealTimeDispatchModel(object):
         self.model.cycle_power_nonlinear_lower_con = pe.Constraint(self.model.T, rule=cycle_power_nonlinear_lower_rule)
 
     def addPowerCycleOutputRampingConstraints(self):
-        def _rule(model, t):
-            return
-
-        self.model._con = pe.Constraint(self.model.T, rule=_rule)
-
-    def addElectricBalanceConstraints(self):
-        def _rule(model, t):
-            return
-
-        self.model._con = pe.Constraint(self.model.T, rule=_rule)
-
-
-    def addPiecewiseLinearEfficiencyConstraints(self):
-        def power_rule(model, t):
-            return model.wdot[t] == (model.etaamb[t]/model.eta_des)*(model.etap*model.x[t] + model.y[t]*(model.Wdotu - model.etap*model.Qu))
-
         def change_in_w_pos_rule(model, t):
             if t == 1:
                 return model.wdot_delta_plus[t] >= model.wdot[t] - model.wdot0
@@ -952,15 +936,31 @@ class RealTimeDispatchModel(object):
 
         def cycle_ramp_rate_pos_rule(model, t):
             return (
-                    model.wdot_delta_plus[t] - model.wdot_v_plus[t] <= model.W_delta_plus*model.Delta[t] 
-                    + ((model.etaamb[t]/model.eta_des)*model.W_u_plus[t] - model.W_delta_plus*model.Delta[t])
+                    model.wdot_delta_plus[t] - model.wdot_v_plus[t] <= model.W_delta_plus*model.Delta[t]
+                    + ((model.etaamb[t]/model.eta_des)*model.W_u_plus[t] - model.W_delta_plus*model.Delta[t] * model.ycgb[t])
             )
 
         def cycle_ramp_rate_neg_rule(model, t):
             return (
-                    model.wdot_delta_minus[t] - model.wdot_v_minus[t] <= model.W_delta_minus*model.Delta[t] 
-                    + ((model.etaamb[t]/model.eta_des)*model.W_u_minus[t] - model.W_delta_minus*model.Delta[t])
+                    model.wdot_delta_minus[t] - model.wdot_v_minus[t] <= model.W_delta_minus*model.Delta[t]
+                    + ((model.etaamb[t]/model.eta_des)*model.W_u_minus[t] - model.W_delta_minus*model.Delta[t] * model.ycge[t])
             )
+
+        self.model.change_in_w_pos_con = pe.Constraint(self.model.T,rule=change_in_w_pos_rule)
+        self.model.change_in_w_neg_con = pe.Constraint(self.model.T,rule=change_in_w_neg_rule)
+        self.model.cycle_ramp_rate_pos_con = pe.Constraint(self.model.T,rule=cycle_ramp_rate_pos_rule)
+        self.model.cycle_ramp_rate_neg_con = pe.Constraint(self.model.T,rule=cycle_ramp_rate_neg_rule)
+
+    def addElectricBalanceConstraints(self):
+        def _rule(model, t):
+            return
+
+        self.model._con = pe.Constraint(self.model.T, rule=_rule)
+
+
+    def addPiecewiseLinearEfficiencyConstraints(self):
+        def power_rule(model, t):
+            return model.wdot[t] == (model.etaamb[t]/model.eta_des)*(model.etap*model.x[t] + model.y[t]*(model.Wdotu - model.etap*model.Qu))
 
         def grid_max_rule(model, t):
             return model.wdot_s[t] <= model.Wdotnet[t]
@@ -975,12 +975,6 @@ class RealTimeDispatchModel(object):
             )
         
         self.model.power_con = pe.Constraint(self.model.T,rule=power_rule)
-        self.model.power_ub_con = pe.Constraint(self.model.T,rule=power_ub_rule)
-        self.model.power_lb_con = pe.Constraint(self.model.T,rule=power_lb_rule)
-        self.model.change_in_w_pos_con = pe.Constraint(self.model.T,rule=change_in_w_pos_rule)
-        self.model.change_in_w_neg_con = pe.Constraint(self.model.T,rule=change_in_w_neg_rule)
-        self.model.cycle_ramp_rate_pos_con = pe.Constraint(self.model.T,rule=cycle_ramp_rate_pos_rule)
-        self.model.cycle_ramp_rate_neg_con = pe.Constraint(self.model.T,rule=cycle_ramp_rate_neg_rule)
         self.model.grid_max_con = pe.Constraint(self.model.T,rule=grid_max_rule)
         self.model.grid_sun_con = pe.Constraint(self.model.T,rule=grid_sun_rule)
         
