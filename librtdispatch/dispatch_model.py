@@ -429,8 +429,8 @@ class RealTimeDispatchModel(object):
         def wdot_s_persist_neg_rule(model, t):
             return model.wdot_s_prev_delta_minus[t] >= model.wdot_s_prev[t] - model.wdot_s[t]
 
-        self.model.persist_pos_con = pe.Constraint(self.model.T,rule=wdot_s_persist_pos_rule)
-        self.model.persist_neg_con = pe.Constraint(self.model.T,rule=wdot_s_persist_neg_rule)
+        self.model.persist_pos_con = pe.Constraint(self.model.T, rule=wdot_s_persist_pos_rule)
+        self.model.persist_neg_con = pe.Constraint(self.model.T, rule=wdot_s_persist_neg_rule)
 
     def addPumpConstraints(self):
         def receiver_pump_rule(model,t,i):
@@ -480,12 +480,12 @@ class RealTimeDispatchModel(object):
         def nontrivial_solar_rule(model, t):
             return model.yrsu[t] <= model.Qin[t]
 
-        self.model.rec_inventory_con = pe.Constraint(self.model.T,rule=rec_inventory_rule)
-        self.model.rec_inv_nonzero_con = pe.Constraint(self.model.T,rule=rec_inv_nonzero_rule)
-        self.model.rec_startup_con = pe.Constraint(self.model.T,rule=rec_startup_rule)
-        self.model.rec_su_persist_con = pe.Constraint(self.model.T,rule=rec_su_persist_rule)
-        self.model.ramp_limit_con = pe.Constraint(self.model.T,rule=ramp_limit_rule)
-        self.model.nontrivial_solar_con = pe.Constraint(self.model.T,rule=nontrivial_solar_rule)
+        self.model.rec_inventory_con = pe.Constraint(self.model.T, rule=rec_inventory_rule)
+        self.model.rec_inv_nonzero_con = pe.Constraint(self.model.T, rule=rec_inv_nonzero_rule)
+        self.model.rec_startup_con = pe.Constraint(self.model.T, rule=rec_startup_rule)
+        self.model.rec_su_persist_con = pe.Constraint(self.model.T, rule=rec_su_persist_rule)
+        self.model.ramp_limit_con = pe.Constraint(self.model.T, rule=ramp_limit_rule)
+        self.model.nontrivial_solar_con = pe.Constraint(self.model.T, rule=nontrivial_solar_rule)
 
     def addReceiverStartupConstraints(self):
         ### time inventory
@@ -528,15 +528,15 @@ class RealTimeDispatchModel(object):
         def rec_force_startup_frac_rule(model, t):
             return model.frsu[t] >= model.yrsu[t] - model.yr[t]
 
-        self.model.rec_su_time_inv_con = pe.Constraint(self.model.T,rule=rec_su_time_inv_rule)
-        self.model.rec_su_time_nonzero_con = pe.Constraint(self.model.T,rule=rec_su_time_nonzero_rule)
-        self.model.rec_startup_time_con = pe.Constraint(self.model.T,rule=rec_startup_time_rule)
-        self.model.rec_su_eng_inv1_con = pe.Constraint(self.model.T,rule=rec_su_eng_inv1_rule)
-        self.model.rec_su_eng_inv2_con = pe.Constraint(self.model.T,rule=rec_su_eng_inv2_rule)
-        self.model.rec_su_eng_nonzero_con = pe.Constraint(self.model.T,rule=rec_su_eng_nonzero_rule)
-        self.model.rec_startup_eng_con = pe.Constraint(self.model.T,rule=rec_startup_eng_rule)
-        self.model.rec_startup_frac_nonzero_con = pe.Constraint(self.model.T,rule=rec_startup_frac_nonzero_rule)
-        self.model.rec_force_startup_frac_con = pe.Constraint(self.model.T,rule=rec_force_startup_frac_rule)
+        self.model.rec_su_time_inv_con = pe.Constraint(self.model.T, rule=rec_su_time_inv_rule)
+        self.model.rec_su_time_nonzero_con = pe.Constraint(self.model.T, rule=rec_su_time_nonzero_rule)
+        self.model.rec_startup_time_con = pe.Constraint(self.model.T, rule=rec_startup_time_rule)
+        self.model.rec_su_eng_inv1_con = pe.Constraint(self.model.T, rule=rec_su_eng_inv1_rule)
+        self.model.rec_su_eng_inv2_con = pe.Constraint(self.model.T, rule=rec_su_eng_inv2_rule)
+        self.model.rec_su_eng_nonzero_con = pe.Constraint(self.model.T, rule=rec_su_eng_nonzero_rule)
+        self.model.rec_startup_eng_con = pe.Constraint(self.model.T, rule=rec_startup_eng_rule)
+        self.model.rec_startup_frac_nonzero_con = pe.Constraint(self.model.T, rule=rec_startup_frac_nonzero_rule)
+        self.model.rec_force_startup_frac_con = pe.Constraint(self.model.T, rule=rec_force_startup_frac_rule)
 
     #Receiver Collection
     def addReceiverSupplyAndDemandConstraints(self):
@@ -550,9 +550,9 @@ class RealTimeDispatchModel(object):
         def min_generation_rule(model, t):
             return model.xr[t] >= model.Qrl * (model.yr[t] - model.frsu[t] - model.frsd[t])
 
-        self.model.rec_production_con = pe.Constraint(self.model.T,rule=rec_production_rule)
-        self.model.rec_generation_con = pe.Constraint(self.model.T,rule=rec_generation_rule)
-        self.model.min_generation_con = pe.Constraint(self.model.T,rule=min_generation_rule)
+        self.model.rec_production_con = pe.Constraint(self.model.T, rule=rec_production_rule)
+        self.model.rec_generation_con = pe.Constraint(self.model.T, rule=rec_generation_rule)
+        self.model.min_generation_con = pe.Constraint(self.model.T, rule=min_generation_rule)
 
     # Receiver Shutdown
     def addReceiverShutdownConstraints(self):
@@ -594,15 +594,15 @@ class RealTimeDispatchModel(object):
         def rec_shutdown_rule(model, t):
             return model.frsd[t] >= model.yrsd[t] - model.yr[t]
 
-        self.model.rec_sd_time_inv_con = pe.Constraint(self.model.T,rule=rec_sd_time_inv_rule)
-        self.model.rec_sd_time_nonzero_con = pe.Constraint(self.model.T,rule=rec_sd_time_nonzero_rule)
-        self.model.rec_shutdown_time_con = pe.Constraint(self.model.T,rule=rec_shutdown_time_rule)
-        self.model.rec_sd_eng_inv_con = pe.Constraint(self.model.T,rule=rec_sd_eng_inv_rule)
-        self.model.rec_sd_eng_nonzero_con = pe.Constraint(self.model.T,rule=rec_sd_eng_nonzero_rule)
-        self.model.rec_shutdown_eng_con = pe.Constraint(self.model.T,rule=rec_shutdown_eng_rule)
-        self.model.rec_sd_frac_nonzero_con = pe.Constraint(self.model.T,rule=rec_sd_frac_nonzero_rule)
-        self.model.rec_sd_frac_force_con = pe.Constraint(self.model.T,rule=rec_sd_frac_force_rule)
-        self.model.rec_shutdown_con = pe.Constraint(self.model.T,rule=rec_shutdown_rule)
+        self.model.rec_sd_time_inv_con = pe.Constraint(self.model.T, rule=rec_sd_time_inv_rule)
+        self.model.rec_sd_time_nonzero_con = pe.Constraint(self.model.T, rule=rec_sd_time_nonzero_rule)
+        self.model.rec_shutdown_time_con = pe.Constraint(self.model.T, rule=rec_shutdown_time_rule)
+        self.model.rec_sd_eng_inv_con = pe.Constraint(self.model.T, rule=rec_sd_eng_inv_rule)
+        self.model.rec_sd_eng_nonzero_con = pe.Constraint(self.model.T, rule=rec_sd_eng_nonzero_rule)
+        self.model.rec_shutdown_eng_con = pe.Constraint(self.model.T, rule=rec_shutdown_eng_rule)
+        self.model.rec_sd_frac_nonzero_con = pe.Constraint(self.model.T, rule=rec_sd_frac_nonzero_rule)
+        self.model.rec_sd_frac_force_con = pe.Constraint(self.model.T, rule=rec_sd_frac_force_rule)
+        self.model.rec_shutdown_con = pe.Constraint(self.model.T, rule=rec_shutdown_rule)
 
     def addReceiverPenaltyConstraints(self):
         def rec_su_pen_rule(model, t):
@@ -620,9 +620,9 @@ class RealTimeDispatchModel(object):
                 return self.model.yrsdp[t] >= self.model.yrsd0 - self.model.yrsd[t]
             return self.model.yrsdp[t] >= self.model.yrsd[t-1] - self.model.yrsd[t]
 
-        self.model.rec_su_pen_con = pe.Constraint(self.model.T,rule=rec_su_pen_rule)
-        self.model.rec_hs_pen_con = pe.Constraint(self.model.T,rule=rec_hs_pen_rule)
-        self.model.rec_sd_pen_con = pe.Constraint(self.model.T,rule=rec_sd_pen_rule)
+        self.model.rec_su_pen_con = pe.Constraint(self.model.T, rule=rec_su_pen_rule)
+        self.model.rec_hs_pen_con = pe.Constraint(self.model.T, rule=rec_hs_pen_rule)
+        self.model.rec_sd_pen_con = pe.Constraint(self.model.T, rule=rec_sd_pen_rule)
 
     def addReceiverModeLogicConstraints(self):
         def rec_su_sb_persist_rule(model, t):
@@ -739,7 +739,7 @@ class RealTimeDispatchModel(object):
         #     return model.s[model.num_periods] >= model.s0
         
         self.model.tes_balance_con = pe.Constraint(self.model.T_l, rule=tes_balance_rule)
-        #self.model.tes_start_up_con = pe.Constraint(self.model.T,rule=tes_start_up_rule)
+        #self.model.tes_start_up_con = pe.Constraint(self.model.T, rule=tes_start_up_rule)
         #self.model.maintain_tes_con = pe.Constraint(rule=maintain_tes_rule)  Used?
 
     def addThemalStorageMassTempConstraints(self):
@@ -953,10 +953,10 @@ class RealTimeDispatchModel(object):
                     + ((model.etaamb[t]/model.eta_des)*model.W_u_minus[t] - model.W_delta_minus*model.Delta[t] * model.ycge[t])
             )
 
-        self.model.change_in_w_pos_con = pe.Constraint(self.model.T,rule=change_in_w_pos_rule)
-        self.model.change_in_w_neg_con = pe.Constraint(self.model.T,rule=change_in_w_neg_rule)
-        self.model.cycle_ramp_rate_pos_con = pe.Constraint(self.model.T,rule=cycle_ramp_rate_pos_rule)
-        self.model.cycle_ramp_rate_neg_con = pe.Constraint(self.model.T,rule=cycle_ramp_rate_neg_rule)
+        self.model.change_in_w_pos_con = pe.Constraint(self.model.T, rule=change_in_w_pos_rule)
+        self.model.change_in_w_neg_con = pe.Constraint(self.model.T, rule=change_in_w_neg_rule)
+        self.model.cycle_ramp_rate_pos_con = pe.Constraint(self.model.T, rule=cycle_ramp_rate_pos_rule)
+        self.model.cycle_ramp_rate_neg_con = pe.Constraint(self.model.T, rule=cycle_ramp_rate_neg_rule)
 
     def addElectricBalanceConstraints(self):
         def grid_max_rule(model, t):
@@ -984,8 +984,8 @@ class RealTimeDispatchModel(object):
         def purchase_nonzero_rule(model, t):
             return model.wdot_p[t] <= model.Wdot_p_max*(1-model.y[t])
 
-        self.model.grid_max_con = pe.Constraint(self.model.T,rule=grid_max_rule)
-        self.model.grid_sun_con = pe.Constraint(self.model.T,rule=grid_sun_rule)
+        self.model.grid_max_con = pe.Constraint(self.model.T, rule=grid_max_rule)
+        self.model.grid_sun_con = pe.Constraint(self.model.T, rule=grid_sun_rule)
         self.model.sell_production_con = pe.Constraint(self.model.T, rule=sell_production_rule)
         self.model.purchase_nonzero_con = pe.Constraint(self.model.T, rule=purchase_nonzero_rule)
 
@@ -1010,10 +1010,10 @@ class RealTimeDispatchModel(object):
                 return model.y[t] == model.y0
             return pe.Constraint.Feasible
         
-        self.model.min_cycle_uptime_con = pe.Constraint(self.model.T,rule=min_cycle_uptime_rule)
-        self.model.min_cycle_downtime_con = pe.Constraint(self.model.T,rule=min_cycle_downtime_rule)
-        self.model.cycle_start_end_gen_con = pe.Constraint(self.model.T,rule=cycle_start_end_gen_rule)
-        self.model.cycle_min_updown_init_con = pe.Constraint(self.model.T,rule=cycle_min_updown_init_rule)
+        self.model.min_cycle_uptime_con = pe.Constraint(self.model.T, rule=min_cycle_uptime_rule)
+        self.model.min_cycle_downtime_con = pe.Constraint(self.model.T, rule=min_cycle_downtime_rule)
+        self.model.cycle_start_end_gen_con = pe.Constraint(self.model.T, rule=cycle_start_end_gen_rule)
+        self.model.cycle_min_updown_init_con = pe.Constraint(self.model.T, rule=cycle_min_updown_init_rule)
 
     def addPowerCyclePenaltyConstraints(self):
         def cycle_start_pen_rule(model, t):
@@ -1031,9 +1031,9 @@ class RealTimeDispatchModel(object):
                 return model.ycsd[t] >= model.y0 - model.y[t] + model.ycsb0 - model.ycsb[t]
             return model.ycsd[t] >= model.y[t-1] - model.y[t] + model.ycsb[t-1] - model.ycsb[t]
 
-        self.model.cycle_start_pen_con = pe.Constraint(self.model.T,rule=cycle_start_pen_rule)
-        self.model.cycle_sb_pen_con = pe.Constraint(self.model.T,rule=cycle_sb_pen_rule)
-        self.model.cycle_shutdown_con = pe.Constraint(self.model.T,rule=cycle_shutdown_rule)
+        self.model.cycle_start_pen_con = pe.Constraint(self.model.T, rule=cycle_start_pen_rule)
+        self.model.cycle_sb_pen_con = pe.Constraint(self.model.T, rule=cycle_sb_pen_rule)
+        self.model.cycle_shutdown_con = pe.Constraint(self.model.T, rule=cycle_shutdown_rule)
         
     def addCycleLogicConstraints(self):
         def pc_su_sb_op_pack_rule(model, t):
@@ -1049,9 +1049,9 @@ class RealTimeDispatchModel(object):
                 return model.ycsb[t] <= model.y0 + model.ycsb0
             return model.ycsb[t] <= model.y[t-1] + model.ycsb[t-1]
 
-        self.model.pc_su_sb_op_pack_con = pe.Constraint(self.model.T,rule=pc_su_sb_op_pack_rule)
-        self.model.pc_su_persist_con = pe.Constraint(self.model.T,rule=pc_su_persist_rule)
-        self.model.pc_sb_start_con = pe.Constraint(self.model.T,rule=pc_sb_start_rule)
+        self.model.pc_su_sb_op_pack_con = pe.Constraint(self.model.T, rule=pc_su_sb_op_pack_rule)
+        self.model.pc_su_persist_con = pe.Constraint(self.model.T, rule=pc_su_persist_rule)
+        self.model.pc_sb_start_con = pe.Constraint(self.model.T, rule=pc_sb_start_rule)
         
     def addPVConstraints(self):
         def pv_batt_lim_rule(model, t):
@@ -1063,10 +1063,10 @@ class RealTimeDispatchModel(object):
         def inv_clipping_DC_rule(model, t):
             return model.wpv[t] - model.wbc_pv[t] <= model.Winv_lim*model.ypv[t]
         
-        self.model.pv_DC_lim_con = pe.Constraint(self.model.T,rule=pv_DC_lim_rule)
+        self.model.pv_DC_lim_con = pe.Constraint(self.model.T, rule=pv_DC_lim_rule)
         if self.include["battery"]:        
-            self.model.pv_batt_lim_con = pe.Constraint(self.model.T,rule=pv_batt_lim_rule)
-            self.model.inv_clipping_DC_con = pe.Constraint(self.model.T,rule=inv_clipping_DC_rule)
+            self.model.pv_batt_lim_con = pe.Constraint(self.model.T, rule=pv_batt_lim_rule)
+            self.model.inv_clipping_DC_con = pe.Constraint(self.model.T, rule=inv_clipping_DC_rule)
         
     def addBatteryConstraints(self):
         def battery_balance_rule(model, t):
@@ -1123,24 +1123,24 @@ class RealTimeDispatchModel(object):
         def pow_lim_n_rule(model, t):
             return model.wbd[t] == model.A_V*model.z_n[t] + (model.B_V - model.I_avg*model.R_int)*model.x_n[t]
  
-        self.model.battery_balance_con = pe.Constraint(self.model.T,rule=battery_balance_rule)
-        self.model.soc_lim_1_con = pe.Constraint(self.model.T,rule=soc_lim_1_rule)
-        self.model.soc_lim_2_con = pe.Constraint(self.model.T,rule=soc_lim_2_rule)
-        self.model.power_lim_n_1_con = pe.Constraint(self.model.T,rule=power_lim_n_1_rule)
-        self.model.power_lim_n_2_con = pe.Constraint(self.model.T,rule=power_lim_n_2_rule)
+        self.model.battery_balance_con = pe.Constraint(self.model.T, rule=battery_balance_rule)
+        self.model.soc_lim_1_con = pe.Constraint(self.model.T, rule=soc_lim_1_rule)
+        self.model.soc_lim_2_con = pe.Constraint(self.model.T, rule=soc_lim_2_rule)
+        self.model.power_lim_n_1_con = pe.Constraint(self.model.T, rule=power_lim_n_1_rule)
+        self.model.power_lim_n_2_con = pe.Constraint(self.model.T, rule=power_lim_n_2_rule)
         if self.include["pv"]:
-            self.model.power_lim_p_1_con = pe.Constraint(self.model.T,rule=power_lim_p_1_rule)
-            self.model.power_lim_p_2_con = pe.Constraint(self.model.T,rule=power_lim_p_2_rule)
-        self.model.curr_lim_con = pe.Constraint(self.model.T,rule=curr_lim_rule)
-        self.model.gradient_con = pe.Constraint(self.model.T,rule=gradient_rule)
-        self.model.curr_lim_n_1_con = pe.Constraint(self.model.T,rule=curr_lim_n_1_rule)
-        self.model.curr_lim_n_2_con = pe.Constraint(self.model.T,rule=curr_lim_n_2_rule)
-        self.model.curr_lim_p_1_con = pe.Constraint(self.model.T,rule=curr_lim_p_1_rule)
-        self.model.curr_lim_p_2_con = pe.Constraint(self.model.T,rule=curr_lim_p_2_rule)
-        self.model.one_state_con = pe.Constraint(self.model.T,rule=one_state_rule)
+            self.model.power_lim_p_1_con = pe.Constraint(self.model.T, rule=power_lim_p_1_rule)
+            self.model.power_lim_p_2_con = pe.Constraint(self.model.T, rule=power_lim_p_2_rule)
+        self.model.curr_lim_con = pe.Constraint(self.model.T, rule=curr_lim_rule)
+        self.model.gradient_con = pe.Constraint(self.model.T, rule=gradient_rule)
+        self.model.curr_lim_n_1_con = pe.Constraint(self.model.T, rule=curr_lim_n_1_rule)
+        self.model.curr_lim_n_2_con = pe.Constraint(self.model.T, rule=curr_lim_n_2_rule)
+        self.model.curr_lim_p_1_con = pe.Constraint(self.model.T, rule=curr_lim_p_1_rule)
+        self.model.curr_lim_p_2_con = pe.Constraint(self.model.T, rule=curr_lim_p_2_rule)
+        self.model.one_state_con = pe.Constraint(self.model.T, rule=one_state_rule)
         if self.include["pv"]:
-            self.model.pow_lim_p_sun_con = pe.Constraint(self.model.T,rule=pow_lim_p_sun_rule)
-        self.model.pow_lim_n_con = pe.Constraint(self.model.T,rule=pow_lim_n_rule)
+            self.model.pow_lim_p_sun_con = pe.Constraint(self.model.T, rule=pow_lim_p_sun_rule)
+        self.model.pow_lim_n_con = pe.Constraint(self.model.T, rule=pow_lim_n_rule)
         
     def addAuxiliaryBatteryConstraints(self):
         def aux_lim_n_1_rule(model, t):
