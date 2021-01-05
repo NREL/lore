@@ -1225,6 +1225,37 @@ class RealTimeDispatchModel(object):
         self.model.cc_6_con = pe.Constraint(self.model.T, rule=cc_6_rule)
         self.model.cc_7_con = pe.Constraint(self.model.T, rule=cc_7_rule)
         self.model.cc_8_con = pe.Constraint(self.model.T, rule=cc_8_rule)
+
+    def addOperatingAssumptions(self):
+        self.model.F_thresh = pe.Param(initialize=0.50)
+
+        # never shutdown the power cycle (run in standby at least)
+        ## do not relax this in the global solve,
+        ## we require a longer problem horizon to make a decision on cycle shutdown
+        def ycoff_force_zero_rule(model, t):
+            return model.y[t] + model.ycsu[t] + model.ycsb[t] >= 1
+
+        # squeeze receiver outlet temp to max possible (if operating)
+        def T_rout_force_upper_rule(model, t):
+            return model.T_rout[t] <= model.F[t] * (model.T_rout_max - model.T_cs[t]) + model.T_cs[t] + model.T_rout_max * (1 - model.yr[t] + model.yrsu[t])
+
+        def T_rout_force_lower_rule(model, t):
+            return model.T_rout[t] >= model.F[t] * (model.T_rout_max - model.T_cs[t]) + model.T_cs[t] - model.T_rout_max * (1 - model.yr[t] + model.yrsu[t])
+
+        # give a tighter upper bound on mass flow rate to the receiver
+        def rec_mdotr_max_rule(model, t):
+            return (model.mdot_r_hs[t] + model.mdot_r_cs[t]) <= (if model.Qin[t]=0 then 0 else model.mdot_r_min + model.Qin[t] / (model.F[t] * model.Cp * (model.T_rout_max - model.T_cs_max))) + model.mdot_r_max * (model.yrsb[t])
+
+        # improves linear solution
+        def lower_F_rule(model, t):
+            return model.yr[t] <= model.F[t] / model.F_thresh
+
+
+        self.model.ycoff_force_zero_con = pe.Constraint(self.model.T, rule=ycoff_force_zero_rule)
+        self.model.T_rout_force_upper_con = pe.Constraint(self.model.T_l, rule=T_rout_force_upper_rule)
+        self.model.T_rout_force_lower_con = pe.Constraint(self.model.T_l, rule=T_rout_force_lower_rule)
+        self.model.rec_mdotr_max_con = pe.Constraint(self.model.T_nl, rule=rec_mdotr_max_rule)
+        self.model.lower_F_con = pe.Constraint(self.model.T_nl, rule=lower_F_rule)
     
     def generateConstraints(self):
         if self.include["persistence"]:
@@ -1255,6 +1286,9 @@ class RealTimeDispatchModel(object):
             self.addBatteryConstraints()
             self.addAuxiliaryBatteryConstraints()
             self.addBatteryLinearizationConstraints()
+        if self.include["op_assumptions"]:
+            self.addOperatingAssumptions()
+
             
     def solveModel(self, mipgap=0.005):
         opt = pe.SolverFactory('cbc')
