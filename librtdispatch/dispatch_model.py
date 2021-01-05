@@ -272,7 +272,7 @@ class RealTimeDispatchModel(object):
         self.model.drsu = pe.Var(self.model.T, domain=pe.NonNegativeReals)  #Receiver start-up time inventory at period t [h]
         self.model.drsd = pe.Var(self.model.T, domain=pe.NonNegativeReals)  #Receiver shut down time inventory at period t [h]
         self.model.frsd = pe.Var(self.model.T, domain=pe.NonNegativeReals, bounds = (0,1))  #Fraction of period used for receiver shut down at period $t [-]
-        self.model.frsu = pe.Var(self.model.T_nl, domain=pe.NonNegativeReals, bounds = (0,1))  #Fraction of period used for receiver start-up at period $t [-]
+        self.model.frsu = pe.Var(self.model.T, domain=pe.NonNegativeReals, bounds = (0,1))  #Fraction of period used for receiver start-up at period $t [-]
         self.model.lr = pe.Var(self.model.T_nl, domain=pe.NonNegativeReals)  #Salt pumping power to receiver in period t [kW\sse]
         self.model.lc = pe.Var(self.model.T_nl, domain=pe.NonNegativeReals)  #Salt pumping power to SGS in period t [kW\sse]
         self.model.lfw = pe.Var(self.model.T_nl, domain=pe.NonNegativeReals)  #Feed water pumping power to SGS in period t [kW\sse]
@@ -289,6 +289,8 @@ class RealTimeDispatchModel(object):
         self.model.ucsu = pe.Var(self.model.T, domain=pe.NonNegativeReals)   #Cycle start-up energy inventory at period $t$ [kWh
         self.model.ucsd = pe.Var(self.model.T, domain=pe.NonNegativeReals)                         #Cycle shutdown energy inventory at period $t$ [kWh\sst]
         self.model.ursu = pe.Var(self.model.T, domain=pe.NonNegativeReals)                         #Receiver start-up energy inventory at period $t$ [kWh\sst]
+        self.model.ursd = pe.Var(self.model.T,
+                                 domain=pe.NonNegativeReals)  # Receiver start-up energy inventory at period $t$ [kWh\sst]
         self.model.wdot = pe.Var(self.model.T, domain=pe.NonNegativeReals)                         #Power cycle electricity generation at period $t$ [kW\sse]
         self.model.wdot_delta_plus = pe.Var(self.model.T, domain=pe.NonNegativeReals)	             #Power cycle ramp-up in period $t$ [kW\sse]
         self.model.wdot_delta_minus = pe.Var(self.model.T, domain=pe.NonNegativeReals)	         #Power cycle ramp-down in period $t$ [kW\sse]
@@ -580,7 +582,7 @@ class RealTimeDispatchModel(object):
         def rec_shutdown_eng_rule(model, t):
             if t == model.t_start:
                 return model.Qrsd*model.yrsd[t] >= model.yrsd0*model.Qrsd - model.ursd0
-            return model.Qrsd*model.yrsd[t] >= model.yrsd[t-1]*model.Qrsd - model.ursd0[t-1]
+            return model.Qrsd*model.yrsd[t] >= model.yrsd[t-1]*model.Qrsd - model.ursd[t-1]
 
         #binary logic
         def rec_sd_frac_nonzero_rule(model, t):
