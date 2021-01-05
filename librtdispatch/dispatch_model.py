@@ -22,9 +22,9 @@ class RealTimeDispatchModel(object):
         self.model.t_start = pe.Param(initialize=params["start"])            #First index of the problem
         self.model.t_end = pe.Param(initialize=params["stop"])               #Last index of the problem
         self.model.t_transition = pe.Param(initialize=params["transition"])  #Index of the transition between models (last index of non-linear formulation)
-        self.model.T = pe.Set(initialize=range(int(self.model.t_start), int(self.model.t_end)+1))  #Set of time steps in the problem
-        self.model.T_nl = pe.Set(initialize=range(int(self.model.t_start), int(self.model.t_transition)+1))  #Set of periods of the non-linear formulation
-        self.model.T_l = pe.Set(initialize=range(int(self.model.t_transition+1), int(self.model.t_end)+1))  #Set of periods of the linear formulation
+        self.model.T = pe.Set(initialize=range(params["start"], params["stop"]))  #Set of time steps in the problem
+        self.model.T_nl = pe.Set(initialize=range(params["start"], params["transition"]+1))  #Set of periods of the non-linear formulation
+        self.model.T_l = pe.Set(initialize=range(params["transition"]+1, params["stop"]+1))  #Set of periods of the linear formulation
         self.model.T_inputs = pe.Set(initialize=range(1, params["T"]+1))
         # Piecewise-linear indexing
         self.model.nc = pe.Param(initialize=params["nc"])     # Number of linear regions in htf pumping power through the cycle regression [-]
@@ -42,8 +42,8 @@ class RealTimeDispatchModel(object):
         self.model.Delta = pe.Param(self.model.T_inputs, mutable=False, initialize=params["Delta"])          #duration of period t
         self.model.Delta_e = pe.Param(self.model.T_inputs, mutable=False, initialize=params["Delta_e"])       #cumulative time elapsed at end of period t
         ### Time-series CSP Parameters ##
-        self.model.delta_rs = pe.Param(self.model.T_inputs, mutable=True, initialize=params["delta_rs"]) # \delta^{rs}_{t}: Estimated fraction of period $t$ required for receiver start-up [-]
-        self.model.delta_cs = pe.Param(self.model.T_inputs, mutable=True, initialize=params["delta_cs"])  # \delta^{cs}_{t}: Estimated fraction of period $t$ required for cycle start-up [-]
+        # self.model.delta_rs = pe.Param(self.model.T_inputs, mutable=True, initialize=params["delta_rs"]) # \delta^{rs}_{t}: Estimated fraction of period $t$ required for receiver start-up [-]
+        # self.model.delta_cs = pe.Param(self.model.T_inputs, mutable=True, initialize=params["delta_cs"])  # \delta^{cs}_{t}: Estimated fraction of period $t$ required for cycle start-up [-]
         self.model.D = pe.Param(self.model.T_inputs, mutable=True, initialize=params["D"]) #D_{t}: Time-weighted discount factor in period $t$ [-]
         self.model.etaamb = pe.Param(self.model.T_inputs, mutable=True, initialize=params["etaamb"])  #\eta^{amb}_{t}: Cycle efficiency ambient temperature adjustment factor in period $t$ [-]
         self.model.etac = pe.Param(self.model.T_inputs, mutable=True, initialize=params["etac"])   #\eta^{c}_{t}:   Normalized condenser parasitic loss in period $t$ [-]
@@ -100,18 +100,18 @@ class RealTimeDispatchModel(object):
         self.model.Qru = pe.Param(mutable=True, initialize=params["Qru"])       #Allowable power per period for receiver start-up [kWh\sst]
         self.model.Qru = pe.Param(mutable=True, initialize=params[
             "Qru"])  # Allowable power per period for receiver start-up [kWh\sst]
-        self.model.T_rout_min = pe.Param(mutable=True, initialize=params[
-            "T_rout_min"])  # Minimum allowable receiver outlet temperature [deg C]
+        # self.model.T_rout_min = pe.Param(mutable=True, initialize=params[
+        #     "T_rout_min"])  # Minimum allowable receiver outlet temperature [deg C]
         self.model.T_rout_max = pe.Param(mutable=True, initialize=params[
             "T_rout_max"])  # Maximum allowable receiver outlet temperature [deg C]
         self.model.Wh_comm = pe.Param(mutable=True, initialize=params[
             "Wh_comm"])  # Heliostat field communication parasitic loss [kW\sse]
         self.model.Wh_track = pe.Param(mutable=True, initialize=params[
             "Wh_track"])  # Heliostat field tracking parasitic loss [kW\sse]
-        self.model.Wh_full = pe.Param(mutable=True, initialize=params[
-            "Wh_full"])  # Tower piping heat trace full load parasitic loss [kW\sse]
-        self.model.Wh_part = pe.Param(mutable=True, initialize=params[
-            "Wh_part"])  # Tower piping heat trace part load parasitic loss [kW\sse]
+        # self.model.Wh_full = pe.Param(mutable=True, initialize=params[
+        #     "Wh_full"])  # Tower piping heat trace full load parasitic loss [kW\sse]
+        # self.model.Wh_part = pe.Param(mutable=True, initialize=params[
+        #     "Wh_part"])  # Tower piping heat trace part load parasitic loss [kW\sse]
         #self.model.Wh = pe.Param(mutable=True, initialize=params["Wh"])        #Heliostat field tracking parasitic loss [kW\sse]
         #self.model.Wht = pe.Param(mutable=True, initialize=params["Wht"])       #Tower piping heat trace parasitic loss [kW\sse]
 
@@ -387,7 +387,7 @@ class RealTimeDispatchModel(object):
                     #obj_cost_rec_su_hs_sd
                     - (model.Crsu*model.yrsup[t] + model.Crhsp*model.yrhsp[t] + model.alpha*(model.yrsb[t]+model.yrsdp[t]))
                     #obj_cost_ops
-                    - model.Delta[t]*(model.Cpc*model.wdot[t] + model.Ccsb*model.Qb*model.ycsb[t] + model.Crec*model.xr[t] )
+                    - model.Delta[t]*(model.Cpc*model.wdot[t] + model.Ccsb*model.ycsb[t] + model.Crec*model.xr[t] )
                     for t in model.T)
                     #obj_end_incentive
                     + model.obj_end_incentive
@@ -404,7 +404,7 @@ class RealTimeDispatchModel(object):
                     #obj_cost_rec_su_hs_sd
                     - (model.Crsu*model.yrsup[t] + model.Crhsp*model.yrhsp[t] + model.alpha*(model.yrsb[t]+model.yrsdp[t]))
                     #obj_cost_ops
-                    - model.Delta[t]*(model.Cpc*model.wdot[t] + model.Ccsb*model.Qb*model.ycsb[t] + model.Crec*model.xr[t] )
+                    - model.Delta[t]*(model.Cpc*model.wdot[t] + model.Ccsb*model.ycsb[t] + model.Crec*model.xr[t] )
                     #obj_force_cycle
                     + model.cycle_incent * (model.ycgb[t] + model.ycge[t])
                     for t in model.T)
@@ -1244,7 +1244,13 @@ class RealTimeDispatchModel(object):
 
         # give a tighter upper bound on mass flow rate to the receiver
         def rec_mdotr_max_rule(model, t):
-            return (model.mdot_r_hs[t] + model.mdot_r_cs[t]) <= (if model.Qin[t]=0 then 0 else model.mdot_r_min + model.Qin[t] / (model.F[t] * model.Cp * (model.T_rout_max - model.T_cs_max))) + model.mdot_r_max * (model.yrsb[t])
+            if model.Qin[t] == 0:
+                return (
+                    model.mdot_r_hs[t] + model.mdot_r_cs[t] <= (
+                    model.Qin[t] / (model.F[t] * model.Cp * (model.T_rout_max - model.T_cs_max))) +
+                    model.mdot_r_max * model.yrsb[t]
+                )
+            return (model.mdot_r_hs[t] + model.mdot_r_cs[t]) <= model.mdot_r_max * model.yrsb[t]
 
         # improves linear solution
         def lower_F_rule(model, t):
