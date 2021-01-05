@@ -1256,7 +1256,33 @@ class RealTimeDispatchModel(object):
         self.model.T_rout_force_lower_con = pe.Constraint(self.model.T_l, rule=T_rout_force_lower_rule)
         self.model.rec_mdotr_max_con = pe.Constraint(self.model.T_nl, rule=rec_mdotr_max_rule)
         self.model.lower_F_con = pe.Constraint(self.model.T_nl, rule=lower_F_rule)
-    
+
+    def addDiscretizedMdotc(self):
+        self.model.n_mdotc = pe.Param(initialize=4);
+        self.model.Kmc = pe.Set(initialize=range(1,self.model.n_mdotc+1))
+        delta_mdotc_dict = {}
+        for k in range(1,self.model.n_mdotc+1):
+            #delta_mdotc_dict[k] = self.model.mdot_c_min * (4 - 1.2) / self.model.n_mdotc   Bug in code - fix below
+            delta_mdotc_dict[k] = self.model.mdot_c_min * (1.2 + 2.8*(k-1)/3) / self.model.n_mdotc  # Kmc equal steps from 1.2*min to 4*min (same as max)
+        self.model.k_mdotc = pe.Param(self.model.Kmc, initialize=delta_mdotc_dict)
+        self.model.mdot_c_min_su = pe.Param(initialize=(self.model.Qc/(self.model.Cp*(5 - self.model.T_cout_su))))
+        self.model.T_cout_su = pe.Param(initialize=2.90)
+        self.model.theta_mdotc = pe.Var(self.model.T_nl * self.model.Kmc, domain=pe.Binary)
+
+        def mdotc_theta_cut_rule(model, t, k):
+            return model.theta_mdotc[t,k] <= model.y[t]
+
+        def mdotc_theta_prec_rule(model, t, k):
+            return model.theta_mdotc[t,k] >= model.theta_mdotc[t,k+1]
+
+        def force_mdotc_rule(model, t):
+            return model.mdot_c[t] == model.mdot_c_min_su*model.ycsu[t] + 1.2*model.mdot_c_min*y[t] + sum (
+                 model.delta_mdotc[k] * self.model.theta_mdotc[t,k] for k in model.Kmc )
+
+        self.model._con = pe.Constraint(self.model.T_nl, self.model.Kmc, rule=mdotc_theta_cut_rule)
+        self.model.mdotc_theta_prec_con = pe.Constraint(self.model.T_nl, self.model.Kmc, rule=mdotc_theta_prec_rule)
+        self.model.force_mdotc_con = pe.Constraint(self.model.T_nl, self.model.Kmc, rule=force_mdotc_rule)
+
     def generateConstraints(self):
         if self.include["persistence"]:
             self.addPersistenceConstraints()
