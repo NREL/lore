@@ -592,7 +592,9 @@ class RealTimeDispatchModel(object):
             return model.frsd[t] >= model.yrsd[t] - model.yr[t]
 
         def rec_shutdown_rule(model, t):
-            return model.frsd[t] >= model.yrsd[t] - model.yr[t]
+            if t == model.t_stop:
+                return pe.Constraint.Feasible
+            return model.yrsd[t] >= (model.yr[t] - model.yr[t+1]) + (model.yrsb[t] - model.yrsb[t+1]);
 
         self.model.rec_sd_time_inv_con = pe.Constraint(self.model.T, rule=rec_sd_time_inv_rule)
         self.model.rec_sd_time_nonzero_con = pe.Constraint(self.model.T, rule=rec_sd_time_nonzero_rule)
@@ -635,16 +637,6 @@ class RealTimeDispatchModel(object):
             if t == 1:
                 return model.yrsb[t] <= (model.yr0 + model.yrsb0) 
             return model.yrsb[t] <= model.yr[t-1] + model.yrsb[t-1]
-
-        def rec_su_pen_rule(model, t):
-            if t == 1:
-                return model.yrsup[t] >= model.yrsu[t] - model.yrsu0 
-            return model.yrsup[t] >= model.yrsu[t] - model.yrsu[t-1]
-
-        def rec_hs_pen_rule(model, t):
-            if t == 1:
-                return model.yrhsp[t] >= model.yr[t] - (1 - model.yrsb0)
-            return model.yrhsp[t] >= model.yr[t] - (1 - model.yrsb[t-1])
 
         def rec_shutdown_rule(model, t):
             if model.Delta[t] >= 1 and t == 1:
