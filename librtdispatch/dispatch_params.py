@@ -6,10 +6,13 @@ Data structures for the real-time dispatch model
 import pyomo.environ as pe
 #import re
 
-
-
-def buildParamsFromAMPLFile(filename):
+def buildParamsFromFiles(filenames):
     params_dict = {}
+    for fname in filenames:
+        params_dict = buildParamsFromAMPLFile(fname, params_dict)
+    return params_dict
+
+def buildParamsFromAMPLFile(filename, params_dict={}):
     f = open(filename, 'r')
     lines = f.readlines()
     in_param = False
@@ -18,7 +21,7 @@ def buildParamsFromAMPLFile(filename):
             in_param = False
             splitline = line.split(" ")
             key = splitline[1]
-            if key in ["T","day_of_year"]:
+            if key in ["T","day_of_year","nc","nfw","transition"]:
                 val = int(splitline[-1][:-2])
             else:
                 val = float(splitline[-1][:-2])
@@ -36,7 +39,9 @@ def buildParamsFromAMPLFile(filename):
             else: 
                 splitline = line.split("\t")
                 params_dict[param_key][int(splitline[0])] = float(splitline[-1])
-    
+    return params_dict
+
+def adjustParamsDict(params_dict):
     ##Adjustments for john's scripts
     params_dict["Delta"] = params_dict["dt"]
     params_dict["Delta_e"] = params_dict["dte"]
@@ -45,11 +50,11 @@ def buildParamsFromAMPLFile(filename):
     params_dict["W_u_minus"] = {}
     params_dict["Wdotnet"] = {}
     for t in params_dict["dt"].keys():
-        params_dict["W_u_plus"][t] =  params_dict["Wdotl"] + params_dict["W_delta_plus"] * params_dict["dt"][t] / 2;
-        params_dict["W_u_minus"][t] = params_dict["Wdotl"] + params_dict["W_delta_minus"] * params_dict["dt"][t] / 2;
+        params_dict["W_u_plus"][t] = params_dict["Wdotl"] + params_dict["W_delta_plus"] * params_dict["dt"][t] / 2
+        params_dict["W_u_minus"][t] = params_dict["Wdotl"] + params_dict["W_delta_minus"] * params_dict["dt"][t] / 2
         params_dict["Wdotnet"][t] = params_dict["Wdotu"]
-        
     return params_dict
+
 
 if __name__ == "__main__":
     filename = "./input_files/data_energy.dat"
