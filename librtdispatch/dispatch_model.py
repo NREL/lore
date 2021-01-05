@@ -627,31 +627,48 @@ class RealTimeDispatchModel(object):
         self.model.rec_sd_pen_con = pe.Constraint(self.model.T, rule=rec_sd_pen_rule)
 
     def addReceiverModeLogicConstraints(self):
-        def rec_su_sb_persist_rule(model, t):
-            return model.yrsu[t] + model.yrsb[t] <= 1
+        def su_sd_nontrivial_solar_rule(model, t):
+            if model.Qin[t] > 0:
+                return model.yrsu[t] + model.yrsd[t] <= 1
+            return model.yrsu[t] + model.yrsd[t] <= 0
 
-        def rec_sb_persist_rule(model, t):
+        def rec_su_run_persist_rule(model, t):
+            if t == model.t_start:
+                return model.yrsu[t] + model.yr0 <= 1
+            return model.yrsu[t] + model.yr[t-1] <= 1
+
+        def rec_su_sb_persist_rule(model, t):
+            if t == model.t_start:
+                return model.yrsu[t] + model.yrsb0 <= 1
+            return model.yrsu[t] + model.yrsb[t-1] <= 1
+
+        def rec_su_sb_sd_pack_rule(model, t):
+            return model.yrsu[t] + model.yrsb[t] + model.yrsd[t] <= 1
+
+        def rec_gen_persist_rule(model, t):
+            return model.Qrl * model.yr[t] <= model.Qin[t]
+
+        def rec_sb_run_pack_rule(model, t):
             return model.yr[t] + model.yrsb[t] <= 1
 
         def rsb_persist_rule(model, t):
             if t == model.t_start:
-                return model.yrsb[t] <= (model.yr0 + model.yrsb0) 
+                return model.yrsb[t] <= model.yr0 + model.yrsb0
             return model.yrsb[t] <= model.yr[t-1] + model.yrsb[t-1]
 
-        def rec_shutdown_rule(model, t):
+        def rec_force_off_rule(model, t):
             if t == model.t_start:
-                return
+                return model.yr[t] + model.yrsd0 <= 1
+            return model.yr[t] + model.yrsd[t-1] <= 1
 
-        def rec_gen_persist_rule(model, t):
-           return model.yr[t] <= model.Qin[t]/model.Qrl
-
-        self.model.rec_gen_persist_con = pe.Constraint(self.model.T, rule=rec_gen_persist_rule)
+        self.model.su_sd_nontrivial_solar_con = pe.Constraint(self.model.T, rule=su_sd_nontrivial_solar_rule)
+        self.model.rec_su_run_persist_con = pe.Constraint(self.model.T, rule=rec_su_run_persist_rule)
         self.model.rec_su_sb_persist_con = pe.Constraint(self.model.T, rule=rec_su_sb_persist_rule)
-        self.model.rec_sb_persist_con = pe.Constraint(self.model.T, rule=rec_sb_persist_rule)
+        self.model.rec_su_sb_sd_pack_con = pe.Constraint(self.model.T, rule=rec_su_sb_sd_pack_rule)
+        self.model.rec_gen_persist_con = pe.Constraint(self.model.T, rule=rec_gen_persist_rule)
+        self.model.rec_sb_run_pack_con = pe.Constraint(self.model.T, rule=rec_sb_run_pack_rule)
         self.model.rsb_persist_con = pe.Constraint(self.model.T, rule=rsb_persist_rule)
-        self.model.rec_su_pen_con = pe.Constraint(self.model.T, rule=rec_su_pen_rule)
-        self.model.rec_hs_pen_con = pe.Constraint(self.model.T, rule=rec_hs_pen_rule)
-        self.model.rec_shutdown_con = pe.Constraint(self.model.T, rule=rec_shutdown_rule)
+        self.model.rec_force_off_con = pe.Constraint(self.model.T, rule=rec_force_off_rule)
 
     def addReceiverMassFlowRateConstraints(self):
         def mdot_r_upper1_rule(model, t):
