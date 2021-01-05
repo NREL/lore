@@ -10,6 +10,7 @@ def buildParamsFromFiles(filenames):
     params_dict = {}
     for fname in filenames:
         params_dict = buildParamsFromAMPLFile(fname, params_dict)
+    params_dict = adjustParamsDict(params_dict)
     return params_dict
 
 def buildParamsFromAMPLFile(filename, params_dict={}):
@@ -21,7 +22,7 @@ def buildParamsFromAMPLFile(filename, params_dict={}):
             in_param = False
             splitline = line.split(" ")
             key = splitline[1]
-            if key in ["T","day_of_year","nc","nfw","transition"]:
+            if key in ["T", "day_of_year", "nc", "nfw", "transition"]:
                 val = int(splitline[-1][:-2])
             else:
                 val = float(splitline[-1][:-2])
