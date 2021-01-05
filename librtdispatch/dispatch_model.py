@@ -957,14 +957,21 @@ class RealTimeDispatchModel(object):
             return model.wdot_s[t] <= model.Wdotnet[t]
 
         def grid_sun_rule(model, t):
+            if t > model.transition:
+                return (
+                    model.wdot_s[t] - model.wdot_p[t] == (1 - model.etac[t]) * model.wdot[t] - model.pr[t]
+                    - (model.Ehs / model.Delta[t]) * (model.yrsu[t] + 2 * model.yrhsp[t] + model.yrsdp[t])
+                    - (model.Wh_track - model.Wh_comm) * (model.yrsu[t] + model.yr[t] + model.yrsb[t]) - model.Wh_comm
+                    - model.Wht_part * model.yr[t] - model.Wht_full * (1 - model.yr[t]) - model.pc[t]
+                    - model.Wb * (model.ycsb[t] + model.ycsu[t]) - model.Wc * (1 - model.y[t])
+                )
             return (
-                    model.wdot_s[t] - model.wdot_p[t] == (1-model.etac[t])*model.wdot[t]
-                		- model.Lr*(model.xr[t] + model.xrsu[t] + model.Qrl*model.yrsb[t])
-                		- model.Lc*model.x[t]
-                        - model.Wh*model.yr[t] - model.Wb*model.ycsb[t] - model.Wht*(model.yrsb[t]+model.yrsu[t])		#Is Wrsb energy [kWh] or power [kW]?  [az] Wrsb = Wht in the math?
-                		- (model.Ehs/model.Delta[t])*(model.yrsu[t] + model.yrsb[t] + model.yrsd[t])
+                model.wdot_s[t] - model.wdot_p[t] == (1 - model.etac[t]) * model.wdot[t] - model.lr[t]
+                - (model.Ehs / model.Delta[t]) * (model.yrsu[t] + 2 * model.yrhsp[t] + model.yrsdp[t])
+                - (model.Wh_track - model.Wh_comm) * (model.yrsu[t] + model.yr[t] + model.yrsb[t]) - model.Wh_comm
+                - model.Wht_part * model.yr[t] - model.Wht_full * (1 - model.yr[t]) - (model.lc[t] + model.lfw[t])
+                - model.Wb * (model.ycsb[t] + model.ycsu[t]) - model.Wc * (1 - model.y[t])
             )
-
         def sell_production_rule(model, t):
             return model.wdot_s[t] <= model.wdot[t]
 
@@ -976,17 +983,6 @@ class RealTimeDispatchModel(object):
         self.model.sell_production_con = pe.Constraint(self.model.T, rule=sell_production_rule)
         self.model.purchase_nonzero_con = pe.Constraint(self.model.T, rule=purchase_nonzero_rule)
 
-
-    def addPiecewiseLinearEfficiencyConstraints(self):
-        def power_rule(model, t):
-            return model.wdot[t] == (model.etaamb[t]/model.eta_des)*(model.etap*model.x[t] + model.y[t]*(model.Wdotu - model.etap*model.Qu))
-
-
-
-
-        
-        self.model.power_con = pe.Constraint(self.model.T,rule=power_rule)
-        
     def addMinUpAndDowntimeConstraints(self):
         def min_cycle_uptime_rule(model, t):
             if pe.value(model.Delta_e[t] > (model.Yu - model.Yu0) * model.y0):
@@ -1034,34 +1030,22 @@ class RealTimeDispatchModel(object):
         self.model.cycle_shutdown_con = pe.Constraint(self.model.T,rule=cycle_shutdown_rule)
         
     def addCycleLogicConstraints(self):
+        def pc_su_sb_op_pack_rule(model, t):
+            return model.ycsu[t] + model.y[t] + model.ycsb[t] <= 1
+
         def pc_su_persist_rule(model, t):
             if t == 1:
                 return model.ycsu[t] + model.y0 <= 1
             return model.ycsu[t] + model.y[t-1] <= 1
-
-        def pc_su_subhourly_rule(model, t):
-            if model.Delta[t] < 1:
-                return model.y[t] + model.ycsu[t] <= 1
-            return pe.Constraint.Feasible  #no analogous constraint for hourly or longer time steps
 
         def pc_sb_start_rule(model, t):
             if t == 1:
                 return model.ycsb[t] <= model.y0 + model.ycsb0
             return model.ycsb[t] <= model.y[t-1] + model.ycsb[t-1]
 
-        def pc_sb_part1_rule(model, t):
-            return model.ycsu[t] + model.ycsb[t] <= 1
-
-        def pc_sb_part2_rule(model, t):
-            return model.y[t] + model.ycsb[t] <= 1
-
-
-         
+        self.model.pc_su_sb_op_pack_con = pe.Constraint(self.model.T,rule=pc_su_sb_op_pack_rule)
         self.model.pc_su_persist_con = pe.Constraint(self.model.T,rule=pc_su_persist_rule)
-        self.model.pc_su_subhourly_con = pe.Constraint(self.model.T,rule=pc_su_subhourly_rule)
         self.model.pc_sb_start_con = pe.Constraint(self.model.T,rule=pc_sb_start_rule)
-        self.modelpc_sb_part1_con = pe.Constraint(self.model.T,rule=pc_sb_part1_rule)
-        self.model.pc_sb_part2_con = pe.Constraint(self.model.T,rule=pc_sb_part2_rule)
         
     def addPVConstraints(self):
         def pv_batt_lim_rule(model, t):
@@ -1241,13 +1225,6 @@ class RealTimeDispatchModel(object):
         self.model.cc_6_con = pe.Constraint(self.model.T, rule=cc_6_rule)
         self.model.cc_7_con = pe.Constraint(self.model.T, rule=cc_7_rule)
         self.model.cc_8_con = pe.Constraint(self.model.T, rule=cc_8_rule)
-        
-    def addSubhourlyCliqueConstraints(self):
-        def clique_rule(model, t):
-            if self.model.Delta[t] < 1:
-                return model.y[t] + model.ycsu[t] + model.ycsb[t] <= 1
-            return pe.Constraint.Feasible
-        self.model.clique_con = pe.Constraint(self.model.T, rule=clique_rule)
     
     def generateConstraints(self):
         if self.include["persistence"]:
@@ -1269,7 +1246,6 @@ class RealTimeDispatchModel(object):
         self.addPowerCycleEnergyOutputConstraints()
         self.addPowerCycleOutputRampingConstraints()
         self.addElectricBalanceConstraints()
-        self.addPiecewiseLinearEfficiencyConstraints()
         self.addMinUpAndDowntimeConstraints()
         self.addPowerCyclePenaltyConstraints()
         self.addCycleLogicConstraints()
@@ -1279,8 +1255,6 @@ class RealTimeDispatchModel(object):
             self.addBatteryConstraints()
             self.addAuxiliaryBatteryConstraints()
             self.addBatteryLinearizationConstraints()
-        if min([self.model.Delta[t] for t in self.model.T]) < 1:
-            self.addSubhourlyCliqueConstraints()
             
     def solveModel(self, mipgap=0.005):
         opt = pe.SolverFactory('cbc')
