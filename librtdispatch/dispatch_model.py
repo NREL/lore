@@ -433,19 +433,19 @@ class RealTimeDispatchModel(object):
         self.model.persist_neg_con = pe.Constraint(self.model.T, rule=wdot_s_persist_neg_rule)
 
     def addPumpConstraints(self):
-        def receiver_pump_rule(model,t,i):
+        def receiver_pump_rule(model, t, i):
             return model.lr[t] == model.Pr * (model.mdot_r_cs[t] + model.mdot_r_hs[t])
 
-        def convex_cycle_pump1_rule(model,t,i):
+        def convex_cycle_pump1_rule(model, t, i):
             return model.lc[t] >= model.Pc[i] * model.mdot_c[t] + model.Bc[i] * model.y[t]
 
-        def convex_cycle_pump2_rule(model,t,i):
+        def convex_cycle_pump2_rule(model, t, i):
             return model.lc[t] >= model.Pc[i] * model.mdot_c[t] + self.model.Bc[i] * model.ycsu[t]
 
-        def convex_feedwater_pump1_rule(model,t,i):
+        def convex_feedwater_pump1_rule(model, t, i):
             return model.lfw[t] >= model.Pfw[i] * model.mdot_c[t] + model.Bfw[i] * model.y[t]
 
-        def convex_feedwater_pump2_rule(model,t,i):
+        def convex_feedwater_pump2_rule(model, t, i):
             return model.lfw[t] >= model.Pfw[i] * model.mdot_c[t] + model.Bfw[i] * model.ycsu[t]
 
         self.model.receiver_pump_con = pe.Constraint(self.model.T_nl * self.model.htf_segments, rule=receiver_pump_rule)
@@ -499,8 +499,8 @@ class RealTimeDispatchModel(object):
 
         def rec_startup_time_rule(model, t):
             if t == model.t_start:
-                return model.yr[t] <= model.ursu[t]/model.Er + model.yr0 + model.yrsb0
-            return model.yr[t] <= model.ursu[t]/model.Er + model.yr[t-1] + model.yrsb[t-1]
+                return model.Drsu*model.yr[t] <= model.drsu[t] + model.Drsu*(model.yr0 + model.yrsb0)
+            return model.Drsu*model.yr[t] <= model.drsu[t] + model.Drsu*(model.yr[t-1] + model.yrsb[t-1])
 
         ### energy inventory
         def rec_su_eng_inv1_rule(model, t):
@@ -1302,7 +1302,8 @@ class RealTimeDispatchModel(object):
 
     def generateConstraints(self):
         if self.include["persistence"]:
-            self.addPersistenceConstraints()
+            self.addPersistenceConstraints(
+        # self.addReceiverStartupConstraintsLinear()
         self.addReceiverStartupConstraints()
         self.addReceiverSupplyAndDemandConstraints()
         self.addReceiverShutdownConstraints()
