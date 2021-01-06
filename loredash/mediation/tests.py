@@ -22,6 +22,24 @@ import numpy as np
 
 
 # TESTS:
+#---RoundTime------------------------------------------------------------------------------------------------------------
+"""Test RoundTime"""
+def test_roundtime():
+    dt = datetime.datetime(2021, 1, 4, 23, 59, 59, 510000)
+    second_resolution = 1
+    dt_rounded = mediator.RoundTime(dt, second_resolution)
+    assert dt_rounded == datetime.datetime(2021, 1, 5, 0, 0, 0, 0)
+
+    dt = datetime.datetime(2021, 1, 4, 23, 59, 59, 500000)
+    second_resolution = 1
+    dt_rounded = mediator.RoundTime(dt, second_resolution)
+    assert dt_rounded == datetime.datetime(2021, 1, 5, 0, 0, 0, 0)
+
+    dt = datetime.datetime(2021, 1, 4, 23, 59, 59, 490000)
+    second_resolution = 1
+    dt_rounded = mediator.RoundTime(dt, second_resolution)
+    assert dt_rounded == datetime.datetime(2021, 1, 4, 23, 59, 59, 0)
+
 #---PySAM minimum one hours sims-----------------------------------------------------------------------------------------
 """Ensure returned date is just that requested if less than one hour"""
 def test_pysam_one_hour_minimum():

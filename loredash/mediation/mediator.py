@@ -36,8 +36,19 @@ class Mediator:
                                                preprocess_on_init=self.preprocess_pysam_on_init)
     
     def RunOnce(self, datetime_start=None, datetime_end=None):
-        """For the current point in time, get data from external plant and weather interfaces and run
-        entire set of submodels, saving data to database"""
+        """
+        Get data from external plant and weather interfaces and run
+        entire set of submodels, saving data to database
+
+        datetime_start = beginning of first timestep
+        datetime_end = end of last timestep
+
+        if datetime_start = none, the timestep including the current time will be run
+        e.g., if current clock time is 17:43 and the simulation_timestep = 5 minutes,
+        the timestep from 17:40 to 17:45 will be run, meaning:
+            datetime_start = 17:40
+            datetime_end = 17:45
+        """
 
         # The planned code:
         # Step 1:
@@ -125,12 +136,21 @@ class Mediator:
         reactor.run()
 
     def ModelPreviousDayAndAddToDb(self):
+        """
+        Simulate previous day and add to database
+        e.g.:
+        if current time is 17:43 and simulation_timestep = 5 minutes:
+            it will model from 17:40 yesterday (start of timestep)
+            to 17:40 today (end of timestep)
+            with timesteps in database (end of timesteps) being from 17:45 yesterday to 17:40 today
+            for 288 total new entries
+        """
         datetime_now = datetime.datetime.now()
         datetime_now_rounded_down = RoundMinutes(datetime_now, 'down', self.simulation_timestep.seconds/60)    # the start of the time interval currently in
         datetime_start_prev_day = datetime_now_rounded_down - datetime.timedelta(days=1)
-        datetime_end_prev_day = datetime_now_rounded_down                   # end of the last timestep
+        datetime_end_current_day = datetime_now_rounded_down                   # end of the last timestep
                                                                             # (as noted for "time_stop" on line 1004 in cmod_tcsmolten_salt.cpp)
-        self.RunOnce(datetime_start_prev_day, datetime_end_prev_day)
+        self.RunOnce(datetime_start_prev_day, datetime_end_current_day)
         return 0
 
     def BulkAddToPysamTable(self, records):
@@ -139,7 +159,7 @@ class Mediator:
 
         instances = [
             models.PysamData(
-                timestamp =             newyears + datetime.timedelta(hours=records['time_hr'][i]),
+                timestamp =             RoundTime(newyears + datetime.timedelta(hours=records['time_hr'][i]), 1),       # round to nearest second
                 E_tes_charged =         records['e_ch_tes'][i],
                 eta_tower_thermal =     records['eta_therm'][i],
                 eta_field_optical =     records['eta_field'][i],
@@ -179,7 +199,22 @@ def MediateContinuously(update_interval=5):
 #     mediator.RunOnce()
 #     return False
 
+def RoundTime(dt, second_resolution):
+    """Round to nearest second interval"""
+    seconds = (dt.replace(tzinfo=None) - dt.min).seconds + dt.microsecond * 1.e-6
+    rounding = (seconds+second_resolution/2) // second_resolution * second_resolution
+    return dt + datetime.timedelta(0,rounding-seconds,0)
+
 def RoundMinutes(dt, direction, minute_resolution):
+    """
+    Round to nearest minute interval
+    e.g.:
+        dt = datetime.datetime(2021, 1, 4, 15, 22, 0, 9155)
+        direction = up
+        minute_resolution = 5
+        -----
+        result = datetime.datetime(2021, 1, 4, 15, 25, 0, 0)
+    """
     on_interval = math.isclose((dt.minute + dt.second/60) % minute_resolution, 0., rel_tol=1e-6)
     new_minute = (dt.minute // minute_resolution + (1 if direction == 'up' and not on_interval else 0)) * minute_resolution
     new_time_old_seconds = dt + datetime.timedelta(minutes=new_minute - dt.minute)

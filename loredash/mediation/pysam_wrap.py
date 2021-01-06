@@ -52,6 +52,17 @@ class PysamWrap:
             self._SaveDesign()
 
     def Simulate(self, datetime_start, datetime_end, timestep, plant_state=None, weather_dataframe=None, solar_resource_data=None):
+        """
+        datetime_start = beginning of first timestep
+        datetime_end = end of last timestep
+            (if there is minimum 1-hr simulation duration and datetime_end is less than one hour after datetime_start,
+            datetime_end will be set to exactly 1 hour after datetime_start:
+            e.g., datetime_end = 18:40 if datetime_start = 17:40)
+
+        returns tech_outputs, where:
+            tech_outputs.time_hr = end of each timestep, given as hours since start of current year
+        """
+
         if not self._DesignIsSet() or self.enable_preprocessing == False:
             self.tech_model.HeliostatField.field_model_type = 2
         else:
@@ -68,8 +79,10 @@ class PysamWrap:
             datetime_end_original = datetime_end
             datetime_end = max(datetime_end, datetime_start + datetime.timedelta(hours=1))
         datetime_newyears = datetime.datetime(datetime_start.year, 1, 1, 0, 0, 0)
-        self.tech_model.SystemControl.time_start = (datetime_start - datetime_newyears).total_seconds()
-        self.tech_model.SystemControl.time_stop = (datetime_end - datetime_newyears).total_seconds()
+        self.tech_model.SystemControl.time_start = (datetime_start - datetime_newyears).total_seconds()     # time at beginning of first timestep, as
+                                                                                                            #  seconds since start of current year
+        self.tech_model.SystemControl.time_stop = (datetime_end - datetime_newyears).total_seconds()        # time at end of last timestep, as
+                                                                                                            #  seconds since start of current year
         self.tech_model.SystemControl.time_steps_per_hour = 3600 / timestep.seconds
 
         self.tech_model.execute(1)
