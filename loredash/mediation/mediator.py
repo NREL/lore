@@ -1,4 +1,5 @@
 from django.conf import settings
+from django.db import IntegrityError
 import sys, os
 sys.path.insert(1, os.path.join(sys.path[0], '..'))
 import time, copy, datetime, math
@@ -120,7 +121,7 @@ class Mediator:
 
         # d. Add data to cache and store in database
         self.validated_outputs_prev = copy.deepcopy(validated_outputs)
-        # self.BulkAddToPysamTable(validated_outputs)
+        self.BulkAddToPysamTable(validated_outputs)
 
         return 0
 
@@ -174,7 +175,16 @@ class Mediator:
             for i in range(n_records)
         ]
 
-        models.PysamData.objects.bulk_create(instances)
+        try:
+            models.PysamData.objects.bulk_create(instances, ignore_conflicts=True)
+            # If ignore_conflicts=False and if any to-be-added records are already in the database, as indicated by the timestamp,
+            #  an exception is raised and no to-be-added records are added.
+            # If ignore_conflicts=True, all records not already in the database are added. To-be-added records that are already in the
+            #  database do not replace the database records. Therefore, no existing database records are overwritten.
+        except IntegrityError as err:
+            error_string = format(err)
+            if error_string == "UNIQUE constraint failed: mediation_pysamdata.timestamp":
+                raise IntegrityError(error_string)      # just re-raise the exception for now
 
     def GetWeatherDataframe(self, datetime_start, datetime_end, **kwargs):
         """put the weather forecast call here instead"""
