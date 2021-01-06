@@ -449,10 +449,14 @@ class RealTimeDispatchModel(object):
             return model.lfw[t] >= model.Pfw[i] * model.mdot_c[t] + model.Bfw[i] * model.ycsu[t]
 
         self.model.receiver_pump_con = pe.Constraint(self.model.T_nl * self.model.htf_segments, rule=receiver_pump_rule)
-        self.model.convex_cycle_pump1_con = pe.Constraint(self.model.T_nl * self.model.htf_segments, rule=convex_cycle_pump1_rule)
-        self.model.convex_cycle_pump2_con = pe.Constraint(self.model.T_nl * self.model.htf_segments, rule=convex_cycle_pump2_rule)
-        self.model.convex_feedwater_pump1_con = pe.Constraint(self.model.T_nl * self.model.fw_segments, rule=convex_feedwater_pump1_rule)
-        self.model.convex_feedwater_pump2_con = pe.Constraint(self.model.T_nl * self.model.fw_segments, rule=convex_feedwater_pump2_rule)
+        self.model.convex_cycle_pump1_con = pe.Constraint(self.model.T_nl * self.model.htf_segments,
+                                                          rule=convex_cycle_pump1_rule)
+        self.model.convex_cycle_pump2_con = pe.Constraint(self.model.T_nl * self.model.htf_segments,
+                                                          rule=convex_cycle_pump2_rule)
+        self.model.convex_feedwater_pump1_con = pe.Constraint(self.model.T_nl * self.model.fw_segments,
+                                                              rule=convex_feedwater_pump1_rule)
+        self.model.convex_feedwater_pump2_con = pe.Constraint(self.model.T_nl * self.model.fw_segments,
+                                                              rule=convex_feedwater_pump2_rule)
 
 
     def addReceiverStartupConstraintsLinear(self):
@@ -678,7 +682,7 @@ class RealTimeDispatchModel(object):
             return model.mdot_r_cs[t] + model.mdot_r_hs[t] <= model.mdot_r_max
 
         def mdot_r_lower1_rule(model, t):
-            return model.mdot_r_cs[t] + model.mdot_r_hs[t] >= model.mdot_r_min*(model.yr[t] + model.rsb[t] - model.frsd[t])
+            return model.mdot_r_cs[t] + model.mdot_r_hs[t] >= model.mdot_r_min*(model.yr[t] + model.yrsb[t] - model.frsd[t])
 
         def mdot_r_lower2_rule(model, t):
             return model.mdot_r_cs[t] + model.mdot_r_hs[t] >= model.mdot_r_min*(model.frsu[t])
@@ -687,7 +691,7 @@ class RealTimeDispatchModel(object):
             return model.mdot_r_cs[t] <= model.mdot_r_max * (model.yrsu[t] + model.yrsb[t])
 
         def mdot_r_upper4_rule(model, t):
-            return model.mdot_r_hs[t] <= model.mdot_r_max * (model.yr[t])
+            return model.mdot_r_hs[t] <= model.mdot_r_max * model.yr[t]
 
         self.model.mdot_r_upper1_con = pe.Constraint(self.model.T_nl, rule=mdot_r_upper1_rule)
         self.model.mdot_r_upper2_con = pe.Constraint(self.model.T_nl, rule=mdot_r_upper2_rule)
@@ -729,7 +733,7 @@ class RealTimeDispatchModel(object):
 
     def addTESEnergyBalanceConstraints(self):
         def tes_balance_rule(model, t):
-            if t == model.t_start:
+            if t == model.t_transition+1:
                 return model.s[t] - model.s0 == model.Delta[t] * (model.xr[t] - (model.Qc*model.ycsu[t] + model.x[t] + model.Qrsb*model.yrsb[t]))
             return model.s[t] - model.s[t-1] == model.Delta[t] * (model.xr[t] - (model.Qc*model.ycsu[t] + model.x[t] + model.Qrsb*model.yrsb[t]))
 
@@ -746,6 +750,7 @@ class RealTimeDispatchModel(object):
         #self.model.maintain_tes_con = pe.Constraint(rule=maintain_tes_rule)  Used?
 
     def addThemalStorageMassTempConstraints(self):
+        ### mass balance
         def cold_side_mass_rule(model, t):
             if t == model.t_start:
                 return model.mass_cs[t] - model.mass_cs0 == model.Delta[t]*3600*(model.mdot_c[t] - model.mdot_r_hs[t])
@@ -756,6 +761,7 @@ class RealTimeDispatchModel(object):
                 return model.mass_hs[t] - model.mass_hs0 == model.Delta[t]*3600*(model.mdot_r_hs[t] - model.mdot_c[t])
             return model.mass_hs[t] - model.mass_hs[t-1] == model.Delta[t]*3600*(model.mdot_r_hs[t] - model.mdot_c[t])
 
+        ### energy balance
         def cold_side_energy_balance_rule(model, t):
             if t == model.t_start:
                 return (
@@ -772,7 +778,7 @@ class RealTimeDispatchModel(object):
         def hot_side_energy_balance_rule(model, t):
             if t == model.t_start:
                 return (
-                    model.mass_hs[t] * model.T_hs[t] - (model.mass_hs0 * model.T_hs0)  ==
+                    model.mass_hs[t] * model.T_hs[t] - (model.mass_hs0 * model.T_hs0) ==
                     model.Delta[t] * 3600 * (model.mdot_r_hs[t] * model.T_rout[t] - model.mdot_c[t] * model.T_hs[t])
                 )
             return (
@@ -845,7 +851,8 @@ class RealTimeDispatchModel(object):
         def pc_lower_input_pen_nonzero_rule(model, t):
             if model.t_transition == 0:
                 return model.x[t] >= model.Ql * model.y[t] - model.kl * (model.T_cin_design - model.T_hs0)
-            return model.x[t] >= model.Ql * model.y[t] - model.kl * (model.T_cin_design - model.T_hs[model.t_transition])
+            return model.x[t] >= model.Ql * model.y[t] - model.kl * (
+                    model.T_cin_design - model.T_hs[model.t_transition])
 
         def cycle_temp_prod_lower_rule(model, t):
             return (
@@ -1302,7 +1309,7 @@ class RealTimeDispatchModel(object):
 
     def generateConstraints(self):
         if self.include["persistence"]:
-            self.addPersistenceConstraints(
+            self.addPersistenceConstraints()
         # self.addReceiverStartupConstraintsLinear()
         self.addReceiverStartupConstraints()
         self.addReceiverSupplyAndDemandConstraints()
