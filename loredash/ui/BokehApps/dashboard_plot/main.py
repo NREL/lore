@@ -58,7 +58,10 @@ lines = {}
 def getDashboardData(_range, _values_list, queue):
     queryset = dd.objects.filter(timestamp__range=_range).values_list(*_values_list)
     df = pd.DataFrame.from_records(queryset)
-    df.columns=_values_list
+    if not df.empty:
+        df.columns=_values_list
+    else:
+        df = pd.DataFrame(columns=_values_list)
     queue.put(df)
 
 def make_dataset(time_box):
