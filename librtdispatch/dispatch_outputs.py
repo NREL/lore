@@ -19,13 +19,22 @@ class RTDispatchOutputs(object):
         self.tes_soc = numpy.array([pe.value(model.s[t]) for t in model.T])
         
     def print_outputs(self):
+        print("objective_value: ")
         print(self.objective_value)
+        print("cycle_on: ")
         print(self.cycle_on)
+        print("cycle_standby: ")
         print(self.cycle_standby)
+        print("cycle_startup: ")
         print(self.cycle_startup)
+        print("receiver_on: ")
         print(self.receiver_on)
+        print("receiver_startup: ")
         print(self.receiver_startup)
+        print("thermal_input_to_cycle: ")
         print(self.thermal_input_to_cycle)
+        print("electrical_output_from_cycle: ")
         print(self.electrical_output_from_cycle)
+        print("tes_soc: ")
         print(self.tes_soc)
 
