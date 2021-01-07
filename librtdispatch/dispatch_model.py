@@ -356,10 +356,10 @@ class RealTimeDispatchModel(object):
         #------ Expressions for existing parameters and variables
         self.model.s0 = (
             (self.model.Cp * (self.model.mass_hs0 - self.model.mass_hs_min) * (
-                        self.model.T_hs0 - self.model.T_cs_min) / 60)
+                        self.model.T_hs0 - self.model.T_cs_min) / 3600)
             if self.model.t_transition == 0 else
             (self.model.Cp * (self.model.mass_hs[self.model.t_transition] - self.model.mass_hs_min) * (
-                    self.model.T_hs[self.model.t_transition] - self.model.T_cs_min) / 60)
+                    self.model.T_hs[self.model.t_transition] - self.model.T_cs_min) / 3600)
         )
 
         self.model.x_calc = lambda t: self.model.Cp * self.model.mdot_c[t] * (self.model.T_hs[t] - self.model.T_cout[t])
