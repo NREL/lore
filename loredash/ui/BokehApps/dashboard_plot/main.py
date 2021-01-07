@@ -160,40 +160,25 @@ def make_plot(pred_src, curr_src): # (Predictive, Current)
             y_range_name = 'mwt'
             level = 'underlay'
             line_width = 2
-
-            lines[data_label] = plot.line( 
-                x = PLOT_LABELS_FOR_DATA_COLS['Timestamp'],
-                y = data_column,
-                line_color = label_colors[data_label + '_color'],
-                line_alpha = 0.7,
-                hover_line_color = label_colors[data_label + '_color'],
-                hover_alpha = 1.0,
-                source = curr_src if PLOT_LABELS_FOR_DATA_COLS[data_label] in curr_src.column_names else pred_src,
-                name = data_label,
-                visible = data_label_no_unit in [plot_select.labels[i] for i in plot_select.active],
-                y_range_name = y_range_name,
-                level = level,
-                line_width = line_width,
-            )
         else:
-            # y_range_name = 'mwt'    # this should be unset
+            y_range_name = 'default'
             level = 'glyph' if 'Actual' in data_label else 'underlay'
             line_width = 3 if 'Actual' in data_label else 2
 
-            lines[data_label] = plot.line( 
-                x = PLOT_LABELS_FOR_DATA_COLS['Timestamp'],
-                y = data_column,
-                line_color = label_colors[data_label + '_color'],
-                line_alpha = 0.7,
-                hover_line_color = label_colors[data_label + '_color'],
-                hover_alpha = 1.0,
-                source = curr_src if PLOT_LABELS_FOR_DATA_COLS[data_label] in curr_src.column_names else pred_src,
-                name = data_label,
-                visible = data_label_no_unit in [plot_select.labels[i] for i in plot_select.active],
-                # y_range_name = y_range_name,
-                level = level,
-                line_width = line_width,
-                )
+        lines[data_label] = plot.line( 
+            x = PLOT_LABELS_FOR_DATA_COLS['Timestamp'],
+            y = data_column,
+            line_color = label_colors[data_label + '_color'],
+            line_alpha = 0.7,
+            hover_line_color = label_colors[data_label + '_color'],
+            hover_alpha = 1.0,
+            source = curr_src if PLOT_LABELS_FOR_DATA_COLS[data_label] in curr_src.column_names else pred_src,
+            name = data_label,
+            visible = data_label_no_unit in [plot_select.labels[i] for i in plot_select.active],
+            y_range_name = y_range_name,
+            level = level,
+            line_width = line_width,
+        )
 
         if 'Field' in data_label:
             plot.extra_y_ranges['mwt'].renderers.append(lines[data_label])
