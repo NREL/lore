@@ -194,10 +194,6 @@ class RealTimeDispatchModel(object):
         self.model.ycsu0 = pe.Param(mutable=True, initialize=params["ycsu0"])  #1 if cycle is in starting up initially, 0 otherwise    [az] this is new.
         self.model.Yu0 = pe.Param(mutable=True, initialize=params["Yu0"])  # duration that cycle has been generating electric power [h]
         self.model.Yd0 = pe.Param(mutable=True, initialize=params["Yd0"])  # duration that cycle has not been generating power (i.e., shut down or in standby mode) [h]
-        self.model.Yu.pprint()
-        self.model.Yd.pprint()
-        self.model.Yu0.pprint()
-        self.model.Yd0.pprint()
         # -------Persistence Parameters ---------
         if self.include["persistence"]:
             self.model.wdot_s_prev  = pe.Param(self.model.T_inputs, mutable=True, initialize=params["wdot_s_prev"])
@@ -358,14 +354,16 @@ class RealTimeDispatchModel(object):
             self.model.ypv = pe.Var(self.model.T, domain=pe.Binary)    #1 if PV is feeding the AC system in t, 0 o.w.
 
         #------ Expressions for existing parameters and variables
-        self.model.s0 =  (
-            (self.model.Cp * (self.model.mass_hs0-self.model.mass_hs_min) * (self.model.T_hs0-self.model.T_cs_min)/60)
+        self.model.s0 = (
+            (self.model.Cp * (self.model.mass_hs0 - self.model.mass_hs_min) * (
+                        self.model.T_hs0 - self.model.T_cs_min) / 60)
             if self.model.t_transition == 0 else
             (self.model.Cp * (self.model.mass_hs[self.model.t_transition] - self.model.mass_hs_min) * (
-                        self.model.T_hs[self.model.t_transition] - self.model.T_cs_min) / 60)
+                    self.model.T_hs[self.model.t_transition] - self.model.T_cs_min) / 60)
         )
+
         self.model.x_calc = lambda t: self.model.Cp * self.model.mdot_c[t] * (self.model.T_hs[t] - self.model.T_cout[t])
-        self.model.s_calc = lambda t: (self.model.Cp/60) * (self.model.mass_hs[t] - self.model.mass_hs_min) * (self.model.T_hs[t] - self.model.T_cs_min)
+        self.model.s_calc = lambda t: (self.model.Cp/3600) * (self.model.mass_hs[t] - self.model.mass_hs_min) * (self.model.T_hs[t] - self.model.T_cs_min)
         self.model.eta1 = lambda t: self.model.wdot[t]/self.model.x_calc[t] if self.model.x_calc[t] == 0 else 0
         self.model.eta2 = lambda t: self.model.wdot[t]/self.model.x[t] if self.model.x[t] == 0 else 0
         # self.model.pr = lambda t: self.model.Lr*(self.model.xr[t] + self.model.Qin[t]*self.model.frsu[t] + self.model.Qrl*self.model.yrsb[t])
@@ -749,7 +747,7 @@ class RealTimeDispatchModel(object):
         #self.model.tes_start_up_con = pe.Constraint(self.model.T, rule=tes_start_up_rule)
         #self.model.maintain_tes_con = pe.Constraint(rule=maintain_tes_rule)  Used?
 
-    def addThemalStorageMassTempConstraints(self):
+    def addThermalStorageMassTempConstraints(self):
         ### mass balance
         def cold_side_mass_rule(model, t):
             if t == model.t_start:
@@ -952,15 +950,17 @@ class RealTimeDispatchModel(object):
             return model.wdot_delta_minus[t] >= model.wdot[t-1] - model.wdot[t]
 
         def cycle_ramp_rate_pos_rule(model, t):
+            if t > model.t_start:
+                return pe.Constraint.Feasible
             return (
                     model.wdot_delta_plus[t] - model.wdot_v_plus[t] <= model.W_delta_plus*model.Delta[t]
-                    + ((model.etaamb[t]/model.eta_des)*model.W_u_plus[t] - model.W_delta_plus*model.Delta[t] * model.ycgb[t])
+                    + ((model.etaamb[t]/model.eta_des)*model.W_u_plus[t] - model.W_delta_plus*model.Delta[t]) * model.ycgb[t]
             )
 
         def cycle_ramp_rate_neg_rule(model, t):
             return (
                     model.wdot_delta_minus[t] - model.wdot_v_minus[t] <= model.W_delta_minus*model.Delta[t]
-                    + ((model.etaamb[t]/model.eta_des)*model.W_u_minus[t] - model.W_delta_minus*model.Delta[t] * model.ycge[t])
+                    + ((model.etaamb[t]/model.eta_des)*model.W_u_minus[t] - model.W_delta_minus*model.Delta[t]) * model.ycge[t]
             )
 
         self.model.change_in_w_pos_con = pe.Constraint(self.model.T, rule=change_in_w_pos_rule)
@@ -976,11 +976,11 @@ class RealTimeDispatchModel(object):
             if t > model.t_transition:
                 return (
                     model.wdot_s[t] - model.wdot_p[t] == (1 - model.etac[t]) * model.wdot[t]
-                    - (self.model.Lr*(self.model.xr[t] + self.model.Qin[t]*self.model.frsu[t] + self.model.Qrl*self.model.yrsb[t])) # model.pr[t]
+                    - (model.Lr*(model.xr[t] + model.Qin[t]*model.frsu[t] + model.Qrl*model.yrsb[t]))  # model.pr[t]
                     - (model.Ehs / model.Delta[t]) * (model.yrsu[t] + 2 * model.yrhsp[t] + model.yrsdp[t])
                     - (model.Wh_track - model.Wh_comm) * (model.yrsu[t] + model.yr[t] + model.yrsb[t]) - model.Wh_comm
                     - model.Wht_part * model.yr[t] - model.Wht_full * (1 - model.yr[t])
-                    - self.model.Lc*(self.model.x[t] + self.model.Qc*self.model.ycsu[t]) #model.pc[t]
+                     - model.Lc*(model.x[t] + model.Qc*model.ycsu[t])  #model.pc[t]
                     - model.Wb * (model.ycsb[t] + model.ycsu[t]) - model.Wc * (1 - model.y[t])
                 )
             return (
@@ -1320,7 +1320,7 @@ class RealTimeDispatchModel(object):
         self.addReceiverTemperatureConstraints()
         self.addReceiverPowerBalanceConstraints()
         self.addTESEnergyBalanceConstraints()
-        self.addThemalStorageMassTempConstraints()
+        self.addThermalStorageMassTempConstraints()
         self.addCycleStartupConstraints()
         self.addPowerCycleThermalInputConstraints()
         self.addPowerCycleMassFlowRateConstraints()
@@ -1340,11 +1340,10 @@ class RealTimeDispatchModel(object):
         if self.include["op_assumptions"]:
             self.addOperatingAssumptions()
 
-            
     def solveModel(self, mipgap=0.005):
         opt = pe.SolverFactory('cbc')
         opt.options["ratioGap"] = mipgap
-        results = opt.solve(self.model, tee=True, keepfiles=True)
+        results = opt.solve(self.model, tee=True, keepfiles=False)
         return results
     
     def printCycleOutput(self):
