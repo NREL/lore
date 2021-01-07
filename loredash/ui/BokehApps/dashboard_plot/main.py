@@ -20,22 +20,39 @@ import datetime
 import re
 
 # Asyncronous access to Django DB
-from ui.models import DashboardDataRTO as dd
+from mediation.models import PysamData as dd
 from threading import Thread
 import queue
 
-TIME_BOXES = {'TODAY': 1,
-              'LAST_6_HOURS': 6,
-              'LAST_12_HOURS': 12,
-              'LAST_24_HOURS': 24,
-              'LAST_48_HOURS': 48
-              }
+TIME_BOXES = {
+    'TODAY': 1,
+    'LAST_6_HOURS': 6,
+    'LAST_12_HOURS': 12,
+    'LAST_24_HOURS': 24,
+    'LAST_48_HOURS': 48
+}
 
-data_labels = list(map(lambda col: col.name, dd._meta.get_fields()))
-current_datetime = datetime.datetime.now().replace(year=2010, second=0) # Eventually the year will be removed once live data is added
+# From the PysamData model table
+PLOT_LABELS_FOR_DATA_COLS = {
+    'Timestamp': 'timestamp',
+    'Actual [MWe]': 'W_grid_no_derate',
+    'Optimal [MWe]': 'W_grid_with_derate',
+    'Scheduled [MWe]': 'W_grid_with_derate',            # W_grid_with_derate is not really the scheduled value
+    'Field Op. Generated [MWt]': 'Q_tower_incident',
+    'Field Op. Available [MWt]': 'Q_field_incident'
+}
 
-label_colors = {col+'_color': cc.glasbey_cool[i] for i,col in enumerate(data_labels[2:])}
+# Corresponds to PLOT_LABELS_FOR_DATA_COLS
+CURRENT_DATA_COLS = [0, 1, 4, 5]
+FUTURE_DATA_COLS = [0, 2, 3]
 
+
+data_labels = list(PLOT_LABELS_FOR_DATA_COLS.keys())
+data_labels_no_units = [re.sub(' \[.*\]$', '', label) for label in data_labels]
+data_columns = list(PLOT_LABELS_FOR_DATA_COLS.values())
+label_colors = {col+'_color': cc.glasbey_cool[i] for i,col in enumerate(data_labels[1:])}
+
+current_datetime = datetime.datetime.now().replace(second=0, microsecond=0)
 lines = {}
 
 def getDashboardData(_range, _values_list, queue):
@@ -59,7 +76,7 @@ def make_dataset(time_box):
     # Current Data
     thread = Thread(target=getDashboardData, 
         args=((start_date, end_date), 
-            ['timestamp', 'actual', 'field_operation_generated', 'field_operation_available'], 
+            [data_columns[i] for i in CURRENT_DATA_COLS],
             q))
     thread.start()
     thread.join()
@@ -69,7 +86,7 @@ def make_dataset(time_box):
     # Future Data
     thread = Thread(target=getDashboardData, 
         args=((start_date, pred_end_date), 
-        ['timestamp', 'optimal', 'scheduled'], 
+        [data_columns[i] for i in FUTURE_DATA_COLS],
         q))
     thread.start()
     thread.join()
@@ -136,50 +153,57 @@ def make_plot(pred_src, curr_src): # (Predictive, Current)
     )
     plot.add_layout(current_time_line)
 
-    for label in data_labels[2:]:
-        legend_label = butils.col_to_title(label)
-        if 'field' in label:
-            lines[label] = plot.line( 
-                x='timestamp',
-                y=label,
-                line_color = label_colors[label+'_color'], 
-                line_alpha = 0.7, 
-                hover_line_color = label_colors[label+'_color'],
+    for data_label, data_column in PLOT_LABELS_FOR_DATA_COLS.items():
+        if 'Timestamp' in data_label: continue
+        data_label_no_unit = re.sub(' \[.*\]$', '', data_label)
+        if 'Field' in data_label:
+            y_range_name = 'mwt'
+            level = 'underlay'
+            line_width = 2
+
+            lines[data_label] = plot.line( 
+                x = PLOT_LABELS_FOR_DATA_COLS['Timestamp'],
+                y = data_column,
+                line_color = label_colors[data_label + '_color'],
+                line_alpha = 0.7,
+                hover_line_color = label_colors[data_label + '_color'],
                 hover_alpha = 1.0,
-                y_range_name='mwt',
-                level='underlay',
-                source = curr_src,
-                line_width=2,
-                visible=label in [butils.title_to_col(plot_select.labels[i]) for i in plot_select.active],
-                name=legend_label
-                )
-
-            legend_item = LegendItem(label=legend_label + " [MWt]", renderers=[lines[label]])
-            legend.items.append(legend_item)
-            plot.extra_y_ranges['mwt'].renderers.append(lines[label])
-
+                source = curr_src if PLOT_LABELS_FOR_DATA_COLS[data_label] in curr_src.column_names else pred_src,
+                name = data_label,
+                visible = data_label_no_unit in [plot_select.labels[i] for i in plot_select.active],
+                y_range_name = y_range_name,
+                level = level,
+                line_width = line_width,
+            )
         else:
-            lines[label] = plot.line( 
-                x='timestamp',
-                y=label,
-                line_color = label_colors[label+'_color'], 
-                line_alpha = 0.7, 
-                hover_line_color = label_colors[label+'_color'],
+            # y_range_name = 'mwt'    # this should be unset
+            level = 'glyph' if 'Actual' in data_label else 'underlay'
+            line_width = 3 if 'Actual' in data_label else 2
+
+            lines[data_label] = plot.line( 
+                x = PLOT_LABELS_FOR_DATA_COLS['Timestamp'],
+                y = data_column,
+                line_color = label_colors[data_label + '_color'],
+                line_alpha = 0.7,
+                hover_line_color = label_colors[data_label + '_color'],
                 hover_alpha = 1.0,
-                source= curr_src if label == 'actual' else pred_src,
-                level='glyph' if label == 'actual' else 'underlay',
-                line_width=3 if label == 'actual' else 2,
-                visible=label in [butils.title_to_col(plot_select.labels[i]) for i in plot_select.active],
-                name=legend_label,
+                source = curr_src if PLOT_LABELS_FOR_DATA_COLS[data_label] in curr_src.column_names else pred_src,
+                name = data_label,
+                visible = data_label_no_unit in [plot_select.labels[i] for i in plot_select.active],
+                # y_range_name = y_range_name,
+                level = level,
+                line_width = line_width,
                 )
 
-            legend_item = LegendItem(label=legend_label + " [MWe]", renderers=[lines[label]])
-            legend.items.append(legend_item)
-            plot.y_range.renderers.append(lines[label])
+        if 'Field' in data_label:
+            plot.extra_y_ranges['mwt'].renderers.append(lines[data_label])
+        else:
+            plot.y_range.renderers.append(lines[data_label])
+        legend_item = LegendItem(label=data_label, renderers=[lines[data_label]])
+        legend.items.append(legend_item)
 
     # styling
     plot = butils.style(plot)
-
     plot.add_layout(legend, 'below')
 
     return plot
@@ -189,8 +213,8 @@ def update_lines(attr, old, new):
     selected_labels = [plot_select.labels[i] for i in plot_select.active]
 
     for label in lines.keys():
-        label_name = butils.col_to_title(label)
-        lines[label].visible = label_name in selected_labels
+        label_name_no_units = re.sub(' \[.*\]$', '', butils.col_to_title(label))
+        lines[label].visible = label_name_no_units in selected_labels
 
 
 def update_points(attr, old, new):
@@ -207,7 +231,7 @@ def live_update():
     ## Do a live update on the minute
     global current_datetime
 
-    new_current_datetime = datetime.datetime.now().replace(year=2010, second=0, microsecond=0) # Until live data is being used
+    new_current_datetime = datetime.datetime.now().replace(second=0, microsecond=0)
 
     q = queue.Queue()
 
@@ -217,7 +241,7 @@ def live_update():
     # Current Data
     thread = Thread(target=getDashboardData, 
         args=((current_datetime, new_current_datetime), 
-            ['timestamp', 'actual', 'field_operation_generated', 'field_operation_available'], 
+            [data_columns[i] for i in CURRENT_DATA_COLS],
             q))
     thread.start()
     thread.join()
@@ -230,7 +254,7 @@ def live_update():
     # Future Data
     thread = Thread(target=getDashboardData, 
         args=((current_datetime, new_current_datetime), 
-        ['timestamp', 'optimal', 'scheduled'],
+        [data_columns[i] for i in FUTURE_DATA_COLS],                    # the last parameter isn't really the 'scheduled'
         q))
     thread.start()
     thread.join()
@@ -253,9 +277,8 @@ time_window = RadioButtonGroup(
 time_window.on_change('active', update_points)
 
 # Create Checkbox Select Group Widget
-labels_list = [butils.col_to_title(label) for label in data_labels[2:]]
 plot_select = CheckboxButtonGroup(
-    labels = labels_list,
+    labels = [label for label in data_labels_no_units if label != 'Timestamp'],
     active = [0],
     width_policy='min',
     height=31
