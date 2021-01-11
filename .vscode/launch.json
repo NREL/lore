@@ -32,19 +32,19 @@
             "type": "python",
             "request": "launch",
             "module": "bokeh",
-            "args": ["serve",
-                "./ui/BokehApps/dashboard_plot"
-                // "./ui/BokehApps/historical_dashboard_plot",
-                // "./ui/BokehApps/historical_solar_forecast",
-                // "./ui/BokehApps/market_plot",
-                // "./ui/BokehApps/solar_plot",
-                // "./ui/BokehApps/estimates_table.py",
-                // "./ui/BokehApps/probability_table.py",
-                // "./ui/BokehApps/sliders.py",
-                // "./ui/BokehApps/__init__.py",
-                // "--allow-websocket-origin 127.0.0.1:8000",
-                // "--address 127.0.0.1",
-                // "--port 5006"
+            // the args are specified as key value pairs, with only one value allowed per key. If you need multiple values for a key,
+            //  you cannot put a space between them or quotes are added around everything which makes it one value (and doesn't work). To
+            //  get around this, you simulate key value pairs by ensuring there's an odd number of values, where the first
+            //  is paired with the true key, and the rest are paired with each other key-value wise, but this appears the same as
+            //  many values to one key.            
+            "args": ["serve", "./ui/BokehApps/dashboard_plot",
+                "./ui/BokehApps/historical_dashboard_plot", "./ui/BokehApps/historical_solar_forecast",
+                "./ui/BokehApps/market_plot", "./ui/BokehApps/solar_plot",
+                "./ui/BokehApps/estimates_table.py", "./ui/BokehApps/probability_table.py",
+                "./ui/BokehApps/sliders.py", "./ui/BokehApps/__init__.py",
+                "--allow-websocket-origin", "127.0.0.1:8000",
+                "--address", "127.0.0.1",
+                "--port", "5006",
             ],
             "cwd": "${workspaceFolder}\\loredash"
         }

@@ -4,6 +4,7 @@ from voluptuous import Schema, Required, Optional, Range, And, Or, DefaultTo, Se
 import random, time, copy, datetime
 from pathlib import Path
 from mediation import pysam_wrap, data_validator, mediator
+import numpy as np
 
 # To run these tests:
 # 1. see: https://pytest-django.readthedocs.io/en/latest/tutorial.html
@@ -21,6 +22,43 @@ from mediation import pysam_wrap, data_validator, mediator
 
 
 # TESTS:
+#---RoundTime------------------------------------------------------------------------------------------------------------
+"""Test RoundTime"""
+def test_roundtime():
+    dt = datetime.datetime(2021, 1, 4, 23, 59, 59, 510000)
+    second_resolution = 1
+    dt_rounded = mediator.RoundTime(dt, second_resolution)
+    assert dt_rounded == datetime.datetime(2021, 1, 5, 0, 0, 0, 0)
+
+    dt = datetime.datetime(2021, 1, 4, 23, 59, 59, 500000)
+    second_resolution = 1
+    dt_rounded = mediator.RoundTime(dt, second_resolution)
+    assert dt_rounded == datetime.datetime(2021, 1, 5, 0, 0, 0, 0)
+
+    dt = datetime.datetime(2021, 1, 4, 23, 59, 59, 490000)
+    second_resolution = 1
+    dt_rounded = mediator.RoundTime(dt, second_resolution)
+    assert dt_rounded == datetime.datetime(2021, 1, 4, 23, 59, 59, 0)
+
+#---PySAM minimum one hours sims-----------------------------------------------------------------------------------------
+"""Ensure returned date is just that requested if less than one hour"""
+def test_pysam_one_hour_minimum():
+    parent_dir = str(Path(__file__).parents[1])
+    weather_file = parent_dir+"/data/daggett_ca_34.865371_-116.783023_psmv3_60_tmy.csv"
+    plant_config = {'design': None, 'location': None}
+    timestep = datetime.timedelta(minutes=5)
+    datetime_start = datetime.datetime(2021, 1, 1, 0, 0, 0)
+    datetime_end = datetime.datetime(2021, 1, 1, 0, 30, 0)
+
+    pysam_wrap1 = pysam_wrap.PysamWrap(plant_config=plant_config, load_defaults=True, weather_file=weather_file,
+                                       enable_preprocessing=False)
+    tech_outputs = pysam_wrap1.Simulate(datetime_start, datetime_end, timestep)
+    T_tes_cold = tech_outputs["T_tes_cold"]
+
+    # Ensure values are not zeros and there are the correct number of entries
+    assert np.isclose(len(T_tes_cold), (datetime_end - datetime_start).total_seconds() / timestep.seconds)
+    unique_temps = list(set(T_tes_cold))
+    assert len(unique_temps) > 1 or not np.isclose(unique_temps[0], 0)
 
 #---PySAM preprocessing vs. not------------------------------------------------------------------------------------------
 def test_pysam_preprocessing_vs_not():
@@ -52,126 +90,126 @@ def test_pysam_preprocessing_vs_not():
 # NOTE: THIS TEST PASSED THE LAST TIME IT WAS RUN, BUT IT IS QUITE SLOW SO IT IS NORMALLY COMMENTED OUT
 # *****************************************************************************************************
 
-def test_pysam_preprocessing():
-    import PySAM_DAOTk.TcsmoltenSalt as t
+# def test_pysam_preprocessing():
+#     import PySAM_DAOTk.TcsmoltenSalt as t
 
-    #  returns a dictionary of design values
-    def run_pysam(weather_file=None, solar_resource_data=None, datetime_start=None, datetime_end=None, timestep=None):
-        tech_model = t.default('MSPTSingleOwner')
-        if weather_file is not None:
-            tech_model.SolarResource.solar_resource_file = weather_file
-        if solar_resource_data is not None:
-            tech_model.SolarResource.solar_resource_data = solar_resource_data
-        if datetime_start is not None and datetime_end is not None and timestep is not None:
-            datetime_newyears = datetime.datetime(datetime_start.year, 1, 1, 0, 0, 0)
-            tech_model.SystemControl.time_start = (datetime_start - datetime_newyears).total_seconds()
-            tech_model.SystemControl.time_stop = (datetime_end - datetime_newyears).total_seconds()
-            tech_model.SystemControl.time_steps_per_hour = 3600 / timestep.seconds
+#     #  returns a dictionary of design values
+#     def run_pysam(weather_file=None, solar_resource_data=None, datetime_start=None, datetime_end=None, timestep=None):
+#         tech_model = t.default('MSPTSingleOwner')
+#         if weather_file is not None:
+#             tech_model.SolarResource.solar_resource_file = weather_file
+#         if solar_resource_data is not None:
+#             tech_model.SolarResource.solar_resource_data = solar_resource_data
+#         if datetime_start is not None and datetime_end is not None and timestep is not None:
+#             datetime_newyears = datetime.datetime(datetime_start.year, 1, 1, 0, 0, 0)
+#             tech_model.SystemControl.time_start = (datetime_start - datetime_newyears).total_seconds()
+#             tech_model.SystemControl.time_stop = (datetime_end - datetime_newyears).total_seconds()
+#             tech_model.SystemControl.time_steps_per_hour = 3600 / timestep.seconds
 
-        tech_model.HeliostatField.field_model_type = 2                             # generate flux maps
+#         tech_model.HeliostatField.field_model_type = 2                             # generate flux maps
 
-        tech_model.execute(1)
+#         tech_model.execute(1)
 
-        design = {
-        'eta_map' : tech_model.Outputs.eta_map_out,
-        'flux_maps' : tech_model.Outputs.flux_maps_for_import,  
-        'A_sf' : tech_model.Outputs.A_sf,
-        'rec_height' : tech_model.TowerAndReceiver.rec_height,
-        'D_rec' : tech_model.TowerAndReceiver.D_rec,
-        'h_tower' : tech_model.TowerAndReceiver.h_tower,
-        }
+#         design = {
+#         'eta_map' : tech_model.Outputs.eta_map_out,
+#         'flux_maps' : tech_model.Outputs.flux_maps_for_import,  
+#         'A_sf' : tech_model.Outputs.A_sf,
+#         'rec_height' : tech_model.TowerAndReceiver.rec_height,
+#         'D_rec' : tech_model.TowerAndReceiver.D_rec,
+#         'h_tower' : tech_model.TowerAndReceiver.h_tower,
+#         }
 
-        return design
+#         return design
 
-    parent_dir = str(Path(__file__).parents[1])
+#     parent_dir = str(Path(__file__).parents[1])
 
-    #---test 1--------
-    weather_file = parent_dir+"/data/daggett_ca_34.865371_-116.783023_psmv3_60_tmy.csv"
-    datetime_start = datetime.datetime(2020, 1, 1, 0, 0, 0)
-    datetime_end = datetime.datetime(2020, 1, 1, 0, 0, 0)
-    timestep = datetime.timedelta(hours=1)
-    design_vals1 = run_pysam(weather_file=weather_file, datetime_start=datetime_start, datetime_end=datetime_end, timestep=timestep)
+#     #---test 1--------
+#     weather_file = parent_dir+"/data/daggett_ca_34.865371_-116.783023_psmv3_60_tmy.csv"
+#     datetime_start = datetime.datetime(2020, 1, 1, 0, 0, 0)
+#     datetime_end = datetime.datetime(2020, 1, 1, 0, 0, 0)
+#     timestep = datetime.timedelta(hours=1)
+#     design_vals1 = run_pysam(weather_file=weather_file, datetime_start=datetime_start, datetime_end=datetime_end, timestep=timestep)
 
-    #---test 2--------
-    weather_file = parent_dir+"/data/daggett_ca_34.865371_-116.783023_psmv3_60_tmy.csv"
-    design_vals2 = run_pysam(weather_file=weather_file)     # whole year simulation
+#     #---test 2--------
+#     weather_file = parent_dir+"/data/daggett_ca_34.865371_-116.783023_psmv3_60_tmy.csv"
+#     design_vals2 = run_pysam(weather_file=weather_file)     # whole year simulation
 
-    assert design_vals2['eta_map'] == design_vals1['eta_map']
-    assert design_vals2['flux_maps'] == design_vals1['flux_maps']
-    assert design_vals2['A_sf'] == design_vals1['A_sf']
-    assert design_vals2['rec_height'] == design_vals1['rec_height']
-    assert design_vals2['D_rec'] == design_vals1['D_rec']
-    assert design_vals2['h_tower'] == design_vals1['h_tower']
+#     assert design_vals2['eta_map'] == design_vals1['eta_map']
+#     assert design_vals2['flux_maps'] == design_vals1['flux_maps']
+#     assert design_vals2['A_sf'] == design_vals1['A_sf']
+#     assert design_vals2['rec_height'] == design_vals1['rec_height']
+#     assert design_vals2['D_rec'] == design_vals1['D_rec']
+#     assert design_vals2['h_tower'] == design_vals1['h_tower']
 
-    #---test 3--------
-    solar_resource_data = {
-        # Corresponds to Daggett, CA
-        'tz':       -8,         # [hr]      timezone
-        'elev':     561.,       # [m]       elevation
-        'lat':      34.85,      # [deg]     latitude
-        'lon':      -116.78,    # [deg]     longitude
-        'year':     [2018],     # [-]
-        'month':    [1],        # [-]
-        'day':      [1],        # [-]
-        'hour':     [0],        # [hr]
-        'minute':   [0],        # [minute]
-        'dn':       [0.],       # [W/m2]    DNI
-        'df':       [0.],       # [W/m2]    DHI
-        'gh':       [0.],       # [W/m2]    GHI
-        'wspd':     [3.4],      # [m/s]     windspeed
-        'tdry':     [-1.],      # [C]       ambient dry bulb temperature
-    }
-    # Need to pad data so it is 8760 long
-    N_to_pad = 8760 - len(solar_resource_data['month']) % 8760
-    padding = [0]*N_to_pad
-    {k:(v.extend(padding) if isinstance(v, list) else v) for (k,v) in solar_resource_data.items()}
+#     #---test 3--------
+#     solar_resource_data = {
+#         # Corresponds to Daggett, CA
+#         'tz':       -8,         # [hr]      timezone
+#         'elev':     561.,       # [m]       elevation
+#         'lat':      34.85,      # [deg]     latitude
+#         'lon':      -116.78,    # [deg]     longitude
+#         'year':     [2018],     # [-]
+#         'month':    [1],        # [-]
+#         'day':      [1],        # [-]
+#         'hour':     [0],        # [hr]
+#         'minute':   [0],        # [minute]
+#         'dn':       [0.],       # [W/m2]    DNI
+#         'df':       [0.],       # [W/m2]    DHI
+#         'gh':       [0.],       # [W/m2]    GHI
+#         'wspd':     [3.4],      # [m/s]     windspeed
+#         'tdry':     [-1.],      # [C]       ambient dry bulb temperature
+#     }
+#     # Need to pad data so it is 8760 long
+#     N_to_pad = 8760 - len(solar_resource_data['month']) % 8760
+#     padding = [0]*N_to_pad
+#     {k:(v.extend(padding) if isinstance(v, list) else v) for (k,v) in solar_resource_data.items()}
 
-    datetime_start = datetime.datetime(2018, 1, 1, 0, 0, 0)
-    datetime_end = datetime.datetime(2018, 1, 1, 0, 0, 0)
-    timestep = datetime.timedelta(hours=1)
-    design_vals3 = run_pysam(solar_resource_data=solar_resource_data, datetime_start=datetime_start, datetime_end=datetime_end, timestep=timestep)
+#     datetime_start = datetime.datetime(2018, 1, 1, 0, 0, 0)
+#     datetime_end = datetime.datetime(2018, 1, 1, 0, 0, 0)
+#     timestep = datetime.timedelta(hours=1)
+#     design_vals3 = run_pysam(solar_resource_data=solar_resource_data, datetime_start=datetime_start, datetime_end=datetime_end, timestep=timestep)
 
-    assert design_vals3['eta_map'] == design_vals1['eta_map']
-    assert design_vals3['flux_maps'] == design_vals1['flux_maps']
-    assert design_vals3['A_sf'] == design_vals1['A_sf']
-    assert design_vals3['rec_height'] == design_vals1['rec_height']
-    assert design_vals3['D_rec'] == design_vals1['D_rec']
-    assert design_vals3['h_tower'] == design_vals1['h_tower']
+#     assert design_vals3['eta_map'] == design_vals1['eta_map']
+#     assert design_vals3['flux_maps'] == design_vals1['flux_maps']
+#     assert design_vals3['A_sf'] == design_vals1['A_sf']
+#     assert design_vals3['rec_height'] == design_vals1['rec_height']
+#     assert design_vals3['D_rec'] == design_vals1['D_rec']
+#     assert design_vals3['h_tower'] == design_vals1['h_tower']
 
-    #---test 4--------
-    solar_resource_data = {
-        # Corresponds to Tucson, AZ
-        'tz':       -7,         # [hr]      timezone
-        'elev':     730.,       # [m]       elevation
-        'lat':      32.21,      # [deg]     latitude
-        'lon':      -110.98,    # [deg]     longitude
-        'year':     [2018],     # [-]
-        'month':    [1],        # [-]
-        'day':      [1],        # [-]
-        'hour':     [0],        # [hr]
-        'minute':   [0],        # [minute]
-        'dn':       [0.],       # [W/m2]    DNI
-        'df':       [0.],       # [W/m2]    DHI
-        'gh':       [0.],       # [W/m2]    GHI
-        'wspd':     [2.0],      # [m/s]     windspeed
-        'tdry':     [7.3],      # [C]       ambient dry bulb temperature
-    }
-    # Need to pad data so it is 8760 long
-    N_to_pad = 8760 - len(solar_resource_data['month']) % 8760
-    padding = [0]*N_to_pad
-    {k:(v.extend(padding) if isinstance(v, list) else v) for (k,v) in solar_resource_data.items()}
+#     #---test 4--------
+#     solar_resource_data = {
+#         # Corresponds to Tucson, AZ
+#         'tz':       -7,         # [hr]      timezone
+#         'elev':     730.,       # [m]       elevation
+#         'lat':      32.21,      # [deg]     latitude
+#         'lon':      -110.98,    # [deg]     longitude
+#         'year':     [2018],     # [-]
+#         'month':    [1],        # [-]
+#         'day':      [1],        # [-]
+#         'hour':     [0],        # [hr]
+#         'minute':   [0],        # [minute]
+#         'dn':       [0.],       # [W/m2]    DNI
+#         'df':       [0.],       # [W/m2]    DHI
+#         'gh':       [0.],       # [W/m2]    GHI
+#         'wspd':     [2.0],      # [m/s]     windspeed
+#         'tdry':     [7.3],      # [C]       ambient dry bulb temperature
+#     }
+#     # Need to pad data so it is 8760 long
+#     N_to_pad = 8760 - len(solar_resource_data['month']) % 8760
+#     padding = [0]*N_to_pad
+#     {k:(v.extend(padding) if isinstance(v, list) else v) for (k,v) in solar_resource_data.items()}
 
-    datetime_start = datetime.datetime(2018, 1, 1, 0, 0, 0)
-    datetime_end = datetime.datetime(2018, 1, 1, 0, 0, 0)
-    timestep = datetime.timedelta(hours=1)
-    design_vals4 = run_pysam(solar_resource_data=solar_resource_data, datetime_start=datetime_start, datetime_end=datetime_end, timestep=timestep)
+#     datetime_start = datetime.datetime(2018, 1, 1, 0, 0, 0)
+#     datetime_end = datetime.datetime(2018, 1, 1, 0, 0, 0)
+#     timestep = datetime.timedelta(hours=1)
+#     design_vals4 = run_pysam(solar_resource_data=solar_resource_data, datetime_start=datetime_start, datetime_end=datetime_end, timestep=timestep)
 
-    assert design_vals4['eta_map'] != design_vals3['eta_map']           # NOT EQUALS!
-    assert design_vals4['flux_maps'] != design_vals3['flux_maps']       # NOT EQUALS!
-    assert design_vals4['A_sf'] == design_vals3['A_sf']
-    assert design_vals4['rec_height'] == design_vals3['rec_height']
-    assert design_vals4['D_rec'] == design_vals3['D_rec']
-    assert design_vals4['h_tower'] == design_vals3['h_tower']
+#     assert design_vals4['eta_map'] != design_vals3['eta_map']           # NOT EQUALS!
+#     assert design_vals4['flux_maps'] != design_vals3['flux_maps']       # NOT EQUALS!
+#     assert design_vals4['A_sf'] == design_vals3['A_sf']
+#     assert design_vals4['rec_height'] == design_vals3['rec_height']
+#     assert design_vals4['D_rec'] == design_vals3['D_rec']
+#     assert design_vals4['h_tower'] == design_vals3['h_tower']
 
 #---/PySAM preprocessing-------------------------------------------------------------------------------------------------
 

@@ -22,29 +22,42 @@ import re
 from scipy.signal import savgol_filter
 
 # Asyncronous access to Django DB
-from ui.models import ForecastsSolarData as fsd
+from ui.models import ForecastsSolarData as fsd         # TODO: replace ForecastsMarketData with the real data model table
 from threading import Thread
 import queue
 
-TIME_BOXES = {'NEXT_6_HOURS': 6,
-              'NEXT_12_HOURS': 12,
-              'NEXT_24_HOURS': 24,
-              'NEXT_48_HOURS': 48
-              }
+TIME_BOXES = {
+    'NEXT_6_HOURS': 6,
+    'NEXT_12_HOURS': 12,
+    'NEXT_24_HOURS': 24,
+    'NEXT_48_HOURS': 48
+}
+
+TIMESTAMP = 'Timestamp'
+
+# TODO: Replace this with the mapping for the real data model table
+PLOT_LABELS_FOR_DATA_COLS = {
+    TIMESTAMP: 'timestamp',
+}
 
 data_labels = list(map(lambda col: col.name, fsd._meta.get_fields()))
-current_datetime = datetime.datetime.now().replace(year=2010, second=0) # Eventually the year will be removed once live data is added
+current_datetime = datetime.datetime.now().replace(year=2010, second=0)     # TODO: swap year for microsecond
 
 plus_minus_regx = re.compile('.*(?<!_minus)(?<!_plus)$')
+# TODO: replace this with a dictionary of specified plot labels and data cols (see PLOT_LABELS_FOR_DATA_COLS)
 base_data_labels = list(filter(plus_minus_regx.search, data_labels))
-label_colors = {col+'_color': cc.fire[(i+1)*40] for i,col in enumerate(base_data_labels[2:])}
+label_colors = {col+'_color': cc.fire[(i+1)*40] for i,col in enumerate(base_data_labels[2:])}   # TODO: change 2: to 1:
 lines = {}
 bands = {}
 
 def getForecastSolarData(_range, queue):
+    # TODO: replace data_labels[1:] with the labels, including the timestamp
     queryset = fsd.objects.filter(timestamp__range=_range).values_list(*(data_labels[1:]))
     df = pd.DataFrame.from_records(queryset)
-    df.columns = data_labels[1:]
+    if not df.empty:
+        df.columns = data_labels[1:]     # TODO: do the same here
+    else:
+        df = pd.DataFrame(columns=data_labels[1:])       # TODO: do the same here
     queue.put(df)
 
 def make_dataset(time_box, distribution):
@@ -132,7 +145,7 @@ def make_plot(src): # Takes in a ColumnDataSource
 
         if len(list(filter(lower_upper_regex.search, data_labels))):
             bands[label] = Band(
-                base='timestamp',
+                base=PLOT_LABELS_FOR_DATA_COLS[TIMESTAMP],
                 lower= label + '_lower',
                 upper= label + '_upper',
                 source=src,
@@ -145,31 +158,19 @@ def make_plot(src): # Takes in a ColumnDataSource
                 name = legend_label,
                 )
             plot.add_layout(bands[label])
-            lines[label] = plot.line( 
-                x='timestamp',
-                y=label,
-                line_color = label_colors[label+'_color'], 
-                line_alpha = 1.0,
-                line_width=3,
-                source=src,
-                visible = label in [butils.title_to_col(plot_select.labels[i]) for i in plot_select.active],
-                name = legend_label, 
-                )
-            legend_item = LegendItem(label=legend_label, renderers=[lines[label]])
-            legend.items.append(legend_item)
-        else:
-            lines[label] = plot.line( 
-                x='timestamp',
-                y=label,
-                line_color = label_colors[label+'_color'], 
-                line_alpha = 1.0,
-                line_width=3,
-                source=src,
-                visible = label in [butils.title_to_col(plot_select.labels[i]) for i in plot_select.active],
-                name = legend_label,
-                )
-            legend_item = LegendItem(label=legend_label, renderers=[lines[label]])
-            legend.items.append(legend_item)
+
+        lines[label] = plot.line( 
+            x=PLOT_LABELS_FOR_DATA_COLS[TIMESTAMP],
+            y=label,
+            line_color = label_colors[label+'_color'], 
+            line_alpha = 1.0,
+            line_width=3,
+            source=src,
+            visible = label in [butils.title_to_col(plot_select.labels[i]) for i in plot_select.active],
+            name = legend_label,
+            )
+        legend_item = LegendItem(label=legend_label, renderers=[lines[label]])
+        legend.items.append(legend_item)
 
     # styling
     plot = butils.style(plot)
@@ -204,7 +205,7 @@ def live_update():
     ## Do a live update on the minute
     global current_datetime
 
-    new_current_datetime = datetime.datetime.now().replace(year=2010, second=0) # Until live data is being used
+    new_current_datetime = datetime.datetime.now().replace(year=2010, second=0) # TODO: replace year with microseconds
 
     q = queue.Queue()
     
@@ -247,7 +248,7 @@ time_window = Select(
 time_window.on_change('value', update_points)
 
 # Create Checkbox Select Group Widget
-labels_list = [butils.col_to_title_upper(label) for label in base_data_labels[2:]]
+labels_list = [butils.col_to_title_upper(label) for label in base_data_labels[2:]]      # TODO: replace base_data_labels[2:]
 plot_select = CheckboxButtonGroup(
     labels = labels_list,
     active = [0],

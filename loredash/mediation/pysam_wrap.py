@@ -11,6 +11,7 @@ from mediation import data_validator
 class PysamWrap:
     parent_dir = str(Path(__file__).parents[1])
     design_path = parent_dir+"/data/field_design.json"
+    kMinOneHourSims = True        # circumvents SSC bug
 
     def __init__(self, plant_config, model_name="MSPTSingleOwner", load_defaults=True, weather_file=None,
                  enable_preprocessing=True, preprocess_on_init=True):
@@ -51,6 +52,17 @@ class PysamWrap:
             self._SaveDesign()
 
     def Simulate(self, datetime_start, datetime_end, timestep, plant_state=None, weather_dataframe=None, solar_resource_data=None):
+        """
+        datetime_start = beginning of first timestep
+        datetime_end = end of last timestep
+            (if there is minimum 1-hr simulation duration and datetime_end is less than one hour after datetime_start,
+            datetime_end will be set to exactly 1 hour after datetime_start:
+            e.g., datetime_end = 18:40 if datetime_start = 17:40)
+
+        returns tech_outputs, where:
+            tech_outputs.time_hr = end of each timestep, given as hours since start of current year
+        """
+
         if not self._DesignIsSet() or self.enable_preprocessing == False:
             self.tech_model.HeliostatField.field_model_type = 2
         else:
@@ -63,20 +75,27 @@ class PysamWrap:
         result = self.SetWeatherData(weather_dataframe=weather_dataframe, solar_resource_data=solar_resource_data)
 
         # set times:
+        if self.kMinOneHourSims == True:
+            datetime_end_original = datetime_end
+            datetime_end = max(datetime_end, datetime_start + datetime.timedelta(hours=1))
         datetime_newyears = datetime.datetime(datetime_start.year, 1, 1, 0, 0, 0)
-        self.tech_model.SystemControl.time_start = (datetime_start - datetime_newyears).total_seconds()
-        self.tech_model.SystemControl.time_stop = (datetime_end - datetime_newyears).total_seconds()
+        self.tech_model.SystemControl.time_start = (datetime_start - datetime_newyears).total_seconds()     # time at beginning of first timestep, as
+                                                                                                            #  seconds since start of current year
+        self.tech_model.SystemControl.time_stop = (datetime_end - datetime_newyears).total_seconds()        # time at end of last timestep, as
+                                                                                                            #  seconds since start of current year
         self.tech_model.SystemControl.time_steps_per_hour = 3600 / timestep.seconds
 
         self.tech_model.execute(1)
         tech_outputs = self.tech_model.Outputs.export()
         # tech_attributes = self.tech_model.export()
 
-        # Strip trailing zeros from outputs
+        # Strip trailing zeros or excess data from outputs
         times = {'time_start': self.tech_model.SystemControl.time_start,
                  'time_stop': self.tech_model.SystemControl.time_stop,
                  'time_steps_per_hour': self.tech_model.SystemControl.time_steps_per_hour}
-        tech_outputs = self._StripTrailingZeros(tech_outputs, times)
+        if self.kMinOneHourSims == True:
+            times['time_stop'] = (datetime_end_original - datetime_newyears).total_seconds()
+        tech_outputs = self._RemoveDataPadding(tech_outputs, times)
 
         return tech_outputs
 
@@ -220,7 +239,7 @@ class PysamWrap:
 
         if 'strip_zeros' in kwargs and kwargs.get('strip_zeros') == True:
             try:
-                self._StripTrailingZeros(model_outputs, kwargs.get('times'))
+                self._RemoveDataPadding(model_outputs, kwargs.get('times'))
             except:
                 print("Trailing zeroes could not be stripped. Plant state may be invalid.")
 
@@ -252,7 +271,7 @@ class PysamWrap:
         else:
             return True
 
-    def _StripTrailingZeros(self, model_outputs, times):
+    def _RemoveDataPadding(self, model_outputs, times):
         points_per_year = int(times['time_steps_per_hour'] * 24 * 365)
         points_in_simulation = int((times['time_stop']-times['time_start'])/ \
             3600 * times['time_steps_per_hour'])
