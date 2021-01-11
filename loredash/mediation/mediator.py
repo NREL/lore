@@ -199,7 +199,8 @@ class Mediator:
                 raise IntegrityError(error_string)      # just re-raise the exception for now
         except Exception as err:
             raise(err)
-    
+			
+
     def GetWeatherDataframe(self, datetime_start, datetime_end, **kwargs):
         """put the weather forecast call here instead"""
         tmy3_path = kwargs.get('tmy3_path') if 'tmy3_path' in kwargs else None
