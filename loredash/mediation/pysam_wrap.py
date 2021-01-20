@@ -42,7 +42,7 @@ class PysamWrap:
             solar_resource_data = None
 
         self.tech_model.HeliostatField.field_model_type = 2                             # generate flux maps
-        datetime_start = datetime.datetime(2018, 1, 1, 0, 0, 0)         
+        datetime_start = datetime.datetime(2018, 1, 1, 0, 0, 0)
         datetime_end = datetime_start                                                   # run for just first hour of year
         timestep = datetime.timedelta(hours=1)
         tech_outputs = self.Simulate(datetime_start, datetime_end, timestep, solar_resource_data=solar_resource_data)
@@ -291,7 +291,7 @@ class PysamWrap:
         try:
             design = {
                 'eta_map' : self.tech_model.Outputs.eta_map_out,
-                'flux_maps' : self.tech_model.Outputs.flux_maps_for_import,  
+                'flux_maps' : self.tech_model.Outputs.flux_maps_for_import,
                 'A_sf' : self.tech_model.Outputs.A_sf,
                 'rec_height' : self.tech_model.TowerAndReceiver.rec_height,
                 'D_rec' : self.tech_model.TowerAndReceiver.D_rec,
