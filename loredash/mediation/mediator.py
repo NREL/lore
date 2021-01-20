@@ -35,7 +35,7 @@ class Mediator:
                                                load_defaults=True, weather_file=None,
                                                enable_preprocessing=self.preprocess_pysam,
                                                preprocess_on_init=self.preprocess_pysam_on_init)
-    
+
     def RunOnce(self, datetime_start=None, datetime_end=None):
         """
         Get data from external plant and weather interfaces and run
@@ -94,7 +94,7 @@ class Mediator:
         else:
             datetime_start = RoundMinutes(datetime_now, 'down', self.simulation_timestep.seconds/60)    # the start of the time interval currently in
             datetime_end = datetime_start + self.simulation_timestep        # disregard a given datetime_end if there is no given datetime_start
-        
+
         print("Datetime now = {datetime}".format(datetime=datetime_now))
         print("Start datetime = {datetime}".format(datetime=datetime_start))
         print("End datetime = {datetime}".format(datetime=datetime_end))
@@ -102,7 +102,7 @@ class Mediator:
         # a. Set weather values and plant state for PySAM
         weather_dataframe = self.GetWeatherDataframe(datetime_start, datetime_end, tmy3_path=self.weather_file)
         plant_state = self.GetPlantState()
-        
+
         # b. Call PySAM using inputs
         tech_outputs = self.pysam_wrap.Simulate(datetime_start, datetime_end, self.simulation_timestep, plant_state, weather_dataframe=weather_dataframe)
         print("Annual Energy [kWh]= ", tech_outputs["annual_energy"])
@@ -128,7 +128,7 @@ class Mediator:
     def RunContinuously(self, update_interval=5):
         """Continuously get data from external plant and weather interfaces and run
         entire set of submodels, saving data to database
-        
+
         update_interval -- [s] how frequently the interfaces and submodels are polled and run, respectively
         """
         looping_call = LoopingCall(self.RunOnce)
@@ -174,7 +174,6 @@ class Mediator:
             )
             for i in range(n_records)
         ]
-
         try:
             models.PysamData.objects.bulk_create(instances, ignore_conflicts=True)
             # If ignore_conflicts=False and if any to-be-added records are already in the database, as indicated by the timestamp,
@@ -185,6 +184,14 @@ class Mediator:
             error_string = format(err)
             if error_string == "UNIQUE constraint failed: mediation_pysamdata.timestamp":
                 raise IntegrityError(error_string)      # just re-raise the exception for now
+        except Exception as err:
+            error_string = format(err)
+            if error_string != "no such table: mediation_pysamdata":
+                raise(err)
+            else:
+                # Do nothing. The table hasn't been created yet because we are
+                # running this for the first time.
+                pass
 
     def GetWeatherDataframe(self, datetime_start, datetime_end, **kwargs):
         """put the weather forecast call here instead"""
