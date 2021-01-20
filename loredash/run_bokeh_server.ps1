@@ -5,11 +5,11 @@
 #$exclude_arr = @('theme', 'bokeh_utils')
 
 #$bokeh_app_dirs = Get-ChildItem -Name '.\' -Directory | Where-Object { $_ -notin $exclude_arr}
-#$bokeh_app_files = Get-ChildItem -Name '*.py' -File 
+#$bokeh_app_files = Get-ChildItem -Name '*.py' -File
 
 #python -m bokeh serve $bokeh_app_dirs $bokeh_app_files --allow-websocket-origin $websocket --address $address
 
-conda activate loredash
+# conda activate loredash
 
 python -m bokeh serve `
     ./ui/BokehApps/dashboard_plot `
