@@ -106,7 +106,7 @@ class Forecast:
             self.plant_location.longitude,
             current_time,
             current_time + pandas.Timedelta(hours = 48),
-            how = 'campbell_norman',
+            how = 'clearsky_scaling',
         )[['dni']]
         data.index = pandas.to_datetime(data.index)
         # Map the values to a normalized dni/clear-sky ratio space to allow us
