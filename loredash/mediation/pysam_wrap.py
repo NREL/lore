@@ -35,7 +35,9 @@ class PysamWrap:
 
     def PreProcess(self):
         if not self._WeatherFileIsSet():
-            solar_resource_data = PysamWrap.GetSolarResourceDataTemplate(plant_location=self.plant_config.location)
+            solar_resource_data = PysamWrap.GetSolarResourceDataTemplate(
+                plant_location=self.plant_config['location']
+            )
         else:
             solar_resource_data = None
 
