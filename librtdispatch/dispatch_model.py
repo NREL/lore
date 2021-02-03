@@ -1480,14 +1480,16 @@ class RealTimeDispatchModel(object):
         if self.include["signal"]:
             self.addGridSignalConstraints()
 
-    def solveModel(self, mipgap=0.001):
-        # opt = pe.SolverFactory('cbc')
-        # opt.options["ratioGap"] = mipgap
-        # opt.options["seconds"] = 30
-        opt = pe.SolverFactory('cplex')
-        opt.options["mipgap"] = mipgap
-        opt.options["timelimit"] = 60
-        results = opt.solve(self.model, tee=False, keepfiles=False)
+    def solveModel(self, mipgap=0.001, solver='cbc', timelimit=60, tee=False, keepfiles=False):
+        if solver == 'cbc':
+            opt = pe.SolverFactory('cbc')
+            opt.options["ratioGap"] = mipgap
+            opt.options["seconds"] = timelimit
+        elif solver == 'cplex':
+            opt = pe.SolverFactory('cplex')
+            opt.options["mipgap"] = mipgap
+            opt.options["timelimit"] = timelimit
+        results = opt.solve(self.model, tee=tee, keepfiles=keepfiles)
         return results
     
     def printCycleOutput(self):
