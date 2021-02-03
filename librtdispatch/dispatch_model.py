@@ -8,6 +8,11 @@ import pyomo.environ as pe
 
 class RealTimeDispatchModel(object):
     def __init__(self, params, include={"pv":False,"battery":False,"persistence":False}):
+        """
+        Generates a concrete instance of a pyomo model for CSP dispatch optimization.
+        :param params: DispatchParams object containing inputs, taken from SSC or converted from files
+        :param include: settings of optional add-ons, such as battery, PV and operational assumptions
+        """
         self.model = pe.ConcreteModel()
         self.include = include
         self.generateParams(params)
@@ -16,44 +21,59 @@ class RealTimeDispatchModel(object):
         self.generateConstraints()
 
     def generateParams(self,params):
+        """
+
+        :param params: DispatchParams object containing inputs, taken from SSC or converted from files
+        :return:
+        """
         ### Sets and Indices ###
         # Time indexing
-        self.model.num_periods = pe.Param(initialize=params["T"])                 #Number of time steps in time-indexed params
-        self.model.t_start = pe.Param(initialize=params["start"])            #First index of the problem
-        self.model.t_end = pe.Param(initialize=params["stop"])               #Last index of the problem
-        self.model.t_transition = pe.Param(initialize=params["transition"])  #Index of the transition between models (last index of non-linear formulation)
-        self.model.T = pe.Set(initialize=range(params["start"], params["stop"]+1))  #Set of time steps in the problem
-        self.model.T_nl = pe.Set(initialize=range(params["start"], params["transition"]+1))  #Set of periods of the non-linear formulation
-        self.model.T_l = pe.Set(initialize=range(params["transition"]+1, params["stop"]+1))  #Set of periods of the linear formulation
-        self.model.T_inputs = pe.Set(initialize=range(1, params["T"]+1))
+        self.model.num_periods = pe.Param(initialize=params.T)                 #Number of time steps in time-indexed params
+        self.model.t_start = pe.Param(initialize=params.start)            #First index of the problem
+        self.model.t_end = pe.Param(initialize=params.stop)               #Last index of the problem
+        self.model.t_transition = pe.Param(initialize=params.transition)  #Index of the transition between models (last index of non-linear formulation)
+        self.model.T = pe.Set(initialize=range(params.start, params.stop+1))  #Set of time steps in the problem
+        self.model.T_nl = pe.Set(initialize=range(params.start, params.transition+1))  #Set of periods of the non-linear formulation
+        self.model.T_l = pe.Set(initialize=range(params.transition+1, params.stop+1))  #Set of periods of the linear formulation
+        self.model.T_inputs = pe.Set(initialize=range(1, params.T+1))
+        # Hours for signal
+        if self.include["signal"]:
+            self.model.num_signal_hours = pe.Param(initialize=params.num_signal_hours)
+            self.model.H = pe.Set(initialize=range(1, params.num_signal_hours+1))
+            def T_h_init(model, h):
+                for t in model.T:
+                    if (h-1)+1e-10 < params.Delta_e[t] <= h:
+                        yield t
+            self.model.T_h = pe.Set(self.model.H, initialize=T_h_init)
+
         # Piecewise-linear indexing
-        self.model.nc = pe.Param(initialize=params["nc"])     # Number of linear regions in htf pumping power through the cycle regression [-]
-        self.model.htf_segments = pe.Set(initialize=range(1, params["nc"]+1))
-        self.model.nfw = pe.Param(initialize=params["nfw"])   # Number of linear regions in feed water pumping power through the cycle regression [-]
-        self.model.fw_segments = pe.Set(initialize=range(1, params["nfw"] + 1))
+        self.model.nc = pe.Param(initialize=params.nc)     # Number of linear regions in htf pumping power through the cycle regression [-]
+        self.model.htf_segments = pe.Set(initialize=range(1, params.nc+1))
+        self.model.nfw = pe.Param(initialize=params.nfw)   # Number of linear regions in feed water pumping power through the cycle regression [-]
+        self.model.fw_segments = pe.Set(initialize=range(1, params.nfw + 1))
 
         #------- Piecewise-linear indexed parameters ------------
-        self.model.Pc = pe.Param(self.model.htf_segments, initialize=params["Pc"])  #Slope of the htf pumping power through the cycle regression region i [kWe / kg/s]
-        self.model.Bc = pe.Param(self.model.htf_segments, initialize=params["Bc"])  #Intercept of the htf pumping power through the cycle regression region i [kWe]
-        self.model.Pfw = pe.Param(self.model.fw_segments, initialize=params["Pfw"])  #Slope of the feed water pumping power through the cycle regression region i [kWe / kg/s]
-        self.model.Bfw = pe.Param(self.model.fw_segments, initialize=params["Bfw"])  #Intercept of the feed water pumping power through the cycle regression region i [kWe]
+        self.model.Pc = pe.Param(self.model.htf_segments, initialize=params.Pc)  #Slope of the htf pumping power through the cycle regression region i [kWe / kg/s]
+        self.model.Bc = pe.Param(self.model.htf_segments, initialize=params.Bc)  #Intercept of the htf pumping power through the cycle regression region i [kWe]
+        self.model.Pfw = pe.Param(self.model.fw_segments, initialize=params.Pfw)  #Slope of the feed water pumping power through the cycle regression region i [kWe / kg/s]
+        self.model.Bfw = pe.Param(self.model.fw_segments, initialize=params.Bfw)  #Intercept of the feed water pumping power through the cycle regression region i [kWe]
 
         #------- Time-indexed parameters --------------
-        self.model.Delta = pe.Param(self.model.T_inputs, mutable=False, initialize=params["Delta"])          #duration of period t
-        self.model.Delta_e = pe.Param(self.model.T_inputs, mutable=False, initialize=params["Delta_e"])       #cumulative time elapsed at end of period t
+        self.model.Delta = pe.Param(self.model.T_inputs, mutable=False, initialize=params.Delta)          #duration of period t
+        self.model.Delta_e = pe.Param(self.model.T_inputs, mutable=False, initialize=params.Delta_e)       #cumulative time elapsed at end of period t
         ### Time-series CSP Parameters ##
-        # self.model.delta_rs = pe.Param(self.model.T_inputs, mutable=True, initialize=params["delta_rs"]) # \delta^{rs}_{t}: Estimated fraction of period $t$ required for receiver start-up [-]
-        # self.model.delta_cs = pe.Param(self.model.T_inputs, mutable=True, initialize=params["delta_cs"])  # \delta^{cs}_{t}: Estimated fraction of period $t$ required for cycle start-up [-]
-        self.model.D = pe.Param(self.model.T_inputs, mutable=True, initialize=params["D"]) #D_{t}: Time-weighted discount factor in period $t$ [-]
-        self.model.etaamb = pe.Param(self.model.T_inputs, mutable=True, initialize=params["etaamb"])  #\eta^{amb}_{t}: Cycle efficiency ambient temperature adjustment factor in period $t$ [-]
-        self.model.etac = pe.Param(self.model.T_inputs, mutable=True, initialize=params["etac"])   #\eta^{c}_{t}:   Normalized condenser parasitic loss in period $t$ [-]
-        self.model.F = pe.Param(self.model.T_inputs, mutable=True, initialize=params["F"])   ##F_{t}: Ratio of actual to clear-sky CSP heliostat field power in period $t$ [-]
-        self.model.P = pe.Param(self.model.T_inputs, mutable=True, initialize=params["P"])       #P_{t}: Electricity sales price in period $t$ [\$/kWh\sse]
-        self.model.Qin = pe.Param(self.model.T_inputs, mutable=True, initialize=params["Qin"])    #Q^{in}_{t}: Available thermal power generated by the CSP heliostat field in period $t$ [kW\sst]
-        # self.model.Qc = pe.Param(self.model.T_inputs, mutable=True, initialize=params["Qc"])     #Q^{c}_{t}: Allowable power per period for cycle start-up in period $t$ [kW\sst]
-        self.model.Wdotnet = pe.Param(self.model.T_inputs, mutable=True, initialize=params["Wdotnet"])  #\dot{W}^{net}_{t}: Net grid transmission upper limit in period $t$ [kW\sse]
-        self.model.W_u_plus = pe.Param(self.model.T_inputs, mutable=True, initialize=params["W_u_plus"])  #W^{u+}_{t}: Maximum power production when starting generation in period $t$  [kW\sse]
-        self.model.W_u_minus = pe.Param(self.model.T_inputs, mutable=True, initialize=params["W_u_minus"])  #W^{u-}_{t}: Maximum power production in period $t$ when stopping generation in period $t+1$  [kW\sse]
+        # self.model.delta_rs = pe.Param(self.model.T_inputs, mutable=True, initialize=params.delta_rs) # \delta^{rs}_{t}: Estimated fraction of period $t$ required for receiver start-up [-]
+        # self.model.delta_cs = pe.Param(self.model.T_inputs, mutable=True, initialize=params.delta_cs)  # \delta^{cs}_{t}: Estimated fraction of period $t$ required for cycle start-up [-]
+        self.model.D = pe.Param(self.model.T_inputs, mutable=True, initialize=params.D) #D_{t}: Time-weighted discount factor in period $t$ [-]
+        self.model.etaamb = pe.Param(self.model.T_inputs, mutable=True, initialize=params.etaamb)  #\eta^{amb}_{t}: Cycle efficiency ambient temperature adjustment factor in period $t$ [-]
+        self.model.etac = pe.Param(self.model.T_inputs, mutable=True, initialize=params.etac)   #\eta^{c}_{t}:   Normalized condenser parasitic loss in period $t$ [-]
+        self.model.F = pe.Param(self.model.T_inputs, mutable=True, initialize=params.F)   ##F_{t}: Ratio of actual to clear-sky CSP heliostat field power in period $t$ [-]
+        self.model.P = pe.Param(self.model.T_inputs, mutable=True, initialize=params.P)       #P_{t}: Electricity sales price in period $t$ [\$/kWh\sse]
+        self.model.Qin = pe.Param(self.model.T_inputs, mutable=True, initialize=params.Qin)    #Q^{in}_{t}: Available thermal power generated by the CSP heliostat field in period $t$ [kW\sst]
+        # self.model.Qc = pe.Param(self.model.T_inputs, mutable=True, initialize=params.Qc)     #Q^{c}_{t}: Allowable power per period for cycle start-up in period $t$ [kW\sst]
+        self.model.Wdotnet = pe.Param(self.model.T_inputs, mutable=True, initialize=params.Wdotnet)  #\dot{W}^{net}_{t}: Net grid transmission upper limit in period $t$ [kW\sse]
+        self.model.W_u_plus = pe.Param(self.model.T_inputs, mutable=True, initialize=params.W_u_plus)  #W^{u+}_{t}: Maximum power production when starting generation in period $t$  [kW\sse]
+        self.model.W_u_minus = pe.Param(self.model.T_inputs, mutable=True, initialize=params.W_u_minus)  #W^{u-}_{t}: Maximum power production in period $t$ when stopping generation in period $t+1$  [kW\sse]
         Q_cls_d = dict()
         for t in self.model.T_inputs:
             Q_cls_d[t] = self.model.Qin[t] / (1 if self.model.F[t] == 0 else self.model.F[t])
@@ -61,215 +81,218 @@ class RealTimeDispatchModel(object):
 
         ### Time-Series PV Parameters ###
         if self.include["pv"]:
-            self.model.wpv_dc = pe.Param(self.model.T_inputs, mutable=True, initialize=params["wpv_dc"])      #w^{PV}_t: maximum DC power production from PV system in period $t$
+            self.model.wpv_dc = pe.Param(self.model.T_inputs, mutable=True, initialize=params.wpv_dc)      #w^{PV}_t: maximum DC power production from PV system in period $t$
         
         ###  Cost Parameters ###
-        self.model.alpha = pe.Param(mutable=True, initialize=params["alpha"])        #alpha: Conversion factor between unitless and monetary values [\$]
-        self.model.Crec = pe.Param(mutable=True, initialize=params["Crec"])         #Crec: Operating cost of heliostat field and receiver [\$/kWh\sst]
-        self.model.Crsu = pe.Param(mutable=True, initialize=params["Crsu"])         #Crsu: Penalty for receiver cold start-up [\$/start]
-        self.model.Crhsp = pe.Param(mutable=True, initialize=params["Crhsp"])        #Crhsp: Penalty for receiver hot start-up [\$/start]
-        self.model.Cpc = pe.Param(mutable=True, initialize=params["Cpc"])          #Cpc: Operating cost of power cycle [\$/kWh\sse]
-        self.model.Ccsu = pe.Param(mutable=True, initialize=params["Ccsu"])        #Ccsu: Penalty for power cycle cold start-up [\$/start]
-        self.model.Cchsp = pe.Param(mutable=True, initialize=params["Cchsp"])       #Cchsp: Penalty for power cycle hot start-up [\$/start]
-        self.model.C_delta_w = pe.Param(mutable=True, initialize=params["C_delta_w"])    #C_delta_w: Penalty for change in power cycle  production [\$/$\Delta\text{kW}$\sse]
-        self.model.C_v_w = pe.Param(mutable=True, initialize=params["C_v_w"])        #C_v_w: Penalty for change in power cycle  production \tcb{beyond designed limits} [\$/$\Delta\text{kW}$\sse]
-        self.model.Ccsb = pe.Param(mutable=True, initialize=params["Ccsb"])         #Ccsb: Operating cost of power cycle standby operation [\$/kWh\sst]
+        self.model.alpha = pe.Param(mutable=True, initialize=params.alpha)        #alpha: Conversion factor between unitless and monetary values [\$]
+        self.model.Crec = pe.Param(mutable=True, initialize=params.Crec)         #Crec: Operating cost of heliostat field and receiver [\$/kWh\sst]
+        self.model.Crsu = pe.Param(mutable=True, initialize=params.Crsu)         #Crsu: Penalty for receiver cold start-up [\$/start]
+        self.model.Crhsp = pe.Param(mutable=True, initialize=params.Crhsp)        #Crhsp: Penalty for receiver hot start-up [\$/start]
+        self.model.Cpc = pe.Param(mutable=True, initialize=params.Cpc)          #Cpc: Operating cost of power cycle [\$/kWh\sse]
+        self.model.Ccsu = pe.Param(mutable=True, initialize=params.Ccsu)        #Ccsu: Penalty for power cycle cold start-up [\$/start]
+        self.model.Cchsp = pe.Param(mutable=True, initialize=params.Cchsp)       #Cchsp: Penalty for power cycle hot start-up [\$/start]
+        self.model.C_delta_w = pe.Param(mutable=True, initialize=params.C_delta_w)    #C_delta_w: Penalty for change in power cycle  production [\$/$\Delta\text{kW}$\sse]
+        self.model.C_v_w = pe.Param(mutable=True, initialize=params.C_v_w)        #C_v_w: Penalty for change in power cycle  production \tcb{beyond designed limits} [\$/$\Delta\text{kW}$\sse]
+        self.model.Ccsb = pe.Param(mutable=True, initialize=params.Ccsb)         #Ccsb: Operating cost of power cycle standby operation [\$/kWh\sst]
+        if self.include["signal"]:
+            self.model.Cg_plus = pe.Param(self.model.H, mutable=True, initialize=params.Cg_plus)         #Cg_plus: Penalty for overproducing in period  [\$/kWh\sst]
+            self.model.Cg_minus = pe.Param(self.model.H, mutable=True, initialize=params.Cg_minus)  # Cg_minus: Penalty for overproducing in period  [\$/kWh\sst]
+            self.model.day_ahead_tol_plus = pe.Param(mutable=True, initialize=params.day_ahead_tol_plus)  # Cg_minus: Tolerance for overproducing in period  [kWh\sst]
+            self.model.day_ahead_tol_minus = pe.Param(mutable=True, initialize=params.day_ahead_tol_minus)  # Cg_minus: Tolerance for underproducing in period  [kWh\sst]
         
         # -------PV and Battery Cost Parameters -------
         if self.include["pv"]:
-            self.model.Cpv = pe.Param(mutable=True, initialize=params["Cpv"])    #Operating cost of photovoltaic field [\$/kWh\sse]
+            self.model.Cpv = pe.Param(mutable=True, initialize=params.Cpv)    #Operating cost of photovoltaic field [\$/kWh\sse]
         if self.include["battery"]:
-            self.model.Cbc = pe.Param(mutable=True, initialize=params["Cbc"])    #Operating cost of charging battery [\$/kWh\sse]
-            self.model.Cbd = pe.Param(mutable=True, initialize=params["Cbd"])    #Operating cost of discharging battery [\$/kWh\sse]
-            self.model.Cbl = pe.Param(mutable=True, initialize=params["Cbl"])    #Lifecycle cost for battery [\$/lifecycle]
+            self.model.Cbc = pe.Param(mutable=True, initialize=params.Cbc)    #Operating cost of charging battery [\$/kWh\sse]
+            self.model.Cbd = pe.Param(mutable=True, initialize=params.Cbd)    #Operating cost of discharging battery [\$/kWh\sse]
+            self.model.Cbl = pe.Param(mutable=True, initialize=params.Cbl)    #Lifecycle cost for battery [\$/lifecycle]
         
         ### CSP Field and Receiver Parameters ###
-        #self.model.deltal = pe.Param(mutable=True, initialize=params["deltal"])  # Minimum time to start the receiver [hr]
-        self.model.Drsu = pe.Param(mutable=True, initialize=params["Drsu"])    #Minimum time to start the receiver [hr]
-        self.model.Drsd = pe.Param(mutable=True, initialize=params["Drsd"])    #Minimum time to shut down the receiver [hr]
-        self.model.Ehs = pe.Param(mutable=True, initialize=params["Ehs"])       #Heliostat field startup or shut down parasitic loss [kWh\sse]
-        self.model.Er = pe.Param(mutable=True, initialize=params["Er"])        #Required energy expended to start receiver [kWh\sst]
-        self.model.Eu = pe.Param(mutable=True, initialize=params["Eu"])        #Thermal energy storage capacity [kWh\sst]
-        self.model.Lr = pe.Param(mutable=True, initialize=params["Lr"])        #Receiver pumping power per unit power produced [kW\sse/kW\sst]
-        self.model.mdot_r_min = pe.Param(mutable=True, initialize=params["mdot_r_min"])  # Minimum mass flow rate of heat transfer fluid to the receiver [kg/s]
-        self.model.mdot_r_max = pe.Param(mutable=True, initialize=params["mdot_r_max"])  # Maximum mass flow rate of heat transfer fluid to the receiver [kg/s]
-        self.model.Pr = pe.Param(mutable=True, initialize=params["Pr"])  # Receiver pumping power per unit mass flow rate [kW\sse/ kg/s]
-        self.model.Qrl = pe.Param(mutable=True, initialize=params["Qrl"])       #Minimum operational thermal power delivered by receiver [kWh\sst]
-        self.model.Qrsb = pe.Param(mutable=True, initialize=params["Qrsb"])      #Required thermal power for receiver standby [kWh\sst]
-        self.model.Qrsd = pe.Param(mutable=True, initialize=params["Qrsd"])      #Required thermal power for receiver shut down [kWh\sst] 
-        self.model.Qru = pe.Param(mutable=True, initialize=params["Qru"])       #Allowable power per period for receiver start-up [kWh\sst]
-        # self.model.T_rout_min = pe.Param(mutable=True, initialize=params[
-        #     "T_rout_min"])  # Minimum allowable receiver outlet temperature [deg C]
-        self.model.T_rout_max = pe.Param(mutable=True, initialize=params[
-            "T_rout_max"])  # Maximum allowable receiver outlet temperature [deg C]
-        self.model.Wh_comm = pe.Param(mutable=True, initialize=params[
-            "Wh_comm"])  # Heliostat field communication parasitic loss [kW\sse]
-        self.model.Wh_track = pe.Param(mutable=True, initialize=params[
-            "Wh_track"])  # Heliostat field tracking parasitic loss [kW\sse]
-        self.model.Wht_full = pe.Param(mutable=True, initialize=params[
-            "Wht_full"])  # Tower piping heat trace full load parasitic loss [kW\sse]
-        self.model.Wht_part = pe.Param(mutable=True, initialize=params[
-            "Wht_part"])  # Tower piping heat trace part load parasitic loss [kW\sse]
-        #self.model.Wh = pe.Param(mutable=True, initialize=params["Wh"])        #Heliostat field tracking parasitic loss [kW\sse]
-        #self.model.Wht = pe.Param(mutable=True, initialize=params["Wht"])       #Tower piping heat trace parasitic loss [kW\sse]
+        if self.include["simple_receiver"]:
+            self.model.P_field_rec = pe.Param(self.model.T_inputs, mutable=True, initialize=params.P_field_rec)  #Parasitic power draws from receiver operations [kW\sse]
+        else:
+            #self.model.deltal = pe.Param(mutable=True, initialize=params.deltal)  # Minimum time to start the receiver [hr]
+            self.model.Drsu = pe.Param(mutable=True, initialize=params.Drsu)    #Minimum time to start the receiver [hr]
+            self.model.Drsd = pe.Param(mutable=True, initialize=params.Drsd)    #Minimum time to shut down the receiver [hr]
+            self.model.Ehs = pe.Param(mutable=True, initialize=params.Ehs)       #Heliostat field startup or shut down parasitic loss [kWh\sse]
+            self.model.Er = pe.Param(mutable=True, initialize=params.Er)        #Required energy expended to start receiver [kWh\sst]
+            self.model.Lr = pe.Param(mutable=True, initialize=params.Lr)        #Receiver pumping power per unit power produced [kW\sse/kW\sst]
+            self.model.mdot_r_min = pe.Param(mutable=True, initialize=params.mdot_r_min)  # Minimum mass flow rate of heat transfer fluid to the receiver [kg/s]
+            self.model.mdot_r_max = pe.Param(mutable=True, initialize=params.mdot_r_max)  # Maximum mass flow rate of heat transfer fluid to the receiver [kg/s]
+            self.model.Pr = pe.Param(mutable=True, initialize=params.Pr)  # Receiver pumping power per unit mass flow rate [kW\sse/ kg/s]
+            self.model.Qrl = pe.Param(mutable=True, initialize=params.Qrl)       #Minimum operational thermal power delivered by receiver [kWh\sst]
+            self.model.Qrsb = pe.Param(mutable=True, initialize=params.Qrsb)      #Required thermal power for receiver standby [kWh\sst]
+            self.model.Qrsd = pe.Param(mutable=True, initialize=params.Qrsd)      #Required thermal power for receiver shut down [kWh\sst]
+            self.model.Qru = pe.Param(mutable=True, initialize=params.Qru)       #Allowable power per period for receiver start-up [kWh\sst]
+            # self.model.T_rout_min = pe.Param(mutable=True, initialize=params.T_rout_min)  # Minimum allowable receiver outlet temperature [deg C]
+            self.model.T_rout_max = pe.Param(mutable=True, initialize=params.T_rout_max)  # Maximum allowable receiver outlet temperature [deg C]
+            self.model.Wh_comm = pe.Param(mutable=True, initialize=params.Wh_comm)  # Heliostat field communication parasitic loss [kW\sse]
+            self.model.Wh_track = pe.Param(mutable=True, initialize=params.Wh_track)  # Heliostat field tracking parasitic loss [kW\sse]
+            self.model.Wht_full = pe.Param(mutable=True, initialize=params.Wht_full)  # Tower piping heat trace full load parasitic loss [kW\sse]
+            self.model.Wht_part = pe.Param(mutable=True, initialize=params.Wht_part)  # Tower piping heat trace part load parasitic loss [kW\sse]
+            #self.model.Wh = pe.Param(mutable=True, initialize=params.Wh)        #Heliostat field tracking parasitic loss [kW\sse]
+            #self.model.Wht = pe.Param(mutable=True, initialize=params.Wht)       #Tower piping heat trace parasitic loss [kW\sse]
 
         ### Thermal Energy Storage parameters
-        self.model.Cp = pe.Param(mutable=True, initialize=params[
-            "Cp"])  # Tower piping heat trace part load parasitic loss [kW\sse]
-        self.model.mass_cs_min = pe.Param(mutable=True, initialize=params[
-            "mass_cs_min"])  # Minimum mass of heat transfer fluid in cold storage [kg]
-        self.model.mass_cs_max = pe.Param(mutable=True, initialize=params[
-            "mass_cs_max"])  # Maximum mass of heat transfer fluid in cold storage [kg]
-        self.model.mass_hs_min = pe.Param(mutable=True, initialize=params[
-            "mass_hs_min"])  # Minimum mass of heat transfer fluid in hot storage [kg]
-        self.model.mass_hs_max = pe.Param(mutable=True, initialize=params[
-            "mass_hs_max"])  # Maximum mass of heat transfer fluid in hot storage [kg]
-        self.model.T_cs_min = pe.Param(mutable=True, initialize=params[
-            "T_cs_min"])  # Minimum temperature of heat transfer fluid in cold storage [C]
-        self.model.T_cs_max = pe.Param(mutable=True, initialize=params[
-            "T_cs_max"])  # Maximum temperature of heat transfer fluid in cold storage [C]
-        self.model.T_hs_min = pe.Param(mutable=True, initialize=params[
-            "T_hs_min"])  # Minimum temperature of heat transfer fluid in hot storage [C]
-        self.model.T_hs_max = pe.Param(mutable=True, initialize=params[
-            "T_hs_max"])  # Maximum temperature of heat transfer fluid in hot storage [C]
+        self.model.Eu = pe.Param(mutable=True, initialize=params.Eu)  # Thermal energy storage capacity [kWh\sst]
+        self.model.Cp = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.Cp)  # Tower piping heat trace part load parasitic loss [kW\sse]
+        self.model.mass_cs_min = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.mass_cs_min)  # Minimum mass of heat transfer fluid in cold storage [kg]
+        self.model.mass_cs_max = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.mass_cs_max)  # Maximum mass of heat transfer fluid in cold storage [kg]
+        self.model.mass_hs_min = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.mass_hs_min)  # Minimum mass of heat transfer fluid in hot storage [kg]
+        self.model.mass_hs_max = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.mass_hs_max)  # Maximum mass of heat transfer fluid in hot storage [kg]
+        self.model.T_cs_min = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.T_cs_min)  # Minimum temperature of heat transfer fluid in cold storage [C]
+        self.model.T_cs_max = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.T_cs_max)  # Maximum temperature of heat transfer fluid in cold storage [C]
+        self.model.T_hs_min = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.T_hs_min)  # Minimum temperature of heat transfer fluid in hot storage [C]
+        self.model.T_hs_max = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.T_hs_max)  # Maximum temperature of heat transfer fluid in hot storage [C]
+        self.model.T_cs_des = pe.Param(mutable=True, within=pe.NonNegativeReals,
+                                       initialize=params.T_cs_des)  # Design point temperature of heat transfer fluid in cold storage [C]
+        self.model.T_hs_des = pe.Param(mutable=True, within=pe.NonNegativeReals,
+                                       initialize=params.T_hs_des)  # Design point temperature of heat transfer fluid in hot storage [C]
 
         ### Power Cycle Parameters ###
-        self.model.alpha_b = pe.Param(mutable=True, initialize=params["alpha_b"])
-        self.model.alpha_T = pe.Param(mutable=True, initialize=params["alpha_T"])
-        self.model.alpha_m = pe.Param(mutable=True, initialize=params["alpha_m"])  #Regression coefficients for heat transfer fluid temperature drop across SGS model
-        self.model.beta_b = pe.Param(mutable=True, initialize=params["beta_b"])
-        self.model.beta_m = pe.Param(mutable=True, initialize=params["beta_m"])
-        self.model.beta_mT = pe.Param(mutable=True, initialize=params["beta_mT"])  #Regression coefficients for the power cycle efficiency model
-        self.model.delta_T_design = pe.Param(mutable=True, initialize=params["delta_T_design"])  #Design point temperature change of the heat transfer fluid across the SGS model
-        self.model.delta_T_max = pe.Param(mutable=True, initialize=params["delta_T_max"])   #Max temperature change of the heat transfer fluid across the SGS model
-        self.model.Ec = pe.Param(mutable=True, initialize=params["Ec"])           #Required energy expended to cold start cycle [kWh\sst]
-        self.model.Ew = pe.Param(mutable=True,
-                                 initialize=params["Ew"])  # Required energy expended to warm start cycle (from standby) [kWh\sst]
-        self.model.eta_des = pe.Param(mutable=True, initialize=params["eta_des"])      #Cycle nominal efficiency [-]
-        self.model.etap = pe.Param(mutable=True, initialize=params["etap"])         #Slope of linear approximation of power cycle performance curve [kW\sse/kW\sst]
-        self.model.kl = pe.Param(mutable=True, initialize=params["kl"])     #Change in lower bound of cycle thermal load due to hot storage temperature
-        self.model.ku = pe.Param(mutable=True, initialize=params["kl"])     #Change in upper bound of cycle thermal load due to hot storage temperature
-        self.model.Lc = pe.Param(mutable=True, initialize=params["Lc"])           #Cycle heat transfer fluid pumping power per unit energy expended [kW\sse/kW\sst]
-        self.model.mdot_c_design = pe.Param(mutable=True, initialize=params["mdot_c_design"])  #Design point mass flow rate of the heat transfer fluid through the power cycle
-        self.model.mdot_c_min = pe.Param(mutable=True, initialize=params["mdot_c_min"])  #Minimum mass flow rate of heat transfer fluid to the cycle [kg/s]
-        self.model.mdot_c_max = pe.Param(mutable=True, initialize=params["mdot_c_max"])  #Maximum mass flow rate of heat transfer fluid to the cycle [kg/s]
-        self.model.Qc = pe.Param(mutable=True, initialize=params["Qc"])  # Thermal power input to power cycle during start-up [kW\sst]
-        # self.model.Qb = pe.Param(mutable=True, initialize=params["Qb"])           #Cycle standby thermal power consumption per period [kW\sst]
-        self.model.Ql = pe.Param(mutable=True, initialize=params["Ql"])           #Minimum operational thermal power input to cycle [kW\sst]
-        self.model.Qu = pe.Param(mutable=True, initialize=params["Qu"])           #Cycle thermal power capacity [kW\sst]
-        self.model.T_cin_design = pe.Param(mutable=True, initialize=params["T_cin_design"])   #Design point power cycle inlet temperature of the heat transfer fluid
-        # self.model.T_cout_min = pe.Param(mutable=True, initialize=params["T_cout_min"])   #Minimum allowable cycle outlet temperature [deg C]
-        # self.model.T_cout_max = pe.Param(mutable=True, initialize=params["T_cout_max"])  #Maximum allowable cycle outlet temperature [deg C]
-        self.model.Wdot_design = pe.Param(mutable=True, initialize=params["Wdot_design"]) #Design point electrical output of the power cycle
-        self.model.Wdot_p_max = pe.Param(mutable=True, initialize=params["Wdot_p_max"]) #Power purchase required to cover all parasitic loads [kW\sse]
-        self.model.Wb = pe.Param(mutable=True, initialize=params["Wb"])           #Power cycle standby operation parasitic load [kW\sse]
-        self.model.Wc = pe.Param(mutable=True, initialize=params["Wc"])           #Power cycle operating parasitic loss [kW\sse]
-        self.model.Wdotl = pe.Param(mutable=True, initialize=params["Wdotl"])        #Minimum cycle electric power output [kW\sse]
-        self.model.Wdotu = pe.Param(mutable=True, initialize=params["Wdotu"])        #Cycle electric power rated capacity [kW\sse]
-        self.model.W_delta_plus = pe.Param(mutable=True, initialize=params["W_delta_plus"]) #Power cycle ramp-up designed limit [kW\sse/h]
-        self.model.W_delta_minus = pe.Param(mutable=True, initialize=params["W_delta_minus"])#Power cycle ramp-down designed limit [kW\sse/h]
-        self.model.W_v_plus = pe.Param(mutable=True, initialize=params["W_v_plus"])     #Power cycle ramp-up violation limit [kW\sse/h]
-        self.model.W_v_minus = pe.Param(mutable=True, initialize=params["W_v_minus"])    #Power cycle ramp-down violation limit [kW\sse/h]
-        self.model.Yu = pe.Param(mutable=True, initialize=params["Yu"])           #Minimum required power cycle uptime [h]
-        self.model.Yd = pe.Param(mutable=True, initialize=params["Yd"])           #Minimum required power cycle downtime [h]
+        self.model.alpha_b = pe.Param(mutable=True, within=pe.Reals, initialize=params.alpha_b)
+        self.model.alpha_T = pe.Param(mutable=True, within=pe.Reals, initialize=params.alpha_T)
+        self.model.alpha_m = pe.Param(mutable=True, within=pe.Reals, initialize=params.alpha_m)  #Regression coefficients for heat transfer fluid temperature drop across SGS model
+        self.model.beta_b = pe.Param(mutable=True, within=pe.Reals, initialize=params.beta_b)
+        self.model.beta_m = pe.Param(mutable=True, within=pe.Reals, initialize=params.beta_m)
+        self.model.beta_mT = pe.Param(mutable=True, within=pe.Reals, initialize=params.beta_mT)  #Regression coefficients for the power cycle efficiency model
+        self.model.delta_T_design = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.delta_T_design)  #Design point temperature change of the heat transfer fluid across the SGS model
+        self.model.delta_T_max = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.delta_T_max)   #Max temperature change of the heat transfer fluid across the SGS model
+        self.model.Ec = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.Ec)           #Required energy expended to cold start cycle [kWh\sst]
+        self.model.Ew = pe.Param(mutable=True, within=pe.NonNegativeReals,
+                                 initialize=params.Ew)  # Required energy expended to warm start cycle (from standby) [kWh\sst]
+        self.model.eta_des = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.eta_des)      #Cycle nominal efficiency [-]
+        self.model.etap = pe.Param(mutable=True, within=pe.Reals, initialize=params.etap)         #Slope of linear approximation of power cycle performance curve [kW\sse/kW\sst]
+        self.model.kl = pe.Param(mutable=True, within=pe.Reals, initialize=params.kl)     #Change in lower bound of cycle thermal load due to hot storage temperature
+        self.model.ku = pe.Param(mutable=True, within=pe.Reals, initialize=params.kl)     #Change in upper bound of cycle thermal load due to hot storage temperature
+        self.model.Lc = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.Lc)           #Cycle heat transfer fluid pumping power per unit energy expended [kW\sse/kW\sst]
+        self.model.mdot_c_design = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.mdot_c_design)  #Design point mass flow rate of the heat transfer fluid through the power cycle
+        self.model.mdot_c_min = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.mdot_c_min)  #Minimum mass flow rate of heat transfer fluid to the cycle [kg/s]
+        self.model.mdot_c_max = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.mdot_c_max)  #Maximum mass flow rate of heat transfer fluid to the cycle [kg/s]
+        self.model.Qc = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.Qc)  # Thermal power input to power cycle during start-up [kW\sst]
+        # self.model.Qb = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.Qb)           #Cycle standby thermal power consumption per period [kW\sst]
+        self.model.Ql = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.Ql)           #Minimum operational thermal power input to cycle [kW\sst]
+        self.model.Qu = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.Qu)           #Cycle thermal power capacity [kW\sst]
+        self.model.T_cin_design = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.T_cin_design)   #Design point power cycle inlet temperature of the heat transfer fluid
+        # self.model.T_cout_min = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.T_cout_min)   #Minimum allowable cycle outlet temperature [deg C]
+        # self.model.T_cout_max = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.T_cout_max)  #Maximum allowable cycle outlet temperature [deg C]
+        self.model.Wdot_design = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.Wdot_design) #Design point electrical output of the power cycle
+        self.model.Wdot_p_max = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.Wdot_p_max) #Power purchase required to cover all parasitic loads [kW\sse]
+        self.model.Wb = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.Wb)           #Power cycle standby operation parasitic load [kW\sse]
+        self.model.Wc = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.Wc)           #Power cycle operating parasitic loss [kW\sse]
+        self.model.Wdotl = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.Wdotl)        #Minimum cycle electric power output [kW\sse]
+        self.model.Wdotu = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.Wdotu)        #Cycle electric power rated capacity [kW\sse]
+        self.model.W_delta_plus = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.W_delta_plus) #Power cycle ramp-up designed limit [kW\sse/h]
+        self.model.W_delta_minus = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.W_delta_minus)#Power cycle ramp-down designed limit [kW\sse/h]
+        self.model.W_v_plus = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.W_v_plus)     #Power cycle ramp-up violation limit [kW\sse/h]
+        self.model.W_v_minus = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.W_v_minus)    #Power cycle ramp-down violation limit [kW\sse/h]
+        self.model.Yu = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.Yu)           #Minimum required power cycle uptime [h]
+        self.model.Yd = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.Yd)           #Minimum required power cycle downtime [h]
         
         ### Initial Condition Parameters ###
-        self.model.drsd0 = pe.Param(mutable=True, initialize=params["drsd0"])  #Time spent shutting down the receiver before the problem horizon [h]
-        self.model.drsu0 = pe.Param(mutable=True, initialize=params["drsu0"])  #Time spent starting up the receiver before the problem horizon [h]
-        # self.model.s0 = pe.Param(mutable=True, initialize=params["s0"])  #Initial TES reserve quantity  [kWh\sst]  -- moved to transition
-        self.model.mass_cs0 = pe.Param(mutable=True, initialize=params["mass_cs0"])  #Initial mass of heat transfer fluid in cold storage  [kg]
-        self.model.mass_hs0 = pe.Param(mutable=True, initialize=params["mass_hs0"])  #Initial mass of heat transfer fluid in hot storage  [kg]
-        self.model.T_cs0 = pe.Param(mutable=True, initialize=params["T_cs0"])  #Initial temperature of heat transfer fluid in cold storage  [C]
-        self.model.T_hs0 = pe.Param(mutable=True, initialize=params["T_hs0"])  #Initial temperature of heat transfer fluid in hot storage  [C]
-        self.model.ucsu0 = pe.Param(mutable=True, initialize=params["ucsu0"]) #Initial cycle start-up energy inventory  [kWh\sst]
-        self.model.ursd0 = pe.Param(mutable=True, initialize=params["ursd0"]) #Initial receiver shut-down energy inventory [kWh\sst]
-        self.model.ursu0 = pe.Param(mutable=True, initialize=params["ursu0"])  # Initial receiver start-up energy inventory [kWh\sst]
-        self.model.wdot0 = pe.Param(mutable=True, initialize=params["wdot0"]) #Initial power cycle electricity generation [kW\sse]
-        self.model.yr0 = pe.Param(mutable=True, initialize=params["yr0"])  #1 if receiver is generating ``usable'' thermal power initially, 0 otherwise  [az] this is new.
-        self.model.yrsb0 = pe.Param(mutable=True, initialize=params["yrsb0"])  #1 if receiver is in standby mode initially, 0 otherwise [az] this is new.
-        self.model.yrsu0 = pe.Param(mutable=True, initialize=params["yrsu0"])  #1 if receiver is in starting up initially, 0 otherwise    [az] this is new.
-        self.model.yrsd0 = pe.Param(mutable=True, initialize=params["yrsd0"])  #1 if receiver is in shutting down initially, 0 otherwise    [az] this is new.
-        self.model.y0 = pe.Param(mutable=True, initialize=params["y0"])  #1 if cycle is generating electric power initially, 0 otherwise
-        self.model.ycsb0 = pe.Param(mutable=True, initialize=params["ycsb0"])  #1 if cycle is in standby mode initially, 0 otherwise
-        self.model.ycsu0 = pe.Param(mutable=True, initialize=params["ycsu0"])  #1 if cycle is in starting up initially, 0 otherwise    [az] this is new.
-        self.model.Yu0 = pe.Param(mutable=True, initialize=params["Yu0"])  # duration that cycle has been generating electric power [h]
-        self.model.Yd0 = pe.Param(mutable=True, initialize=params["Yd0"])  # duration that cycle has not been generating power (i.e., shut down or in standby mode) [h]
+        self.model.drsd0 = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.drsd0)  #Time spent shutting down the receiver before the problem horizon [h]
+        self.model.drsu0 = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.drsu0)  #Time spent starting up the receiver before the problem horizon [h]
+        # self.model.s0 = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.s0)  #Initial TES reserve quantity  [kWh\sst]  -- moved to transition
+        self.model.mass_cs0 = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.mass_cs0)  #Initial mass of heat transfer fluid in cold storage  [kg]
+        self.model.mass_hs0 = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.mass_hs0)  #Initial mass of heat transfer fluid in hot storage  [kg]
+        self.model.T_cs0 = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.T_cs0)  #Initial temperature of heat transfer fluid in cold storage  [C]
+        self.model.T_hs0 = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.T_hs0)  #Initial temperature of heat transfer fluid in hot storage  [C]
+        self.model.ucsu0 = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.ucsu0) #Initial cycle start-up energy inventory  [kWh\sst]
+        self.model.ursd0 = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.ursd0) #Initial receiver shut-down energy inventory [kWh\sst]
+        self.model.ursu0 = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.ursu0)  # Initial receiver start-up energy inventory [kWh\sst]
+        self.model.wdot0 = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.wdot0) #Initial power cycle electricity generation [kW\sse]
+        self.model.yr0 = pe.Param(mutable=True, within=pe.NonNegativeIntegers, initialize=params.yr0)  #1 if receiver is generating ``usable'' thermal power initially, 0 otherwise  [az] this is new.
+        self.model.yrsb0 = pe.Param(mutable=True, within=pe.NonNegativeIntegers, initialize=params.yrsb0)  #1 if receiver is in standby mode initially, 0 otherwise [az] this is new.
+        self.model.yrsu0 = pe.Param(mutable=True, within=pe.NonNegativeIntegers, initialize=params.yrsu0)  #1 if receiver is in starting up initially, 0 otherwise    [az] this is new.
+        self.model.yrsd0 = pe.Param(mutable=True, within=pe.NonNegativeIntegers, initialize=params.yrsd0)  #1 if receiver is in shutting down initially, 0 otherwise    [az] this is new.
+        self.model.y0 = pe.Param(mutable=True, within=pe.NonNegativeIntegers, initialize=params.y0)  #1 if cycle is generating electric power initially, 0 otherwise
+        self.model.ycsb0 = pe.Param(mutable=True, within=pe.NonNegativeIntegers, initialize=params.ycsb0)  #1 if cycle is in standby mode initially, 0 otherwise
+        self.model.ycsu0 = pe.Param(mutable=True, within=pe.NonNegativeIntegers, initialize=params.ycsu0)  #1 if cycle is in starting up initially, 0 otherwise    [az] this is new.
+        self.model.Yu0 = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.Yu0)  # duration that cycle has been generating electric power [h]
+        self.model.Yd0 = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.Yd0)  # duration that cycle has not been generating power (i.e., shut down or in standby mode) [h]
         # -------Persistence Parameters ---------
         if self.include["persistence"]:
-            self.model.wdot_s_prev  = pe.Param(self.model.T_inputs, mutable=True, initialize=params["wdot_s_prev"])
-            self.model.wdot_s_pen  = pe.Param(self.model.T_inputs, mutable=True, initialize=params["wdot_s_pen"])
+            self.model.wdot_s_prev  = pe.Param(self.model.T_inputs, within=pe.NonNegativeReals, mutable=True, initialize=params.wdot_s_prev)
+            self.model.wdot_s_pen  = pe.Param(self.model.T_inputs, within=pe.Reals, mutable=True, initialize=params.wdot_s_pen)
         
         # -------Miscellaneous Parameters taken from SAM---------
-        self.model.day_of_year = pe.Param(mutable=True, initialize=params["day_of_year"])
-        self.model.disp_time_weighting = pe.Param(mutable=True, initialize=params["disp_time_weighting"])
-        self.model.csu_cost = pe.Param(mutable=True, initialize=params["csu_cost"])
-        self.model.eta_cycle = pe.Param(mutable=True, initialize=params["eta_cycle"])
-        self.model.gamma = pe.Param(mutable=True, initialize=params["gamma"])
-        self.model.gammac = pe.Param(mutable=True, initialize=params["gammac"])
-        self.model.M = pe.Param(mutable=True, initialize=params["M"]) 
-        self.model.qrecmaxobs = pe.Param(mutable=True, initialize=params["qrecmaxobs"])
-        self.model.W_dot_cycle = pe.Param(mutable=True, initialize=params["W_dot_cycle"])
-        self.model.Z_1 = pe.Param(mutable=True, initialize=params["Z_1"])
-        self.model.Z_2 = pe.Param(mutable=True, initialize=params["Z_2"])
-        self.model.max_up = pe.Param(mutable=True, initialize=params["max_up"])
-        self.model.max_down = pe.Param(mutable=True, initialize=params["max_down"])
-        self.model.max_up_v = pe.Param(mutable=True, initialize=params["max_up_v"])
-        self.model.max_down_v = pe.Param(mutable=True, initialize=params["max_down_v"])
-        self.model.pen_delta_w = pe.Param(mutable=True, initialize=params["pen_delta_w"])
-        self.model.q0 = pe.Param(mutable=True, initialize=params["q0"])
-        self.model.rsu_cost = pe.Param(mutable=True, initialize=params["rsu_cost"])
-        self.model.tdown0 = pe.Param(mutable=True, initialize=params["tdown0"])
-        self.model.tstby0 = pe.Param(mutable=True, initialize=params["tstby0"])
-        self.model.tup0 = pe.Param(mutable=True, initialize=params["tup0"])
-        self.model.Wdot0 = pe.Param(mutable=True, initialize=params["Wdot0"])
-        # self.model.wnet_lim_min = pe.Param(self.model.T_inputs, mutable=True, initialize=params["wnet_lim_min"])
-        # self.model.cap_frac = pe.Param(self.model.T_inputs, mutable=True, initialize=params["cap_frac"])
-        # self.model.eff_frac = pe.Param(self.model.T_inputs, mutable=True, initialize=params["eff_frac"])
-        # self.model.dt = pe.Param(self.model.T_inputs, mutable=True, initialize=params["dt"])
-        # self.model.dte = pe.Param(self.model.T_inputs, mutable=True, initialize=params["dte"])
-        # self.model.twt = pe.Param(self.model.T_inputs, mutable=True, initialize=params["twt"])
-        self.model.avg_price = pe.Param(mutable=True, initialize=params["avg_price"])
+        # self.model.day_of_year = pe.Param(mutable=True, initialize=params.day_of_year)
+        self.model.disp_time_weighting = pe.Param(mutable=True, within=pe.Reals, initialize=params.disp_time_weighting)
+        # self.model.csu_cost = pe.Param(mutable=True, initialize=params.csu_cost)
+        # self.model.eta_cycle = pe.Param(mutable=True, initialize=params.eta_cycle)
+        # self.model.gamma = pe.Param(mutable=True, initialize=params.gamma)
+        # self.model.gammac = pe.Param(mutable=True, initialize=params.gammac)
+        # self.model.M = pe.Param(mutable=True, initialize=params.M)
+        # self.model.qrecmaxobs = pe.Param(mutable=True, initialize=params.qrecmaxobs)
+        # self.model.W_dot_cycle = pe.Param(mutable=True, initialize=params.W_dot_cycle)
+        # self.model.Z_1 = pe.Param(mutable=True, initialize=params.Z_1)
+        # self.model.Z_2 = pe.Param(mutable=True, initialize=params.Z_2)
+        # self.model.max_up = pe.Param(mutable=True, initialize=params.max_up)
+        # self.model.max_down = pe.Param(mutable=True, initialize=params.max_down)
+        # self.model.max_up_v = pe.Param(mutable=True, initialize=params.max_up_v)
+        # self.model.max_down_v = pe.Param(mutable=True, initialize=params.max_down_v)
+        # self.model.pen_delta_w = pe.Param(mutable=True, initialize=params.pen_delta_w)
+        # self.model.q0 = pe.Param(mutable=True, initialize=params.q0)
+        # self.model.rsu_cost = pe.Param(mutable=True, initialize=params.rsu_cost)
+        # self.model.tdown0 = pe.Param(mutable=True, initialize=params.tdown0)
+        # self.model.tstby0 = pe.Param(mutable=True, initialize=params.tstby0)
+        # self.model.tup0 = pe.Param(mutable=True, initialize=params.tup0)
+        # self.model.Wdot0 = pe.Param(mutable=True, initialize=params.Wdot0)
+        # self.model.wnet_lim_min = pe.Param(self.model.T_inputs, mutable=True, initialize=params.wnet_lim_min)
+        # self.model.cap_frac = pe.Param(self.model.T_inputs, mutable=True, initialize=params.cap_frac)
+        # self.model.eff_frac = pe.Param(self.model.T_inputs, mutable=True, initialize=params.eff_frac)
+        # self.model.dt = pe.Param(self.model.T_inputs, mutable=True, initialize=params.dt)
+        # self.model.dte = pe.Param(self.model.T_inputs, mutable=True, initialize=params.dte)
+        # self.model.twt = pe.Param(self.model.T_inputs, mutable=True, initialize=params.twt)
+        self.model.avg_price = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.avg_price)  #average sale price [\$/kWh]
+        self.model.avg_purchase_price = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.avg_purchase_price)   #average grid purchase price [\$/kWh]
+        self.model.avg_price_disp_storage_incentive = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.avg_price_disp_storage_incentive )   #average grid purchase price [\$/kWh]
+
+        if self.include["signal"]:
+            self.model.G = pe.Param(self.model.H, mutable=True, within=pe.NonNegativeReals, initialize=params.G)
         
         
         #--------Parameters for the Battery---------
         if self.include["battery"]:
-            self.model.alpha_p = pe.Param(mutable=True, initialize=params["alpha_p"])    #Bi-directional converter slope-intercept parameter
-            self.model.alpha_n = pe.Param(mutable=True, initialize=params["alpha_n"])	  #Bi-directional converter slope-intercept parameter
-            self.model.beta_p = pe.Param(mutable=True, initialize=params["beta_p"])     #Bi-directional converter slope parameter
-            self.model.beta_n = pe.Param(mutable=True, initialize=params["beta_n"])	  #Bi-directional converter slope parameter
-            self.model.C_B = pe.Param(mutable=True, initialize=params["C_B"])
-            self.model.I_upper_p = pe.Param(mutable=True, initialize=params["I_upper_p"])
-            self.model.I_upper_n = pe.Param(mutable=True, initialize=params["I_upper_n"])  #Battery discharge current max
-            self.model.S_B_lower = pe.Param(mutable=True, initialize=params["S_B_lower"])
-            self.model.S_B_upper = pe.Param(mutable=True, initialize=params["S_B_upper"])
-            self.model.I_lower_n = pe.Param(mutable=True, initialize=params["I_lower_n"])
-            self.model.I_lower_p = pe.Param(mutable=True, initialize=params["I_lower_p"])
-            self.model.P_B_lower = pe.Param(mutable=True, initialize=params["P_B_lower"])
-            self.model.P_B_upper = pe.Param(mutable=True, initialize=params["P_B_upper"])  #Battery min/max power rating
-            self.model.A_V = pe.Param(mutable=True, initialize=params["A_V"])
-            self.model.B_V = pe.Param(mutable=True, initialize=params["B_V"])	  #Battery linear voltage model slope/intercept coeffs
-            self.model.R_int = pe.Param(mutable=True, initialize=params["R_int"])
-            self.model.I_avg = pe.Param(mutable=True, initialize=params["I_avg"])	  #Typical current expected from the battery
-            self.model.alpha_pv = pe.Param(mutable=True, initialize=params["alpha_pv"])
-            self.model.beta_pv = pe.Param(mutable=True, initialize=params["beta_pv"])
-            self.model.soc0 = pe.Param(mutable=True, initialize=params["soc0"])     #initial state of charge
-            self.model.Winv_lim = pe.Param(mutable=True, initialize=params["Winv_lim"])	  # Inverter max power (DC)
-            self.model.Wmax = pe.Param(mutable=True, initialize=params["Wmax"])	  #Constant Max power to grid
-            self.model.Winvnt = pe.Param(mutable=True, initialize=params["Winvnt"])
-            self.model.N_csp = pe.Param(mutable=True, initialize=params["N_csp"])
+            self.model.alpha_p = pe.Param(mutable=True, within=pe.Reals, initialize=params.alpha_p)    #Bi-directional converter slope-intercept parameter
+            self.model.alpha_n = pe.Param(mutable=True, within=pe.Reals, initialize=params.alpha_n)	  #Bi-directional converter slope-intercept parameter
+            self.model.beta_p = pe.Param(mutable=True, within=pe.Reals, initialize=params.beta_p)     #Bi-directional converter slope parameter
+            self.model.beta_n = pe.Param(mutable=True, within=pe.Reals, initialize=params.beta_n)	  #Bi-directional converter slope parameter
+            self.model.C_B = pe.Param(mutable=True, within=pe.Reals, initialize=params.C_B)
+            self.model.I_upper_p = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.I_upper_p)
+            self.model.I_upper_n = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.I_upper_n)  #Battery discharge current max
+            self.model.S_B_lower = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.S_B_lower)
+            self.model.S_B_upper = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.S_B_upper)
+            self.model.I_lower_n = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.I_lower_n)
+            self.model.I_lower_p = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.I_lower_p)
+            self.model.P_B_lower = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.P_B_lower)
+            self.model.P_B_upper = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.P_B_upper)  #Battery min/max power rating
+            self.model.A_V = pe.Param(mutable=True, within=pe.Reals, initialize=params.A_V)
+            self.model.B_V = pe.Param(mutable=True, within=pe.Reals, initialize=params.B_V)	  #Battery linear voltage model slope/intercept coeffs
+            self.model.R_int = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.R_int)
+            self.model.I_avg = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.I_avg)	  #Typical current expected from the battery
+            self.model.alpha_pv = pe.Param(mutable=True, within=pe.Reals, initialize=params.alpha_pv)
+            self.model.beta_pv = pe.Param(mutable=True, within=pe.Reals, initialize=params.beta_pv)
+            self.model.soc0 = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.soc0)     #initial state of charge
+            self.model.Winv_lim = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.Winv_lim)	  # Inverter max power (DC)
+            self.model.Wmax = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.Wmax)	  #Constant Max power to grid
+            self.model.Winvnt = pe.Param(mutable=True, within=pe.Reals, initialize=params.Winvnt)
+            self.model.N_csp = pe.Param(mutable=True, within=pe.Reals, initialize=params.N_csp)
         
         #------------- Cycle Incentive Parameter - for testing only -----------
         if self.include["force_cycle"]:
-            self.model.cycle_incent = pe.Param(initialize=1.0e7)
+            self.model.cycle_incent = pe.Param(within=pe.Reals, initialize=1.0e7)
 
     def generateVariables(self):
         ### Decision Variables ###
         ##--------- Variables ------------------------
-        self.model.drsu = pe.Var(self.model.T, domain=pe.NonNegativeReals)  #Receiver start-up time inventory at period t [h]
-        self.model.drsd = pe.Var(self.model.T, domain=pe.NonNegativeReals)  #Receiver shut down time inventory at period t [h]
-        self.model.frsd = pe.Var(self.model.T, domain=pe.NonNegativeReals, bounds = (0,1))  #Fraction of period used for receiver shut down at period $t [-]
-        self.model.frsu = pe.Var(self.model.T, domain=pe.NonNegativeReals, bounds = (0,1))  #Fraction of period used for receiver start-up at period $t [-]
-        self.model.lr = pe.Var(self.model.T_nl, domain=pe.NonNegativeReals)  #Salt pumping power to receiver in period t [kW\sse]
+        if not self.include["simple_receiver"]:
+            self.model.drsu = pe.Var(self.model.T, domain=pe.NonNegativeReals)  #Receiver start-up time inventory at period t [h]
+            self.model.drsd = pe.Var(self.model.T, domain=pe.NonNegativeReals)  #Receiver shut down time inventory at period t [h]
+            self.model.frsd = pe.Var(self.model.T, domain=pe.NonNegativeReals, bounds = (0,1))  #Fraction of period used for receiver shut down at period $t [-]
+            self.model.frsu = pe.Var(self.model.T, domain=pe.NonNegativeReals, bounds = (0,1))  #Fraction of period used for receiver start-up at period $t [-]
+            self.model.lr = pe.Var(self.model.T_nl, domain=pe.NonNegativeReals)  #Salt pumping power to receiver in period t [kW\sse]
         self.model.lc = pe.Var(self.model.T_nl, domain=pe.NonNegativeReals)  #Salt pumping power to SGS in period t [kW\sse]
         self.model.lfw = pe.Var(self.model.T_nl, domain=pe.NonNegativeReals)  #Feed water pumping power to SGS in period t [kW\sse]
         self.model.mass_cs = pe.Var(self.model.T_nl, domain=pe.NonNegativeReals, bounds = (self.model.mass_cs_min,self.model.mass_cs_max))  #Mass of htf in cold storage in period t [kg]
@@ -296,7 +319,14 @@ class RealTimeDispatchModel(object):
         self.model.wdot_p = pe.Var(self.model.T, domain=pe.NonNegativeReals)	                     #Energy purchased from the grid in time t
         self.model.x = pe.Var(self.model.T_l, domain=pe.NonNegativeReals)                            #Cycle thermal power utilization at period $t$ [kW\sst]
         self.model.xr = pe.Var(self.model.T, domain=pe.NonNegativeReals)	                         #Thermal power delivered by the receiver at period $t$ [kW\sst]
-        self.model.xrsu = pe.Var(self.model.T, domain=pe.NonNegativeReals)                         #Receiver start-up power consumption at period $t$ [kW\sst]
+        if not self.include["simple_receiver"]:
+            self.model.xrsu = pe.Var(self.model.T, domain=pe.NonNegativeReals)                         #Receiver start-up power consumption at period $t$ [kW\sst]
+
+        if self.include["signal"]:
+            self.model.g_plus = pe.Var(self.model.H,
+                                     domain=pe.NonNegativeReals)  # overproduction vs. grid signal for demand in hour $h$ [kWh\sse]
+            self.model.g_minus = pe.Var(self.model.H,
+                                     domain=pe.NonNegativeReals)  # underproduction vs. grid signal for demand in hour $h$ [kWh\sse]
         
         #----------Continuous for PV -------------------
         if self.include["pv"]:
@@ -320,13 +350,14 @@ class RealTimeDispatchModel(object):
             self.model.bat_lc  = pe.Var(domain=pe.NonNegativeReals)
         
         #--------------- Binary Variables ----------------------
-        self.model.yr = pe.Var(self.model.T, domain=pe.Binary)        #1 if receiver is generating ``usable'' thermal power at period $t$; 0 otherwise
-        self.model.yrhsp = pe.Var(self.model.T, domain=pe.Binary)	    #1 if receiver hot start-up penalty is incurred at period $t$ (from standby); 0 otherwise
-        self.model.yrsb = pe.Var(self.model.T, domain=pe.Binary)	    #1 if receiver is in standby mode at period $t$; 0 otherwise
-        self.model.yrsd = pe.Var(self.model.T, domain=pe.Binary)	    #1 if receiver is shut down at period $t$; 0 otherwise
-        self.model.yrsdp = pe.Var(self.model.T, domain=pe.Binary)  # 1 if receiver cold shut-down penalty is incurred at period $t$ (from off); 0 oth
-        self.model.yrsu = pe.Var(self.model.T, domain=pe.Binary)      #1 if receiver is starting up at period $t$; 0 otherwise
-        self.model.yrsup = pe.Var(self.model.T, domain=pe.Binary)     #1 if receiver cold start-up penalty is incurred at period $t$ (from off); 0 otherwise
+        if not self.include["simple_receiver"]:
+            self.model.yr = pe.Var(self.model.T, domain=pe.Binary)        #1 if receiver is generating ``usable'' thermal power at period $t$; 0 otherwise
+            self.model.yrhsp = pe.Var(self.model.T, domain=pe.Binary)	    #1 if receiver hot start-up penalty is incurred at period $t$ (from standby); 0 otherwise
+            self.model.yrsb = pe.Var(self.model.T, domain=pe.Binary)	    #1 if receiver is in standby mode at period $t$; 0 otherwise
+            self.model.yrsd = pe.Var(self.model.T, domain=pe.Binary)	    #1 if receiver is shut down at period $t$; 0 otherwise
+            self.model.yrsdp = pe.Var(self.model.T, domain=pe.Binary)  # 1 if receiver cold shut-down penalty is incurred at period $t$ (from off); 0 oth
+            self.model.yrsu = pe.Var(self.model.T, domain=pe.Binary)      #1 if receiver is starting up at period $t$; 0 otherwise
+            self.model.yrsup = pe.Var(self.model.T, domain=pe.Binary)     #1 if receiver cold start-up penalty is incurred at period $t$ (from off); 0 otherwise
         self.model.y = pe.Var(self.model.T, domain=pe.Binary)         #1 if cycle is generating electric power at period $t$; 0 otherwise
         self.model.ychsp = pe.Var(self.model.T, domain=pe.Binary)     #1 if cycle hot start-up penalty is incurred at period $t$ (from standby); 0 otherwise
         self.model.ycsb = pe.Var(self.model.T, domain=pe.Binary)      #1 if cycle is in standby mode at period $t$; 0 otherwise
@@ -356,21 +387,21 @@ class RealTimeDispatchModel(object):
         #------ Expressions for existing parameters and variables
         self.model.s0 = (
             (self.model.Cp * (self.model.mass_hs0 - self.model.mass_hs_min) * (
-                        self.model.T_hs0 - self.model.T_cs_min) / 3600)
+                        self.model.T_hs0 - self.model.T_cs_des) / 3600)
             if self.model.t_transition == 0 else
             (self.model.Cp * (self.model.mass_hs[self.model.t_transition] - self.model.mass_hs_min) * (
-                    self.model.T_hs[self.model.t_transition] - self.model.T_cs_min) / 3600)
+                    self.model.T_hs[self.model.t_transition] - self.model.T_cs_des) / 3600)
         )
 
         self.model.x_calc = lambda t: self.model.Cp * self.model.mdot_c[t] * (self.model.T_hs[t] - self.model.T_cout[t])
-        self.model.s_calc = lambda t: (self.model.Cp/3600) * (self.model.mass_hs[t] - self.model.mass_hs_min) * (self.model.T_hs[t] - self.model.T_cs_min)
+        self.model.s_calc = lambda t: (self.model.Cp/3600) * (self.model.mass_hs[t] - self.model.mass_hs_min) * (self.model.T_hs[t] - self.model.T_cs_des)
         self.model.eta1 = lambda t: self.model.wdot[t]/self.model.x_calc[t] if self.model.x_calc[t] == 0 else 0
         self.model.eta2 = lambda t: self.model.wdot[t]/self.model.x[t] if self.model.x[t] == 0 else 0
         # self.model.pr = lambda t: self.model.Lr*(self.model.xr[t] + self.model.Qin[t]*self.model.frsu[t] + self.model.Qrl*self.model.yrsb[t])
         # self.model.pc = lambda t: self.model.Lc*(self.model.x[t] + self.model.Qc*self.model.ycsu[t])# + Qb*ycsb[t])
 
         self.model.obj_end_incentive = (
-                self.model.D[self.model.t_end] * self.model.disp_time_weighting * self.model.avg_price *
+                self.model.D[self.model.t_end] * self.model.disp_time_weighting * self.model.avg_price_disp_storage_incentive *
                 (self.model.eta_des) * (
                     self.model.s_calc[self.model.t_end] if self.model.t_end == self.model.t_transition
                         else self.model.s[self.model.t_end]
@@ -383,7 +414,7 @@ class RealTimeDispatchModel(object):
             return (
                     sum( model.D[t] * 
                     #obj_profit
-                    model.Delta[t]*model.P[t]*(model.wdot_s[t] - model.wdot_p[t])
+                    model.Delta[t] * model.P[t] * (model.wdot_s[t] - (model.avg_purchase_price/model.avg_price) * model.wdot_p[t])
                     #obj_cost_cycle_su_hs_sd
                     - (model.Ccsu*model.ycsup[t] + model.Cchsp*model.ychsp[t] + model.alpha*model.ycsdp[t])
                     #obj_cost_cycle_ramping
@@ -400,7 +431,7 @@ class RealTimeDispatchModel(object):
             return (
                     sum( model.D[t] * 
                     #obj_profit
-                    model.Delta[t]*model.P[t]*0.1*(model.wdot_s[t] - model.wdot_p[t])
+                    model.Delta[t] * model.P[t] * (model.wdot_s[t] - (model.avg_purchase_price/model.avg_price) * model.wdot_p[t])
                     #obj_cost_cycle_su_hs_sd
                     - (model.Ccsu*model.ycsup[t] + 0.1*model.Cchsp*model.ychsp[t] + model.alpha*model.ycsdp[t])
                     #obj_cost_cycle_ramping
@@ -415,10 +446,80 @@ class RealTimeDispatchModel(object):
                     #obj_end_incentive
                     + model.obj_end_incentive
                     )
+
+        def objectiveRuleSignal(model):
+            return (
+                    sum(model.D[t] *
+                        # obj_profit
+                        model.Delta[t] * model.P[t] * (model.wdot_s[t] - (model.avg_purchase_price/model.avg_price) * model.wdot_p[t])
+                        # obj_cost_cycle_su_hs_sd
+                        - (model.Ccsu * model.ycsup[t] + model.Cchsp * model.ychsp[t] + model.alpha * model.ycsdp[t])
+                        # obj_cost_cycle_ramping
+                        - (model.C_delta_w * (model.wdot_delta_plus[t] + model.wdot_delta_minus[t]) + model.C_v_w * (
+                                model.wdot_v_plus[t] + model.wdot_v_minus[t]))
+                        # obj_cost_rec_su_hs_sd
+                        - (model.Crsu * model.yrsup[t] + model.Crhsp * model.yrhsp[t] + model.alpha * (
+                                model.yrsb[t] + model.yrsdp[t]))
+                        # obj_cost_ops
+                        - model.Delta[t] * (
+                                    model.Cpc * model.wdot[t] + model.Ccsb * model.ycsb[t] + model.Crec * model.xr[t])
+                        for t in model.T)
+                    - sum(model.Cg_plus[h] * model.g_plus[h] + model.Cg_minus[h] * model.g_minus[h] for h in model.H)
+                    # obj_end_incentive
+                    + model.obj_end_incentive
+            )
+
+        def addObjectiveSimpleReceiver(model):
+            return (
+                    sum(model.D[t] *
+                        # obj_profit
+                        model.Delta[t] * model.P[t] * (model.wdot_s[t] - (model.avg_purchase_price / model.avg_price) * model.wdot_p[t])
+                        # obj_cost_cycle_su_hs_sd
+                        - (model.Ccsu * model.ycsup[t] + model.Cchsp * model.ychsp[t] + model.alpha * model.ycsdp[t])
+                        # obj_cost_cycle_ramping
+                        - (model.C_delta_w * (model.wdot_delta_plus[t] + model.wdot_delta_minus[t]) + model.C_v_w * (
+                                model.wdot_v_plus[t] + model.wdot_v_minus[t]))
+                        # obj_cost_ops
+                        - model.Delta[t] * (
+                                    model.Cpc * model.wdot[t] + model.Ccsb * model.ycsb[t] + model.Crec * model.xr[t])
+                        for t in model.T)
+                    # obj_end_incentive
+                    + model.obj_end_incentive
+            )
+
+        def addObjectiveSimpleReceiverSignal(model):
+            return (
+                    sum(model.D[t] *
+                        # obj_profit
+                        model.Delta[t] * model.P[t] * (model.wdot_s[t] - (model.avg_purchase_price/model.avg_price) * model.wdot_p[t])
+                        # obj_cost_cycle_su_hs_sd
+                        - (model.Ccsu * model.ycsup[t] + model.Cchsp * model.ychsp[t] + model.alpha * model.ycsdp[t])
+                        # obj_cost_cycle_ramping
+                        - (model.C_delta_w * (model.wdot_delta_plus[t] + model.wdot_delta_minus[t]) + model.C_v_w * (
+                                model.wdot_v_plus[t] + model.wdot_v_minus[t]))
+                        # obj_cost_ops
+                        - model.Delta[t] * (
+                                    model.Cpc * model.wdot[t] + model.Ccsb * model.ycsb[t] + model.Crec * model.xr[t])
+                        for t in model.T)
+                    - sum(model.Cg_plus[h] * model.g_plus[h] + model.Cg_minus[h] * model.g_minus[h] for h in model.H)
+                    #missed signal penalties
+                    - sum(model.Cg_plus[h] * model.g_plus[h] + model.Cg_minus[h] * model.g_minus[h] for h in model.H)
+                    # obj_end_incentive
+                    + model.obj_end_incentive
+            )
+
         if self.include["force_cycle"]:
             self.model.OBJ = pe.Objective(rule=objectiveRuleForceCycle, sense=pe.maximize)
+        elif self.include["signal"]:
+            if self.include["simple_receiver"]:
+                self.model.OBJ = pe.Objective(rule=addObjectiveSimpleReceiverSignal, sense=pe.maximize)
+            else:
+                self.model.OBJ = pe.Objective(rule=objectiveRuleSignal, sense=pe.maximize)
         else:
-            self.model.OBJ = pe.Objective(rule=objectiveRule, sense=pe.maximize)
+            if self.include["simple_receiver"]:
+                self.model.OBJ = pe.Objective(rule=addObjectiveSimpleReceiver, sense=pe.maximize)
+            else:
+                self.model.OBJ = pe.Objective(rule=objectiveRule, sense=pe.maximize)
             
     def addPersistenceConstraints(self):
         def wdot_s_persist_pos_rule(model, t):
@@ -729,11 +830,22 @@ class RealTimeDispatchModel(object):
         self.model.rec_power_bal_con = pe.Constraint(self.model.T_nl, rule=rec_power_bal_rule)
         self.model.rec_clr_sky_control_con = pe.Constraint(self.model.T_nl, rule=rec_clr_sky_control_rule)
 
+    def addSimpleReceiverConstraint(self):
+        def simple_receiver_rule(model, t):
+            return model.xr[t] <= model.Qin[t]
+
+        self.model.simple_receiver_con = pe.Constraint(self.model.T, rule=simple_receiver_rule)
+
     def addTESEnergyBalanceConstraints(self):
         def tes_balance_rule(model, t):
             if t == model.t_transition+1:
                 return model.s[t] - model.s0 == model.Delta[t] * (model.xr[t] - (model.Qc*model.ycsu[t] + model.x[t] + model.Qrsb*model.yrsb[t]))
             return model.s[t] - model.s[t-1] == model.Delta[t] * (model.xr[t] - (model.Qc*model.ycsu[t] + model.x[t] + model.Qrsb*model.yrsb[t]))
+
+        def tes_balance_simple_receiver_rule(model, t):
+            if t == model.t_transition+1:
+                return model.s[t] - model.s0 == model.Delta[t] * (model.xr[t] - (model.Qc*model.ycsu[t] + model.x[t]))
+            return model.s[t] - model.s[t-1] == model.Delta[t] * (model.xr[t] - (model.Qc*model.ycsu[t] + model.x[t]))
 
         # def tes_start_up_rule(model, t):
         #    if t == model.t_start:
@@ -742,8 +854,10 @@ class RealTimeDispatchModel(object):
 
         # def maintain_tes_rule(model):
         #     return model.s[model.num_periods] >= model.s0
-        
-        self.model.tes_balance_con = pe.Constraint(self.model.T_l, rule=tes_balance_rule)
+        if self.include["simple_receiver"]:
+            self.model.tes_balance_con = pe.Constraint(self.model.T_l, rule=tes_balance_simple_receiver_rule)
+        else:
+            self.model.tes_balance_con = pe.Constraint(self.model.T_l, rule=tes_balance_rule)
         #self.model.tes_start_up_con = pe.Constraint(self.model.T, rule=tes_start_up_rule)
         #self.model.maintain_tes_con = pe.Constraint(rule=maintain_tes_rule)  Used?
 
@@ -990,6 +1104,14 @@ class RealTimeDispatchModel(object):
                 - model.Wht_part * model.yr[t] - model.Wht_full * (1 - model.yr[t]) - (model.lc[t] + model.lfw[t])
                 - model.Wb * (model.ycsb[t] + model.ycsu[t]) - model.Wc * (1 - model.y[t])
             )
+
+        def simple_grid_sun_rule(model, t): #power cycle losses from grid_sun, plus P_field_rec
+            return (
+                    model.wdot_s[t] - model.wdot_p[t] == (1 - model.etac[t]) * model.wdot[t] - model.P_field_rec[t]
+                    - model.Lc * (model.x[t] + model.Qc * model.ycsu[t])  # model.pc[t]
+                    - model.Wb * (model.ycsb[t] + model.ycsu[t]) - model.Wc * (1 - model.y[t])
+            )
+
         def sell_production_rule(model, t):
             return model.wdot_s[t] <= model.wdot[t]
 
@@ -997,7 +1119,10 @@ class RealTimeDispatchModel(object):
             return model.wdot_p[t] <= model.Wdot_p_max*(1-model.y[t])
 
         self.model.grid_max_con = pe.Constraint(self.model.T, rule=grid_max_rule)
-        self.model.grid_sun_con = pe.Constraint(self.model.T, rule=grid_sun_rule)
+        if self.include["simple_receiver"]:
+            self.model.simple_grid_sun_con = pe.Constraint(self.model.T, rule=simple_grid_sun_rule)
+        else:
+            self.model.grid_sun_con = pe.Constraint(self.model.T, rule=grid_sun_rule)
         self.model.sell_production_con = pe.Constraint(self.model.T, rule=sell_production_rule)
         self.model.purchase_nonzero_con = pe.Constraint(self.model.T, rule=purchase_nonzero_rule)
 
@@ -1245,7 +1370,7 @@ class RealTimeDispatchModel(object):
         self.model.cc_8_con = pe.Constraint(self.model.T, rule=cc_8_rule)
 
     def addOperatingAssumptions(self):
-        self.model.F_thresh = pe.Param(initialize=0.50)
+        self.model.F_thresh = pe.Param(within=pe.Reals, initialize=0.50)
 
         # never shutdown the power cycle (run in standby at least)
         ## do not relax this in the global solve,
@@ -1282,15 +1407,15 @@ class RealTimeDispatchModel(object):
         self.model.lower_F_con = pe.Constraint(self.model.T_l, rule=lower_F_rule)
 
     def addDiscretizedMdotc(self):
-        self.model.n_mdotc = pe.Param(initialize=4);
+        self.model.n_mdotc = pe.Param(within=pe.NonNegativeIntegers, initialize=4);
         self.model.Kmc = pe.Set(initialize=range(1, self.model.n_mdotc+1))
         delta_mdotc_dict = {}
         for kidx in range(1, self.model.n_mdotc+1):
             #delta_mdotc_dict[k] = self.model.mdot_c_min * (4 - 1.2) / self.model.n_mdotc   Bug in code - fix below
             delta_mdotc_dict[kidx] = self.model.mdot_c_min * (1.2 + 2.8*(kidx-1)/3) / self.model.n_mdotc  # Kmc equal steps from 1.2*min to 4*min (same as max)
-        self.model.k_mdotc = pe.Param(self.model.Kmc, initialize=delta_mdotc_dict)
-        self.model.mdot_c_min_su = pe.Param(initialize=(self.model.Qc/(self.model.Cp*(5 - self.model.T_cout_su))))
-        self.model.T_cout_su = pe.Param(initialize=2.90)
+        self.model.k_mdotc = pe.Param(self.model.Kmc, within=pe.Reals, initialize=delta_mdotc_dict)
+        self.model.mdot_c_min_su = pe.Param(within=pe.Reals, initialize=(self.model.Qc/(self.model.Cp*(5 - self.model.T_cout_su))))
+        self.model.T_cout_su = pe.Param(within=pe.Reals, initialize=2.90)
         self.model.theta_mdotc = pe.Var(self.model.T_nl * self.model.Kmc, domain=pe.Binary)
 
         def mdotc_theta_cut_rule(model, t, k):
@@ -1307,18 +1432,31 @@ class RealTimeDispatchModel(object):
         self.model.mdotc_theta_prec_con = pe.Constraint(self.model.T_nl, self.model.Kmc, rule=mdotc_theta_prec_rule)
         self.model.force_mdotc_con = pe.Constraint(self.model.T_nl, self.model.Kmc, rule=force_mdotc_rule)
 
+    def addGridSignalConstraints(self):
+        def overprod_signal_rule(model, h):
+            return model.g_plus[h] >= sum(model.Delta[t] * model.wdot_s[t] for t in model.T_h[h]) - (model.G[h] + model.day_ahead_tol_plus)
+
+        def underprod_signal_rule(model, h):
+            return model.g_minus[h] >= (model.G[h] - model.day_ahead_tol_minus) - sum(model.Delta[t] * model.wdot_s[t] for t in model.T_h[h])
+
+        self.model.overprod_signal_con = pe.Constraint(self.model.H, rule=overprod_signal_rule)
+        self.model.underprod_signal_con = pe.Constraint(self.model.H, rule=underprod_signal_rule)
+
     def generateConstraints(self):
         if self.include["persistence"]:
             self.addPersistenceConstraints()
         # self.addReceiverStartupConstraintsLinear()
-        self.addReceiverStartupConstraints()
-        self.addReceiverSupplyAndDemandConstraints()
-        self.addReceiverShutdownConstraints()
-        self.addReceiverPenaltyConstraints()
-        self.addReceiverModeLogicConstraints()
-        self.addReceiverMassFlowRateConstraints()
-        self.addReceiverTemperatureConstraints()
-        self.addReceiverPowerBalanceConstraints()
+        if self.include["simple_receiver"]:
+            self.addSimpleReceiverConstraint()
+        else:
+            self.addReceiverStartupConstraints()
+            self.addReceiverSupplyAndDemandConstraints()
+            self.addReceiverShutdownConstraints()
+            self.addReceiverPenaltyConstraints()
+            self.addReceiverModeLogicConstraints()
+            self.addReceiverMassFlowRateConstraints()
+            self.addReceiverTemperatureConstraints()
+            self.addReceiverPowerBalanceConstraints()
         self.addTESEnergyBalanceConstraints()
         self.addThermalStorageMassTempConstraints()
         self.addCycleStartupConstraints()
@@ -1339,11 +1477,17 @@ class RealTimeDispatchModel(object):
             self.addBatteryLinearizationConstraints()
         if self.include["op_assumptions"]:
             self.addOperatingAssumptions()
+        if self.include["signal"]:
+            self.addGridSignalConstraints()
 
-    def solveModel(self, mipgap=0.005):
-        opt = pe.SolverFactory('cbc')
-        opt.options["ratioGap"] = mipgap
-        results = opt.solve(self.model, tee=True, keepfiles=False)
+    def solveModel(self, mipgap=0.001):
+        # opt = pe.SolverFactory('cbc')
+        # opt.options["ratioGap"] = mipgap
+        # opt.options["seconds"] = 30
+        opt = pe.SolverFactory('cplex')
+        opt.options["mipgap"] = mipgap
+        opt.options["timelimit"] = 60
+        results = opt.solve(self.model, tee=False, keepfiles=False)
         return results
     
     def printCycleOutput(self):
