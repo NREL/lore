@@ -42,12 +42,10 @@ Run this script for each of the requests, then form a unified sky_cover.csv by
 concatenating the csv files:
   cat HAS*/sky_cover.csv > sky_cover.csv"
 
-# The full path to the directory of this source dir.
+# Check we have a copy of degrib
 _SOURCE_DIR="$(dirname ${BASH_SOURCE[0]} > /dev/null 2>&1 ; pwd -P)"
 if [[ "$OSTYPE" == "darwin"* ]]; then
     DEGRIB="$_SOURCE_DIR/degrib_osx"
-# if [[ "$OSTYPE" == "linux-gnu"* ]]; then
-#     DEGRIB="$_SOURCE_DIR/degrib"
 else
     echo "ERROR: we don't have a version of degrib for the OS $OSTYPE"
     exit 1
@@ -113,7 +111,7 @@ then
     cd "processed"
     for filename in ../intermediate/*
     do
-        ../../degrib $filename -P -pnt $LATIDUDE,$LONGITUDE -out ${filename##*/}
+        $DEGRIB $filename -P -pnt $LATIDUDE,$LONGITUDE -out ${filename##*/}
     done
     echo "INFO: finished extracting!"
     cd ".."
@@ -133,4 +131,7 @@ then
     sed 's/Sky, \[\%\], //g' aggregated.txt > sky_cover.csv
     rm out.tmp
     rm aggregated.txt
+    echo "INFO: success! Created the file sky_cover.csv"
+else
+    echo "WARN: the file sky_cover.csv already exists. Use that instead."
 fi
