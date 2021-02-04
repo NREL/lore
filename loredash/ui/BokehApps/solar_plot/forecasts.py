@@ -63,7 +63,7 @@ class Forecast:
         longitude = -117.363598,
         timezone = 'US/Pacific',
         altitude = 1497.0,
-        uncertainty_bands = 'bands.csv',
+        uncertainty_bands = '../../data/solar_forecast_bands.csv',
     ):
         """
         Parameters
@@ -148,6 +148,3 @@ class Forecast:
                 continue
             data[k] = data[k] * data['clear_sky']
         return data
-
-# f = Forecast()
-# d = f.forecast()
