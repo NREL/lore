@@ -180,18 +180,24 @@ weather_schema = Schema( All(
                                     #   Optional(), if not present will throw exception
 )
 
+plant_location_schema = Schema( All(
+        {
+        Required('latitude'): And(Coerce(float), Range(min=-90, max=90)),             # latitude [deg]
+        Required('longitude'): And(Coerce(float), Range(min=-180, max=180)),          # longitude [deg]
+        Required('elevation'): And(Coerce(float), Range(min=-500, max=9000)),         # elevation [m]
+        Required('timezone'): And(Number(scale=0), Coerce(int), Range(min=-12, max=12))  # timezone [hr]
+        },
+        list_lengths_must_match
+    ),
+        extra=REMOVE_EXTRA,
+        required=True,
+)
+
 plant_config_schema = Schema( All(
-        # An exception will be thrown if any value is missing or invalid
-        # Number(scale=0) throws exception if number has a non-zero decimal
         # This is an example of validating a nested dictionary
         {
-        Required('name'): Coerce(str),                                                    # plant name
-        Required('location'): Schema({
-            Required('latitude'): And(Coerce(float), Range(min=-90, max=90)),             # latitude [deg]
-            Required('longitude'): And(Coerce(float), Range(min=-180, max=180)),          # longitude [deg]
-            Required('elevation'): And(Coerce(float), Range(min=-500, max=9000)),         # elevation [m]
-            Required('timezone'): And(Number(scale=0), Coerce(int), Range(min=-12, max=12))  # timezone [hr]
-        }, extra=REMOVE_EXTRA)
+        Required('name'): Coerce(str),                                                 # plant name
+        Required('location'): plant_location_schema,                                   # plant location dict
         },
         list_lengths_must_match
     ),
