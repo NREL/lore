@@ -44,7 +44,7 @@ class ForecastUncertainty:
             )
         )
 
-class Forecast:
+class SolarForecast:
     """
     A class to manage DNI forecasts from NDFD.
     
@@ -63,7 +63,7 @@ class Forecast:
         longitude = -117.363598,
         timezone = 'US/Pacific',
         altitude = 1497.0,
-        uncertainty_bands = '../../data/solar_forecast_bands.csv',
+        uncertainty_bands = '../data/solar_forecast_bands.csv',
     ):
         """
         Parameters
