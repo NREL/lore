@@ -9,6 +9,8 @@ import PySAM_DAOTk.TcsmoltenSalt as pysam
 from pathlib import Path
 from mediation import data_validator, pysam_wrap, models
 import pandas as pd
+from mediation.models import PlantConfig
+import rapidjson
 # import models
 
 class Mediator:
@@ -216,6 +218,24 @@ def MediateContinuously(update_interval=5):
 #     mediator = Mediator()
 #     mediator.RunOnce()
 #     return False
+
+def LoadPlantConfig(config_path):
+    if isinstance(config_path, str) and os.path.isfile(config_path):
+        with open(config_path) as f:
+            plant_config = rapidjson.load(f)
+    else:
+        raise Exception('Plant configuration file not found.')
+        
+    validated_outputs = data_validator.validate(plant_config, data_validator.plant_config_schema)
+
+    plant_config_table = PlantConfig()
+    plant_config_table.name = plant_config['name']
+    plant_config_table.latitude = plant_config['location']['latitude']
+    plant_config_table.longitude = plant_config['location']['longitude']
+    plant_config_table.elevation = plant_config['location']['elevation']
+    plant_config_table.timezone = plant_config['location']['timezone']
+    plant_config_table.save()
+    del plant_config
 
 def RoundTime(dt, second_resolution):
     """Round to nearest second interval"""

@@ -26,6 +26,10 @@ import datetime
 # For testing, bypassing multiprocessing:
 parent_dir = str(Path(__file__).parents[1])
 default_weather_file = parent_dir+"/data/daggett_ca_34.865371_-116.783023_psmv3_60_tmy.csv"
+plant_config_file = parent_dir+"/data/plant_config.json"
+
+# This will be changed so it's triggered by the user, instead of an automatic initialization
+mediator.LoadPlantConfig(plant_config_file)
 
 mediator = mediator.Mediator(override_with_weather_file_location=True,
                              weather_file=default_weather_file, preprocess_pysam=True,
