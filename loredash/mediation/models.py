@@ -1,4 +1,5 @@
 from django.db import models
+from django.conf import settings
 
 #--------------PySAM Data----------------------------------
 class PysamData(models.Model):                                                                              # SSC variables, pre unit conversion:
@@ -18,3 +19,23 @@ class PysamData(models.Model):                                                  
     # shown when entry is generically queried
     def __str__(self):
         return str(self.timestamp)
+
+
+# I kind of gave up here with trying to enforce only one entry in this model/table. However, this
+#  should work unless someone explicity specifies a site_id, and one other than '1'.
+#  See these links for more robust ideas:
+#   https://stackoverflow.com/a/2106836                         (not sure what this means)
+#   https://stackoverflow.com/a/4888467                         (I can't get this idea to work)
+#   https://docs.djangoproject.com/en/3.1/ref/contrib/sites/    (more background on the 'sites' framework)
+#   https://djangopackages.org/grids/g/live-setting/            (Django-Constance looks good, but maybe overkill?)
+class PlantConfig(models.Model):
+    site_id = models.IntegerField(default=settings.SITE_ID, primary_key=True)
+    name = models.CharField(max_length=255, verbose_name="Plant name", default=None)                        # max_length of 255 is a safe constraint
+    latitude = models.FloatField(verbose_name="Latitude, degrees North [deg]", default=None)
+    longitude = models.FloatField(verbose_name="Longitude, degrees East [deg]", default=None)
+    elevation = models.FloatField(verbose_name="Elevation above sea level [m]", default=None)
+    timezone = models.FloatField(verbose_name="Timezone, UTC offset [hr]", default=None)
+
+    # shown when entry is generically queried
+    def __str__(self):
+        return str(self.name)
