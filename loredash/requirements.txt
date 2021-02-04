@@ -8,6 +8,7 @@ NREL-PySAM-DAO-Tk>=1.1.0,<2.0.0
 NREL-PySAM-DAO-Tk-stubs>=1.1.0,<2.0.0
 numpy==1.19.1
 pandas==1.0.3
+python-rapidjson==1.0
 PyInquirer==1.0.3
 voluptuous==0.11.7
 scipy==1.4.1

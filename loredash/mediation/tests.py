@@ -22,6 +22,31 @@ import numpy as np
 
 
 # TESTS:
+
+#---Plant config validation---------------------------------------------------------------------------------------------
+def test_plant_config_validation():
+    plant_config = {
+        "name":  "plant_name",
+        "location": {
+            "latitude":  38.2,
+            "longitude": -117.4,
+            "elevation": 1524,
+            "timezone": -8
+        }
+    }
+
+    plant_config_schema = data_validator.plant_config_schema
+    validated_plant_config = plant_config_schema(plant_config)
+    assert validated_plant_config['name'] == plant_config['name']
+    assert validated_plant_config['location'] == plant_config['location']
+
+    plant_config['location']['timezone'] = 200
+    with pytest.raises(Exception) as excinfo:
+        validated_plant_config = plant_config_schema(plant_config)
+    assert "value must be at most" in str(excinfo.value)
+
+#---/Plant config validation---------------------------------------------------------------------------------------------
+
 #---RoundTime------------------------------------------------------------------------------------------------------------
 """Test RoundTime"""
 def test_roundtime():
