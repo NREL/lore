@@ -30,11 +30,11 @@ class PysamData(models.Model):                                                  
 #   https://djangopackages.org/grids/g/live-setting/            (Django-Constance looks good, but maybe overkill?)
 class PlantConfig(models.Model):
     site_id = models.IntegerField(default=settings.SITE_ID, primary_key=True)
-    name = models.CharField(max_length=255, verbose_name="Plant name", default=None)                        # max_length of 255 is a safe constraint
-    latitude = models.FloatField(verbose_name="Latitude, degrees North [deg]", default=None)
-    longitude = models.FloatField(verbose_name="Longitude, degrees East [deg]", default=None)
-    elevation = models.FloatField(verbose_name="Elevation above sea level [m]", default=None)
-    timezone = models.FloatField(verbose_name="Timezone, UTC offset [hr]", default=None)
+    name = models.CharField(max_length=255, verbose_name="Plant name", default='plant_name')                        # max_length of 255 is a safe constraint
+    latitude = models.FloatField(verbose_name="Latitude, degrees North [deg]", default=-999)
+    longitude = models.FloatField(verbose_name="Longitude, degrees East [deg]", default=-999)
+    elevation = models.FloatField(verbose_name="Elevation above sea level [m]", default=-999)
+    timezone = models.FloatField(verbose_name="Timezone, UTC offset [hr]", default=-999)
 
     # shown when entry is generically queried
     def __str__(self):
