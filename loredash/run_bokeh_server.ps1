@@ -9,7 +9,7 @@
 
 #python -m bokeh serve $bokeh_app_dirs $bokeh_app_files --allow-websocket-origin $websocket --address $address
 
-# conda activate loredash
+conda activate loredash
 
 python -m bokeh serve `
     ./ui/BokehApps/dashboard_plot `
