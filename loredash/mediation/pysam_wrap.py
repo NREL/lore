@@ -7,20 +7,20 @@ import PySAM_DAOTk.TcsmoltenSalt as t
 #import PySAM_DAOTk.Grid as g
 import PySAM_DAOTk.Singleowner as s
 from mediation import data_validator
+from mediation import mediator
 
 class PysamWrap:
     parent_dir = str(Path(__file__).parents[1])
     design_path = parent_dir+"/data/field_design.json"
     kMinOneHourSims = True        # circumvents SSC bug
 
-    def __init__(self, plant_config, model_name="MSPTSingleOwner", load_defaults=True, weather_file=None,
+    def __init__(self, model_name="MSPTSingleOwner", load_defaults=True, weather_file=None,
                  enable_preprocessing=True, preprocess_on_init=True):
         if load_defaults == True:
             self.tech_model = t.default(model_name)
         else:
             self.tech_model = t.new(model_name)
 
-        self.plant_config = plant_config
         #TODO: load plant_config into tech_model and ensure there is a proper initial return value from GetSimulatedPlantState()
 
         self.SetWeatherData(tmy_file_path=weather_file)
@@ -36,7 +36,7 @@ class PysamWrap:
     def PreProcess(self):
         if not self._WeatherFileIsSet():
             solar_resource_data = PysamWrap.GetSolarResourceDataTemplate(
-                plant_location=self.plant_config['location']
+                plant_location = mediator.Plant.GetPlantConfig()['location']
             )
         else:
             solar_resource_data = None

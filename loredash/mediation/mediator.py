@@ -43,8 +43,9 @@ class Mediator:
             Plant.LoadPlantLocation(plant_location)
 
         # TODO: remove plant_config parameter and get from database instead
-        self.pysam_wrap = pysam_wrap.PysamWrap(plant_config=Plant.GetPlantConfig(), model_name=self.default_pysam_model,
-                                               load_defaults=True, weather_file=None,
+        self.pysam_wrap = pysam_wrap.PysamWrap(model_name=self.default_pysam_model,
+                                               load_defaults=True,
+                                               weather_file=None,
                                                enable_preprocessing=self.preprocess_pysam,
                                                preprocess_on_init=self.preprocess_pysam_on_init)
     
