@@ -16,13 +16,11 @@ import rapidjson
 class Mediator:
     pysam_wrap = None
     validated_outputs_prev = None
-    plant_config = {'design': None, 'location': None }
     default_pysam_model = "MSPTSingleOwner"
 
-    def __init__(self, plant_config={'design': None, 'location': None}, override_with_weather_file_location=True,
+    def __init__(self, plant_config_path=None, override_with_weather_file_location=False,
                  weather_file=None, preprocess_pysam=True, preprocess_pysam_on_init=True,
                  update_interval=datetime.timedelta(seconds=5), simulation_timestep=datetime.timedelta(minutes=5)):
-        self.plant_config = plant_config
         self.override_with_weather_file_location = override_with_weather_file_location
         self.weather_file = weather_file
         self.preprocess_pysam = preprocess_pysam
@@ -30,10 +28,22 @@ class Mediator:
         self.update_interval = update_interval
         self.simulation_timestep = simulation_timestep
 
-        if weather_file is not None and override_with_weather_file_location == True:
-            self.plant_config['location'] = GetLocationFromWeatherFile(weather_file)
+        if plant_config_path is None:
+            # Verify plant configuration in database
+            try:
+                data_validator.validate(self.GetPlantConfig(), data_validator.plant_config_schema)
+            except Exception as err:
+                raise(err)  # just re-raise for now
+        else:
+            # TODO: Change so it's triggered by the user instead of an automatic initialization
+            self.LoadPlantConfig(plant_config_path)
 
-        self.pysam_wrap = pysam_wrap.PysamWrap(plant_config=self.plant_config, model_name=self.default_pysam_model,
+        if weather_file is not None and override_with_weather_file_location == True:
+            plant_location = GetLocationFromWeatherFile(weather_file)
+            self.LoadPlantLocation(plant_location)
+
+        # TODO: remove plant_config parameter and get from database instead
+        self.pysam_wrap = pysam_wrap.PysamWrap(plant_config=self.GetPlantConfig(), model_name=self.default_pysam_model,
                                                load_defaults=True, weather_file=None,
                                                enable_preprocessing=self.preprocess_pysam,
                                                preprocess_on_init=self.preprocess_pysam_on_init)
@@ -156,6 +166,41 @@ class Mediator:
         self.RunOnce(datetime_start_prev_day, datetime_end_current_day)
         return 0
 
+    def LoadPlantConfig(self, config_path):
+        if isinstance(config_path, str) and os.path.isfile(config_path):
+            with open(config_path) as f:
+                plant_config = rapidjson.load(f)
+        else:
+            raise Exception('Plant configuration file not found.')
+            
+        validated_outputs = data_validator.validate(plant_config, data_validator.plant_config_schema)
+
+        plant_config_table = PlantConfig()
+        plant_config_table.name = plant_config['name']
+        plant_config_table.save()
+        self.LoadPlantLocation(plant_config['location'], validate=False)    # already validated above
+        del plant_config
+
+    def LoadPlantLocation(self, plant_location, validate=True):
+        if validate == True:
+            plant_location = data_validator.validate(plant_location, data_validator.plant_location_schema)
+
+        plant_config_table = PlantConfig()
+        plant_config_table.latitude = plant_location['latitude']
+        plant_config_table.longitude = plant_location['longitude']
+        plant_config_table.elevation = plant_location['elevation']
+        plant_config_table.timezone = plant_location['timezone']
+        plant_config_table.save()
+
+    def GetPlantConfig(self):
+        result = list(PlantConfig.objects.filter(site_id=settings.SITE_ID).values())[0]
+        result['location'] = {}
+        result['location']['latitude'] = result.pop('latitude')
+        result['location']['longitude'] = result.pop('longitude')
+        result['location']['elevation'] = result.pop('elevation')
+        result['location']['timezone'] = result.pop('timezone')
+        return result
+
     def BulkAddToPysamTable(self, records):
         n_records = len(records['time_hr'])
         newyears = datetime.datetime(records['year_start'], 1, 1, 0, 0, 0)
@@ -218,24 +263,6 @@ def MediateContinuously(update_interval=5):
 #     mediator = Mediator()
 #     mediator.RunOnce()
 #     return False
-
-def LoadPlantConfig(config_path):
-    if isinstance(config_path, str) and os.path.isfile(config_path):
-        with open(config_path) as f:
-            plant_config = rapidjson.load(f)
-    else:
-        raise Exception('Plant configuration file not found.')
-        
-    validated_outputs = data_validator.validate(plant_config, data_validator.plant_config_schema)
-
-    plant_config_table = PlantConfig()
-    plant_config_table.name = plant_config['name']
-    plant_config_table.latitude = plant_config['location']['latitude']
-    plant_config_table.longitude = plant_config['location']['longitude']
-    plant_config_table.elevation = plant_config['location']['elevation']
-    plant_config_table.timezone = plant_config['location']['timezone']
-    plant_config_table.save()
-    del plant_config
 
 def RoundTime(dt, second_resolution):
     """Round to nearest second interval"""
@@ -312,8 +339,8 @@ def Tmy3ToDataframe(tmy3_path, datetime_start=None, datetime_end=None):
 def GetLocationFromWeatherFile(tmy3_path):
     df_meta = pd.read_csv(tmy3_path, sep=',', header=0, nrows=1)
     return {
-        'Latitude': float(df_meta['Latitude'][0]),
-        'Longitude': float(df_meta['Longitude'][0]),
-        'Time Zone': int(df_meta['Time Zone'][0]),
-        'Elevation': float(df_meta['Elevation'][0])
+        'latitude': float(df_meta['Latitude'][0]),
+        'longitude': float(df_meta['Longitude'][0]),
+        'timezone': int(df_meta['Time Zone'][0]),
+        'elevation': float(df_meta['Elevation'][0])
     }

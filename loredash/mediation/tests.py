@@ -22,6 +22,7 @@ import numpy as np
 
 
 # TESTS:
+# (when adding new tests, make sure function name begins with "test_")
 
 #---Plant config validation---------------------------------------------------------------------------------------------
 def test_plant_config_validation():

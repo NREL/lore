@@ -133,10 +133,10 @@ class PysamWrap:
         """solar_resource_data can be directly passed to PySAM, after lists are padded to an 8760 length"""
         solar_resource_data = PysamWrap.GetSolarResourceDataTemplate()
 
-        solar_resource_data['tz'] = weather_dataframe.attrs['Time Zone']
-        solar_resource_data['elev'] = weather_dataframe.attrs['Elevation']
-        solar_resource_data['lat'] = weather_dataframe.attrs['Latitude']
-        solar_resource_data['lon'] = weather_dataframe.attrs['Longitude']
+        solar_resource_data['tz'] = weather_dataframe.attrs['timezone']
+        solar_resource_data['elev'] = weather_dataframe.attrs['elevation']
+        solar_resource_data['lat'] = weather_dataframe.attrs['latitude']
+        solar_resource_data['lon'] = weather_dataframe.attrs['longitude']
         solar_resource_data['year'] = list(weather_dataframe.index.year)
         solar_resource_data['month'] = list(weather_dataframe.index.month)
         solar_resource_data['day'] = list(weather_dataframe.index.day)
