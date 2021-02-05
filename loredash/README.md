@@ -81,8 +81,8 @@ For production testing, the web server [Waitress](https://docs.pylonsproject.org
 	# On Windows:
 	start powershell -noexit -file run_bokeh_server.ps1
 	# On Linux:
-	chmod +x run_bokeh_server.ps1
-	./run_bokeh_server.ps1 &
+	chmod +x run_bokeh_server.sh
+	./run_bokeh_server.sh &
 	```
 5. Start the Django project
 	```

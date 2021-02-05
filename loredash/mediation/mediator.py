@@ -226,8 +226,16 @@ class Plant:
 
         plant_config_table = PlantConfig()
         plant_config_table.name = plant_config['name']
-        plant_config_table.save()
-        Plant.LoadPlantLocation(plant_config['location'], validate=False)    # already validated above
+        try:
+            plant_config_table.save()
+            Plant.LoadPlantLocation(plant_config['location'], validate=False)    # already validated above
+        except Exception as err:
+            if format(err) != "no such table: mediation_plantconfig":
+                raise(err)
+            else:
+                # Do nothing. The table hasn't been created yet because we are
+                # running this for the first time.
+                pass
         del plant_config
 
     @staticmethod

@@ -39,3 +39,12 @@ class PlantConfig(models.Model):
     # shown when entry is generically queried
     def __str__(self):
         return str(self.name)
+
+#-----------Forecasts Solar Data----------------------------
+class SolarForecasts(models.Model):
+    timestamp = models.DateTimeField(verbose_name="Timestamp", db_index=True)
+    clear_sky = models.FloatField(verbose_name="Clear Sky [W/m2]", default=None)
+    ndfd = models.FloatField(verbose_name="NDFD [W/m2]", default=None)
+
+    def __str__(self):
+        return str(self.timestamp)
