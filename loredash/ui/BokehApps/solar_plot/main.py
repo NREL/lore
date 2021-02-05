@@ -26,8 +26,6 @@ from ui.models import ForecastsSolarData as fsd         # TODO: replace Forecast
 from threading import Thread
 import queue
 
-import forecasts
-
 TIME_BOXES = {
     'NEXT_6_HOURS': 6,
     'NEXT_12_HOURS': 12,

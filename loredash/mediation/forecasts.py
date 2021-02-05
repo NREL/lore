@@ -59,10 +59,10 @@ class SolarForecast:
     
     def __init__(
         self,
-        latitude = 38.238875,
-        longitude = -117.363598,
-        timezone = 'US/Pacific',
-        altitude = 1497.0,
+        latitude,
+        longitude,
+        timezone,
+        altitude,
         uncertainty_bands = '../data/solar_forecast_bands.csv',
     ):
         """
