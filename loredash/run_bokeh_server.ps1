@@ -1,3 +1,6 @@
+# Note: if you edit this script, make sure to make the same changes to
+#       `run_bokeh_server.ps1`!
+
 #$websocket = '10.10.10.10'
 #$address = '127.0.0.1'
 
