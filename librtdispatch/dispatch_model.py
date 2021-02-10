@@ -7,6 +7,7 @@ Pyomo real-time dispatch model
 import pyomo.environ as pe
 from pyomo.environ import units
 units.load_definitions_from_strings(['USD = [currency]'])
+#TODO either update specifications for temperatures throughout, or convert upon initialization of dispatch model
 
 class RealTimeDispatchModel(object):
     def __init__(self, params, include={"pv": False, "battery": False, "persistence": False}):
@@ -128,7 +129,7 @@ class RealTimeDispatchModel(object):
             self.model.Qrsd = pe.Param(mutable=True, initialize=params.Qrsd, units=units.kWh)      #Required thermal power for receiver shut down [kWh\sst]
             self.model.Qru = pe.Param(mutable=True, initialize=params.Qru, units=units.kWh)       #Allowable power per period for receiver start-up [kWh\sst]
             # self.model.T_rout_min = pe.Param(mutable=True, initialize=params.T_rout_min)  # Minimum allowable receiver outlet temperature [deg C]
-            self.model.T_rout_max = pe.Param(mutable=True, initialize=params.T_rout_max, units=units.degC)  # Maximum allowable receiver outlet temperature [deg C]
+            self.model.T_rout_max = pe.Param(mutable=True, initialize=params.T_rout_max, units=units.degK)  # Maximum allowable receiver outlet temperature [deg C]
             self.model.Wh_comm = pe.Param(mutable=True, initialize=params.Wh_comm, units=units.kW)  # Heliostat field communication parasitic loss [kW\sse]
             self.model.Wh_track = pe.Param(mutable=True, initialize=params.Wh_track, units=units.kW)  # Heliostat field tracking parasitic loss [kW\sse]
             self.model.Wht_full = pe.Param(mutable=True, initialize=params.Wht_full, units=units.kW)  # Tower piping heat trace full load parasitic loss [kW\sse]
@@ -143,14 +144,14 @@ class RealTimeDispatchModel(object):
         self.model.mass_cs_max = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.mass_cs_max, units=units.kg)  # Maximum mass of heat transfer fluid in cold storage [kg]
         self.model.mass_hs_min = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.mass_hs_min, units=units.kg)  # Minimum mass of heat transfer fluid in hot storage [kg]
         self.model.mass_hs_max = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.mass_hs_max, units=units.kg)  # Maximum mass of heat transfer fluid in hot storage [kg]
-        self.model.T_cs_min = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.T_cs_min, units=units.degC)  # Minimum temperature of heat transfer fluid in cold storage [C]
-        self.model.T_cs_max = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.T_cs_max, units=units.degC)  # Maximum temperature of heat transfer fluid in cold storage [C]
-        self.model.T_hs_min = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.T_hs_min, units=units.degC)  # Minimum temperature of heat transfer fluid in hot storage [C]
-        self.model.T_hs_max = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.T_hs_max, units=units.degC)  # Maximum temperature of heat transfer fluid in hot storage [C]
+        self.model.T_cs_min = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.T_cs_min, units=units.degK)  # Minimum temperature of heat transfer fluid in cold storage [C]
+        self.model.T_cs_max = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.T_cs_max, units=units.degK)  # Maximum temperature of heat transfer fluid in cold storage [C]
+        self.model.T_hs_min = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.T_hs_min, units=units.degK)  # Minimum temperature of heat transfer fluid in hot storage [C]
+        self.model.T_hs_max = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.T_hs_max, units=units.degK)  # Maximum temperature of heat transfer fluid in hot storage [C]
         self.model.T_cs_des = pe.Param(mutable=True, within=pe.NonNegativeReals,
-                                       initialize=params.T_cs_des, units=units.degC)  # Design point temperature of heat transfer fluid in cold storage [C]
+                                       initialize=params.T_cs_des, units=units.degK)  # Design point temperature of heat transfer fluid in cold storage [C]
         self.model.T_hs_des = pe.Param(mutable=True, within=pe.NonNegativeReals,
-                                       initialize=params.T_hs_des, units=units.degC)  # Design point temperature of heat transfer fluid in hot storage [C]
+                                       initialize=params.T_hs_des, units=units.degK)  # Design point temperature of heat transfer fluid in hot storage [C]
 
         ### Power Cycle Parameters ###
         self.model.alpha_b = pe.Param(mutable=True, within=pe.Reals, initialize=params.alpha_b)
@@ -159,8 +160,8 @@ class RealTimeDispatchModel(object):
         self.model.beta_b = pe.Param(mutable=True, within=pe.Reals, initialize=params.beta_b)
         self.model.beta_m = pe.Param(mutable=True, within=pe.Reals, initialize=params.beta_m)
         self.model.beta_mT = pe.Param(mutable=True, within=pe.Reals, initialize=params.beta_mT)  #Regression coefficients for the power cycle efficiency model
-        self.model.delta_T_design = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.delta_T_design, units=units.degC/units.hr)  #Design point temperature change of the heat transfer fluid across the SGS model
-        self.model.delta_T_max = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.delta_T_max, units=units.degC/units.hr)   #Max temperature change of the heat transfer fluid across the SGS model
+        self.model.delta_T_design = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.delta_T_design, units=units.degK/units.hr)  #Design point temperature change of the heat transfer fluid across the SGS model
+        self.model.delta_T_max = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.delta_T_max, units=units.degK/units.hr)   #Max temperature change of the heat transfer fluid across the SGS model
         self.model.Ec = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.Ec, units=units.kWh)           #Required energy expended to cold start cycle [kWh\sst]
         self.model.Ew = pe.Param(mutable=True, within=pe.NonNegativeReals,
                                  initialize=params.Ew)  # Required energy expended to warm start cycle (from standby) [kWh\sst]
@@ -176,9 +177,9 @@ class RealTimeDispatchModel(object):
         # self.model.Qb = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.Qb, units=units.kW)           #Cycle standby thermal power consumption per period [kW\sst]
         self.model.Ql = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.Ql, units=units.kW)           #Minimum operational thermal power input to cycle [kW\sst]
         self.model.Qu = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.Qu, units=units.kW)           #Cycle thermal power capacity [kW\sst]
-        self.model.T_cin_design = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.T_cin_design, units=units.degC)   #Design point power cycle inlet temperature of the heat transfer fluid
-        # self.model.T_cout_min = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.T_cout_min, units=units.degC)   #Minimum allowable cycle outlet temperature [deg C]
-        # self.model.T_cout_max = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.T_cout_max, units=units.degC)  #Maximum allowable cycle outlet temperature [deg C]
+        self.model.T_cin_design = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.T_cin_design, units=units.degK)   #Design point power cycle inlet temperature of the heat transfer fluid
+        # self.model.T_cout_min = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.T_cout_min, units=units.degK)   #Minimum allowable cycle outlet temperature [deg C]
+        # self.model.T_cout_max = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.T_cout_max, units=units.degK)  #Maximum allowable cycle outlet temperature [deg C]
         self.model.Wdot_design = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.Wdot_design, units=units.kw) #Design point electrical output of the power cycle
         self.model.Wdot_p_max = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.Wdot_p_max, units=units.kw) #Power purchase required to cover all parasitic loads [kW\sse]
         self.model.Wb = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.Wb, units=units.kw)           #Power cycle standby operation parasitic load [kW\sse]
@@ -198,8 +199,8 @@ class RealTimeDispatchModel(object):
         # self.model.s0 = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.s0, units=units.kWh)  #Initial TES reserve quantity  [kWh\sst]  -- moved to transition
         self.model.mass_cs0 = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.mass_cs0, units=units.kg)  #Initial mass of heat transfer fluid in cold storage  [kg]
         self.model.mass_hs0 = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.mass_hs0, units=units.kg)  #Initial mass of heat transfer fluid in hot storage  [kg]
-        self.model.T_cs0 = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.T_cs0, units=units.degC)  #Initial temperature of heat transfer fluid in cold storage  [C]
-        self.model.T_hs0 = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.T_hs0, units=units.degC)  #Initial temperature of heat transfer fluid in hot storage  [C]
+        self.model.T_cs0 = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.T_cs0, units=units.degK)  #Initial temperature of heat transfer fluid in cold storage  [C]
+        self.model.T_hs0 = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.T_hs0, units=units.degK)  #Initial temperature of heat transfer fluid in hot storage  [C]
         self.model.ucsu0 = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.ucsu0, units=units.kWh) #Initial cycle start-up energy inventory  [kWh\sst]
         self.model.ursd0 = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.ursd0, units=units.kWh) #Initial receiver shut-down energy inventory [kWh\sst]
         self.model.ursu0 = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.ursu0, units=units.kWh)  # Initial receiver start-up energy inventory [kWh\sst]
@@ -303,10 +304,10 @@ class RealTimeDispatchModel(object):
         self.model.mdot_r_cs = pe.Var(self.model.T_nl, domain=pe.NonNegativeReals, units=units.kg/units.s)  #Mass flow rate of htf to the rec to cold in period t [kg/s]
         self.model.mdot_r_hs = pe.Var(self.model.T_nl, domain=pe.NonNegativeReals, units=units.kg/units.s)  #Mass flow rate of htf to the rec to hot in period t [kg/s]
         self.model.s = pe.Var(self.model.T_l, domain=pe.NonNegativeReals, units=units.kWh, bounds = (0,self.model.Eu))                      #TES reserve quantity at period $t$  [kWh\sst]
-        self.model.T_cout = pe.Var(self.model.T_nl, domain=pe.NonNegativeReals, units=units.degC)  #Temperature of heat transfer fluid at the cycle outlet in period $t$ & $^{\circ} C$
-        self.model.T_cs = pe.Var(self.model.T_nl, domain=pe.NonNegativeReals, units=units.degC, bounds = (self.model.T_cs_min,self.model.T_cs_max))  #Temperature of heat transfer fluid in cold storage in period $t$  & $^{\circ} C$
-        self.model.T_hs = pe.Var(self.model.T_nl, domain=pe.NonNegativeReals, units=units.degC, bounds = (self.model.T_hs_min,self.model.T_hs_max))  #Temperature of heat transfer fluid in hot storage in period $t$  & $^{\circ} C$
-        self.model.T_rout = pe.Var(self.model.T_nl, domain=pe.NonNegativeReals, units=units.degC)  #Temperature of heat transfer fluid at the receiver outlet in period $t$  & $^{\circ} C$
+        self.model.T_cout = pe.Var(self.model.T_nl, domain=pe.NonNegativeReals, units=units.degK)  #Temperature of heat transfer fluid at the cycle outlet in period $t$ & $^{\circ} C$
+        self.model.T_cs = pe.Var(self.model.T_nl, domain=pe.NonNegativeReals, units=units.degK, bounds = (self.model.T_cs_min,self.model.T_cs_max))  #Temperature of heat transfer fluid in cold storage in period $t$  & $^{\circ} C$
+        self.model.T_hs = pe.Var(self.model.T_nl, domain=pe.NonNegativeReals, units=units.degK, bounds = (self.model.T_hs_min,self.model.T_hs_max))  #Temperature of heat transfer fluid in hot storage in period $t$  & $^{\circ} C$
+        self.model.T_rout = pe.Var(self.model.T_nl, domain=pe.NonNegativeReals, units=units.degK)  #Temperature of heat transfer fluid at the receiver outlet in period $t$  & $^{\circ} C$
         self.model.ucsu = pe.Var(self.model.T, domain=pe.NonNegativeReals, units=units.kWh)   #Cycle start-up energy inventory at period $t$ [kWh
         self.model.ucsd = pe.Var(self.model.T, domain=pe.NonNegativeReals, units=units.kWh)                         #Cycle shutdown energy inventory at period $t$ [kWh\sst]
         self.model.ursu = pe.Var(self.model.T, domain=pe.NonNegativeReals, units=units.kWh)                         #Receiver start-up energy inventory at period $t$ [kWh\sst]
