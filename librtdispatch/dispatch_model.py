@@ -180,16 +180,16 @@ class RealTimeDispatchModel(object):
         self.model.T_cin_design = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.T_cin_design, units=units.degK)   #Design point power cycle inlet temperature of the heat transfer fluid
         # self.model.T_cout_min = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.T_cout_min, units=units.degK)   #Minimum allowable cycle outlet temperature [deg C]
         # self.model.T_cout_max = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.T_cout_max, units=units.degK)  #Maximum allowable cycle outlet temperature [deg C]
-        self.model.Wdot_design = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.Wdot_design, units=units.kw) #Design point electrical output of the power cycle
-        self.model.Wdot_p_max = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.Wdot_p_max, units=units.kw) #Power purchase required to cover all parasitic loads [kW\sse]
-        self.model.Wb = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.Wb, units=units.kw)           #Power cycle standby operation parasitic load [kW\sse]
-        self.model.Wc = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.Wc, units=units.kw)           #Power cycle operating parasitic loss [kW\sse]
-        self.model.Wdotl = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.Wdotl, units=units.kw)        #Minimum cycle electric power output [kW\sse]
-        self.model.Wdotu = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.Wdotu, units=units.kw)        #Cycle electric power rated capacity [kW\sse]
-        self.model.W_delta_plus = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.W_delta_plus, units=units.kw/units.hr) #Power cycle ramp-up designed limit [kW\sse/h]
-        self.model.W_delta_minus = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.W_delta_minus, units=units.kw/units.hr)#Power cycle ramp-down designed limit [kW\sse/h]
-        self.model.W_v_plus = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.W_v_plus, units=units.kw/units.hr)     #Power cycle ramp-up violation limit [kW\sse/h]
-        self.model.W_v_minus = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.W_v_minus, units=units.kw/units.hr)    #Power cycle ramp-down violation limit [kW\sse/h]
+        self.model.Wdot_design = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.Wdot_design, units=units.kW) #Design point electrical output of the power cycle
+        self.model.Wdot_p_max = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.Wdot_p_max, units=units.kW) #Power purchase required to cover all parasitic loads [kW\sse]
+        self.model.Wb = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.Wb, units=units.kW)           #Power cycle standby operation parasitic load [kW\sse]
+        self.model.Wc = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.Wc, units=units.kW)           #Power cycle operating parasitic loss [kW\sse]
+        self.model.Wdotl = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.Wdotl, units=units.kW)        #Minimum cycle electric power output [kW\sse]
+        self.model.Wdotu = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.Wdotu, units=units.kW)        #Cycle electric power rated capacity [kW\sse]
+        self.model.W_delta_plus = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.W_delta_plus, units=units.kW/units.hr) #Power cycle ramp-up designed limit [kW\sse/h]
+        self.model.W_delta_minus = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.W_delta_minus, units=units.kW/units.hr)#Power cycle ramp-down designed limit [kW\sse/h]
+        self.model.W_v_plus = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.W_v_plus, units=units.kW/units.hr)     #Power cycle ramp-up violation limit [kW\sse/h]
+        self.model.W_v_minus = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.W_v_minus, units=units.kW/units.hr)    #Power cycle ramp-down violation limit [kW\sse/h]
         self.model.Yu = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.Yu, units=units.hr)           #Minimum required power cycle uptime [h]
         self.model.Yd = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.Yd, units=units.hr)           #Minimum required power cycle downtime [h]
         
@@ -1146,7 +1146,7 @@ class RealTimeDispatchModel(object):
             return model.ycgb[t] - model.ycge[t] == model.y[t] - model.y[t-1]
 
         def cycle_min_updown_init_rule(model, t):
-            if model.Delta_e[t] <= max(pe.value(model.y0*(model.Yu-model.Yu0)), pe.value((1-model.y0)*(model.Yd-model.Yd0))):
+            if pe.value(model.Delta_e[t] <= max(pe.value(model.y0*(model.Yu-model.Yu0)), pe.value((1-model.y0)*(model.Yd-model.Yd0)))):
                 return model.y[t] == model.y0
             return pe.Constraint.Feasible
         
