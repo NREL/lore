@@ -1,7 +1,10 @@
 import datetime
+import os
 import pandas
 from pvlib import forecast
 from pvlib import location
+
+from mediation.models import SolarForecastData
 
 class ForecastUncertainty:
     """
@@ -56,14 +59,13 @@ class SolarForecast:
     """
     plant_location = None
     forecast_uncertainty = None
-    
     def __init__(
         self,
         latitude,
         longitude,
         timezone,
         altitude,
-        uncertainty_bands = '../data/solar_forecast_bands.csv',
+        uncertainty_bands = ""
     ):
         """
         Parameters
@@ -85,6 +87,10 @@ class SolarForecast:
             timezone,
             altitude,
         )
+        if uncertainty_bands == "":
+            uncertainty_bands = os.path.join(
+                os.path.dirname(__file__), '../data/solar_forecast_bands.csv'
+            )
         self.forecast_uncertainty = ForecastUncertainty(uncertainty_bands)
         return
     
@@ -124,10 +130,47 @@ class SolarForecast:
         data.fillna(method = 'ffill', inplace = True)
         return data
     
-    def forecast(self, resolution = '5T'):
-        # Get the median estimate from NDFD, as well as the estimate in 
-        # ratio-space.
-        raw_data = self._raw_data()
+    def _to_utc(self, t):
+        "Convert a timezone-aware `t` to UTC and strip timezone info."
+        return t.astimezone('UTC').tz_localize()
+
+    def _to_local(self, t):
+        "Convert a timezone-naive `t` to local timezone-aware."
+        return t.tz_localize('UTC').astimezone(self.plant_location.tz)
+
+    def update_database(self):
+        data = self._raw_data()
+        current_time = self._to_utc(
+            pandas.Timestamp(
+                datetime.datetime.now(), tz = self.plant_location.tz,
+            )
+        )
+        instances = [
+            SolarForecastData(
+                # Note how these are now in UTC! Remember this when we get them
+                # back.
+                forecast_made = current_time,
+                forecast_for = self._to_utc(time),
+                clear_sky = row.clear_sky,
+                ratio = row.ratio,
+            )
+            for (time, row) in data.iterrows()
+        ]
+        SolarForecastData.objects.bulk_create(instances, ignore_conflicts=True)
+        return
+
+    def latest_forecast(self, resolution = '5T'):
+        # First, read latest forecast data from database, and convert it to the
+        # plant's timezone.
+        latest = SolarForecastData.objects.latest('forecast_made').forecast_made
+        raw_data = pandas.DataFrame(
+            SolarForecastData.objects.filter(forecast_made = latest).values()
+        )
+        raw_data.drop(columns = ['forecast_made', 'id'], inplace=True)
+        raw_data['forecast_for'] = \
+            raw_data['forecast_for'].map(lambda x: self._to_local(x))
+        raw_data.set_index('forecast_for', inplace=True)
+
         # For each row (level = 0), convert the median ratio estimate into a 
         # probabilistic ratio estimate.
         quantile_data = raw_data.groupby(level = 0).apply(
