@@ -167,7 +167,7 @@ class RealTimeDispatchModel(object):
         self.model.eta_des = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.eta_des)      #Cycle nominal efficiency [-]
         self.model.etap = pe.Param(mutable=True, within=pe.Reals, initialize=params.etap)         #Slope of linear approximation of power cycle performance curve [kW\sse/kW\sst]
         self.model.kl = pe.Param(mutable=True, within=pe.Reals, initialize=params.kl, units=units.kWh)     #Change in lower bound of cycle thermal load due to hot storage temperature
-        self.model.ku = pe.Param(mutable=True, within=pe.Reals, initialize=params.kl, units=units.kWh)     #Change in upper bound of cycle thermal load due to hot storage temperature
+        self.model.ku = pe.Param(mutable=True, within=pe.Reals, initialize=params.ku, units=units.kWh)     #Change in upper bound of cycle thermal load due to hot storage temperature
         self.model.Lc = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.Lc)           #Cycle heat transfer fluid pumping power per unit energy expended [kW\sse/kW\sst]
         self.model.mdot_c_design = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.mdot_c_design, units=units.kg/units.s)  #Design point mass flow rate of the heat transfer fluid through the power cycle
         self.model.mdot_c_min = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.mdot_c_min, units=units.kg/units.s)  #Minimum mass flow rate of heat transfer fluid to the cycle [kg/s]
