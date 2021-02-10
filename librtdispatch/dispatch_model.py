@@ -167,11 +167,11 @@ class RealTimeDispatchModel(object):
         self.model.delta_T_max = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.delta_T_max, units=units.degK/units.hr)   #Max temperature change of the heat transfer fluid across the SGS model
         self.model.Ec = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.Ec, units=units.kWh)           #Required energy expended to cold start cycle [kWh\sst]
         self.model.Ew = pe.Param(mutable=True, within=pe.NonNegativeReals,
-                                 initialize=params.Ew)  # Required energy expended to warm start cycle (from standby) [kWh\sst]
+                                 initialize=params.Ew, units=units.kWh)  # Required energy expended to warm start cycle (from standby) [kWh\sst]
         self.model.eta_des = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.eta_des)      #Cycle nominal efficiency [-]
         self.model.etap = pe.Param(mutable=True, within=pe.Reals, initialize=params.etap)         #Slope of linear approximation of power cycle performance curve [kW\sse/kW\sst]
-        self.model.kl = pe.Param(mutable=True, within=pe.Reals, initialize=params.kl, units=units.kWh)     #Change in lower bound of cycle thermal load due to hot storage temperature
-        self.model.ku = pe.Param(mutable=True, within=pe.Reals, initialize=params.ku, units=units.kWh)     #Change in upper bound of cycle thermal load due to hot storage temperature
+        self.model.kl = pe.Param(mutable=True, within=pe.Reals, initialize=params.kl, units=units.kW/units.degK)     #Change in lower bound of cycle thermal load due to hot storage temperature
+        self.model.ku = pe.Param(mutable=True, within=pe.Reals, initialize=params.ku, units=units.kW/units.degK)     #Change in upper bound of cycle thermal load due to hot storage temperature
         self.model.Lc = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.Lc)           #Cycle heat transfer fluid pumping power per unit energy expended [kW\sse/kW\sst]
         self.model.mdot_c_design = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.mdot_c_design, units=units.kg/units.s)  #Design point mass flow rate of the heat transfer fluid through the power cycle
         self.model.mdot_c_min = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.mdot_c_min, units=units.kg/units.s)  #Minimum mass flow rate of heat transfer fluid to the cycle [kg/s]
@@ -256,7 +256,7 @@ class RealTimeDispatchModel(object):
         self.model.avg_price_disp_storage_incentive = pe.Param(mutable=True, within=pe.NonNegativeReals, units=units.USD/units.kWh, initialize=params.avg_price_disp_storage_incentive )   #average grid purchase price [\$/kWh]
 
         if self.include["signal"]:
-            self.model.G = pe.Param(self.model.H, mutable=True, within=pe.NonNegativeReals, units=units.kW, initialize=params.G)
+            self.model.G = pe.Param(self.model.H, mutable=True, within=pe.NonNegativeReals, units=units.kWh, initialize=params.G)
         
         
         #--------Parameters for the Battery---------
