@@ -142,7 +142,7 @@ class RealTimeDispatchModel(object):
 
         ### Thermal Energy Storage parameters
         self.model.Eu = pe.Param(mutable=True, initialize=params.Eu)  # Thermal energy storage capacity [kWh\sst]
-        self.model.Cp = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.Cp, units=units.kW*units.s/units.kg)  # Tower piping heat trace part load parasitic loss [kW\sse/ (kg/s)]
+        self.model.Cp = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.Cp, units=units.kJ/(units.degK*units.kg))  # Specific heat of the heat transfer fluid & [kJ\sst/ kg $^{\circ} C$]
         self.model.mass_cs_min = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.mass_cs_min, units=units.kg)  # Minimum mass of heat transfer fluid in cold storage [kg]
         self.model.mass_cs_max = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.mass_cs_max, units=units.kg)  # Maximum mass of heat transfer fluid in cold storage [kg]
         self.model.mass_hs_min = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.mass_hs_min, units=units.kg)  # Minimum mass of heat transfer fluid in hot storage [kg]
@@ -392,15 +392,17 @@ class RealTimeDispatchModel(object):
 
         #------ Expressions for existing parameters and variables
         self.model.s0 = (
-            (self.model.Cp * (self.model.mass_hs0 - self.model.mass_hs_min) * (
-                        self.model.T_hs0 - self.model.T_cs_des) / 3600)
+            units.convert(self.model.Cp * (self.model.mass_hs0 - self.model.mass_hs_min) * (
+                        self.model.T_hs0 - self.model.T_cs_des), units.kWh )
             if self.model.t_transition == 0 else
-            (self.model.Cp * (self.model.mass_hs[self.model.t_transition] - self.model.mass_hs_min) * (
-                    self.model.T_hs[self.model.t_transition] - self.model.T_cs_des) / 3600)
+            units.convert(self.model.Cp * (self.model.mass_hs[self.model.t_transition] - self.model.mass_hs_min) * (
+                    self.model.T_hs[self.model.t_transition] - self.model.T_cs_des), units.kWh )
         )
 
-        self.model.x_calc = lambda t: self.model.Cp * self.model.mdot_c[t] * (self.model.T_hs[t] - self.model.T_cout[t])
-        self.model.s_calc = lambda t: (self.model.Cp/3600) * (self.model.mass_hs[t] - self.model.mass_hs_min) * (self.model.T_hs[t] - self.model.T_cs_des)
+        self.model.x_calc = lambda t: units.convert(self.model.Cp * self.model.mdot_c[t] * (
+                    self.model.T_hs[t] - self.model.T_cout[t]), units.kW)
+        self.model.s_calc = lambda t: units.convert(self.model.Cp * (self.model.mass_hs[t] - self.model.mass_hs_min) *
+                                                    (self.model.T_hs[t] - self.model.T_cs_des), units.kWh)
         self.model.eta1 = lambda t: self.model.wdot[t]/self.model.x_calc[t] if self.model.x_calc[t] == 0 else 0
         self.model.eta2 = lambda t: self.model.wdot[t]/self.model.x[t] if self.model.x[t] == 0 else 0
         # self.model.pr = lambda t: self.model.Lr*(self.model.xr[t] + self.model.Qin[t]*self.model.frsu[t] + self.model.Qrl*self.model.yrsb[t])
@@ -871,25 +873,25 @@ class RealTimeDispatchModel(object):
         ### mass balance
         def cold_side_mass_rule(model, t):
             if t == model.t_start:
-                return model.mass_cs[t] - model.mass_cs0 == model.Delta[t]*3600*(model.mdot_c[t] - model.mdot_r_hs[t])
-            return model.mass_cs[t] - model.mass_cs[t-1] == model.Delta[t]*3600*(model.mdot_c[t] - model.mdot_r_hs[t])
+                return model.mass_cs[t] - model.mass_cs0 == units.convert(model.Delta[t], units.s)*(model.mdot_c[t] - model.mdot_r_hs[t])
+            return model.mass_cs[t] - model.mass_cs[t-1] == units.convert(model.Delta[t], units.s)*(model.mdot_c[t] - model.mdot_r_hs[t])
 
         def hot_side_mass_rule(model, t):
             if t == model.t_start:
-                return model.mass_hs[t] - model.mass_hs0 == model.Delta[t]*3600*(model.mdot_r_hs[t] - model.mdot_c[t])
-            return model.mass_hs[t] - model.mass_hs[t-1] == model.Delta[t]*3600*(model.mdot_r_hs[t] - model.mdot_c[t])
+                return model.mass_hs[t] - model.mass_hs0 == units.convert(model.Delta[t], units.s)*(model.mdot_r_hs[t] - model.mdot_c[t])
+            return model.mass_hs[t] - model.mass_hs[t-1] == units.convert(model.Delta[t], units.s)*(model.mdot_r_hs[t] - model.mdot_c[t])
 
         ### energy balance
         def cold_side_energy_balance_rule(model, t):
             if t == model.t_start:
                 return (
                 model.mass_cs[t] * model.T_cs[t] - (model.mass_cs0 * model.T_cs0) ==
-                model.Delta[t] * 3600 * (model.mdot_r_cs[t] * model.T_rout[t] + model.mdot_c[t] * model.T_cout[t] - (
+                units.convert(model.Delta[t], units.s) * (model.mdot_r_cs[t] * model.T_rout[t] + model.mdot_c[t] * model.T_cout[t] - (
                             model.mdot_r_cs[t] * model.T_cs[t] + model.mdot_r_hs[t] * model.T_cs[t]))
                 )
             return (
                 model.mass_cs[t] * model.T_cs[t] - (model.mass_cs[t-1] * model.T_cs[t-1]) ==
-                model.Delta[t] * 3600 * (model.mdot_r_cs[t] * model.T_rout[t] + model.mdot_c[t] * model.T_cout[t] - (
+                units.convert(model.Delta[t], units.s) * (model.mdot_r_cs[t] * model.T_rout[t] + model.mdot_c[t] * model.T_cout[t] - (
                         model.mdot_r_cs[t] * model.T_cs[t] + model.mdot_r_hs[t] * model.T_cs[t]))
             )
 
@@ -897,11 +899,11 @@ class RealTimeDispatchModel(object):
             if t == model.t_start:
                 return (
                     model.mass_hs[t] * model.T_hs[t] - (model.mass_hs0 * model.T_hs0) ==
-                    model.Delta[t] * 3600 * (model.mdot_r_hs[t] * model.T_rout[t] - model.mdot_c[t] * model.T_hs[t])
+                    units.convert(model.Delta[t], units.s) * (model.mdot_r_hs[t] * model.T_rout[t] - model.mdot_c[t] * model.T_hs[t])
                 )
             return (
                 model.mass_hs[t] * model.T_hs[t] - (model.mass_hs[t-1] * model.T_hs[t-1]) ==
-                model.Delta[t] * 3600 * (model.mdot_r_hs[t] * model.T_rout[t] - model.mdot_c[t] * model.T_hs[t])
+                units.convert(model.Delta[t], units.s) * (model.mdot_r_hs[t] * model.T_rout[t] - model.mdot_c[t] * model.T_hs[t])
             )
 
         self.model.cold_side_mass_con = pe.Constraint(self.model.T_nl, rule=cold_side_mass_rule)
