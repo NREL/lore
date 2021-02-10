@@ -4,6 +4,7 @@
     "latitude":   38.2389,
     "longitude":  -117.3636,
     "elevation":  1524.0,
-    "timezone":   -8.0
+    "timezone":   -8.0,
+    "timezone_string": "US/Pacific"
   }
 }

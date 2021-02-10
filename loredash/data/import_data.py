@@ -43,9 +43,9 @@ with sqlite3.connect(os.path.join(db_dir, 'db.sqlite3')) as db:
         data = json.load(io)
         l = data['location']
         cur.execute('''
-            INSERT INTO 'mediation_plantconfig' (name, latitude, longitude, elevation, timezone) 
-            VALUES(?,?,?,?,?)''', 
-            (data['name'], l['latitude'], l['longitude'], l['elevation'], l['timezone'])
+            INSERT INTO 'mediation_plantconfig' (name, latitude, longitude, elevation, timezone, timezone_string)
+            VALUES(?,?,?,?,?,?)''',
+            (data['name'], l['latitude'], l['longitude'], l['elevation'], l['timezone'], l['timezone_string'])
         )
         print('Completed writes to mediation_plantconfig.')
     # Add the `ui-xxx.csv` files to the database.
