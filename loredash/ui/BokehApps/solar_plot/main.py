@@ -1,14 +1,8 @@
-
-###
-### Imports
-###
-
 from bokeh import io as bokeh_io
 from bokeh import layouts
 from bokeh import models as bokeh_models
 from bokeh import plotting
 from bokeh import themes
-import bokeh_utils
 from mediation import forecasts
 from mediation import models
 import queue 
@@ -37,11 +31,24 @@ def make_dataset():
 
 def make_plot():
     source = make_dataset()
+    hover_tool = bokeh_models.HoverTool(
+        line_policy='nearest',
+        tooltips=[
+            ('Data','$name'),
+            ('Date', '$x{%a %b, %Y}'),
+            ('Time', '$x{%R}'),
+            ('Value', '$y W/m^2')
+        ],
+        formatters={
+            '$x':'datetime'
+        }
+    )
     plot = plotting.figure(
+        tools = [hover_tool],
         x_axis_type = 'datetime',
         width = 650,
         height = 525,
-        y_axis_label = 'Power [W/m\^2]',
+        y_axis_label = 'Power [W/m^2]',
     )
     legend = bokeh_models.Legend(
         orientation = 'horizontal', 
@@ -63,6 +70,7 @@ def make_plot():
         x = 'forecast_for',
         y = '0.5',
         source = source,
+        name = 'Best guess',
         line_width = 5,
     )
     legend.items.append(
@@ -80,7 +88,7 @@ def make_plot():
         )
         plot.add_layout(band)
     plot.add_layout(legend, 'below')
-    return bokeh_utils.bokeh_utils.style(plot)
+    return plot
 
 plot = make_plot()
 
@@ -95,5 +103,3 @@ current_doc = bokeh_io.curdoc()
 current_doc.title = "Solar Forecast Plot"
 current_doc.theme = themes.Theme(json=theme.json)
 current_doc.add_root(layout)
-
-# curdoc().add_periodic_callback(live_update, 60000)

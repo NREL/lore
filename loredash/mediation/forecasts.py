@@ -115,19 +115,13 @@ class SolarForecast:
             how = 'clearsky_scaling',
         )[['dni']]
         data.index = pandas.to_datetime(data.index)
+        data['clear_sky'] = self.plant_location.get_clearsky(data.index)['dni']
+        # Drop any rows at which NDFD predicts essentially zero DNI, or the
+        # clear-sky is zero (e.g., night-time).
+        data = data[(data['dni'] > 5) & (data['clear_sky'] > 5)]
         # Map the values to a normalized dni/clear-sky ratio space to allow us
         # to convert the median estimate from NDFD to a probabilistic estimate.
-        data['clear_sky'] = self.plant_location.get_clearsky(data.index)['dni']
         data['ratio'] = data['dni'] / data['clear_sky']
-        # Clean up the ratio by imputing any NaNs that arose to the nearest 
-        # non-NaN value. This means we assume that the start of the day acts 
-        # like the earliest observation, and the end of the day looks like the 
-        # last observation.
-        data.interpolate(method = 'nearest', inplace = True)
-        # However, nearest only works when there are non-NaN values either side.
-        # For the first and last NaNs, use bfill and ffill:
-        data.fillna(method = 'bfill', inplace = True)
-        data.fillna(method = 'ffill', inplace = True)
         return data
     
     def _to_utc(self, t):
@@ -164,7 +158,7 @@ class SolarForecast:
     def _hour_diff(self, t):
         return (datetime.datetime.utcnow() - t).total_seconds() / 3600
 
-    def _update_latest_forecast(self, resolution = '1h'):
+    def _update_latest_forecast(self, resolution):
         self.update_database()
         return self.latest_forecast(resolution = resolution)
 
@@ -200,18 +194,24 @@ class SolarForecast:
         raw_data['forecast_for'] = \
             raw_data['forecast_for'].map(lambda x: self._to_local(x))
         raw_data.set_index('forecast_for', inplace=True)
-
+        data = raw_data.resample(resolution).mean()
+        # Clean up the ratio by imputing any NaNs that arose to the nearest
+        # non-NaN value. This means we assume that the start of the day acts
+        # like the earliest observation, and the end of the day looks like the
+        # last observation.
+        data.interpolate(method = 'quadratic', inplace = True)
+        # However, nearest only works when there are non-NaN values either side.
+        # For the first and last NaNs, use bfill and ffill:
+        data.fillna(method = 'bfill', inplace = True)
+        data.fillna(method = 'ffill', inplace = True)
         # For each row (level = 0), convert the median ratio estimate into a 
         # probabilistic ratio estimate.
-        quantile_data = raw_data.groupby(level = 0).apply(
+        data = data.groupby(level = 0).apply(
             lambda df: self.forecast_uncertainty.forecast(
                 (df.index[0] - raw_data.index[0]).seconds / 3_600,
                 df['ratio'][0],
             )
         )
-        # Then, resample these ratio estimates to the user-provided resolution.
-        data = quantile_data.resample(resolution).mean()
-        data.interpolate(method = 'nearest', inplace = True)
         # Get clear-sky estimates for the new time-points.
         data['clear_sky'] = self.plant_location.get_clearsky(data.index)['dni']
         # Convert the ratio estimates back to DNI-space by multiplying by the 
