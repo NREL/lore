@@ -80,13 +80,6 @@ for filename in [f for f in os.listdir() if csv_match.match(f)]:
             cur.executemany('insert into ' + table + ' (id, timestamp, market_forecast, ci_plus, ci_minus) values (?,?,?,?,?);', data_to_db)
             print('Completed writes to ' + table + '.')
 
-        elif re.match(r'.*solar.*', filename):
-            table = 'ui_forecastssolardata'
-            print('Writing to ' + table + '...')
-            data_to_db = [((i+1),row[0],row[1],row[2],row[3],row[4],row[5],row[6],row[7],row[8],row[9],row[10],row[11],row[12],row[13],row[14],row[15],row[16]) for i,row in enumerate(reader)]
-            cur.executemany('insert into ' + table + ' (id, timestamp, clear_sky, nam, nam_plus, nam_minus, rap, rap_plus, rap_minus, hrrr, hrrr_plus, hrrr_minus, gfs, gfs_plus, gfs_minus, ndfd, ndfd_plus, ndfd_minus) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);', data_to_db)
-            print('Completed writes to ' + table + '.')
-
 conn.commit() # Save the changes made to the database
 conn.close()  # Close the databse connection
 

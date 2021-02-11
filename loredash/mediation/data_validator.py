@@ -179,3 +179,29 @@ weather_schema = Schema( All(
         required=True,              # THIS DOESN'T SEEM TO WORK: True = data is required for all defined schema keys unless overriden using
                                     #   Optional(), if not present will throw exception
 )
+
+plant_location_schema = Schema( All(
+        {
+        Required('latitude'): And(Coerce(float), Range(min=-90, max=90)),             # latitude [deg]
+        Required('longitude'): And(Coerce(float), Range(min=-180, max=180)),          # longitude [deg]
+        Required('elevation'): And(Coerce(float), Range(min=-500, max=9000)),         # elevation [m]
+        Required('timezone'): And(Number(scale=0), Coerce(int), Range(min=-12, max=12))  # timezone [hr]
+        },
+        list_lengths_must_match
+    ),
+        extra=REMOVE_EXTRA,
+        required=True,
+)
+
+plant_config_schema = Schema( All(
+        # This is an example of validating a nested dictionary
+        {
+        Required('name'): Coerce(str),                                                 # plant name
+        Required('location'): plant_location_schema,                                   # plant location dict
+        },
+        list_lengths_must_match
+    ),
+        extra=REMOVE_EXTRA,         # REMOVE_EXTRA = keys in data that are undefined in schema will be removed--no exception will be thrown
+        required=True,              # THIS DOESN'T SEEM TO WORK: True = data is required for all defined schema keys unless overriden using
+                                    #   Optional(), if not present will throw exception
+)

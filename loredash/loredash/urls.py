@@ -26,9 +26,12 @@ import datetime
 # For testing, bypassing multiprocessing:
 parent_dir = str(Path(__file__).parents[1])
 default_weather_file = parent_dir+"/data/daggett_ca_34.865371_-116.783023_psmv3_60_tmy.csv"
+plant_config_path = parent_dir+"/data/plant_config.json"
 
-mediator = mediator.Mediator(override_with_weather_file_location=True,
-                             weather_file=default_weather_file, preprocess_pysam=True,
+mediator = mediator.Mediator(plant_config_path=plant_config_path,
+                             override_with_weather_file_location=False,
+                             weather_file=default_weather_file,
+                             preprocess_pysam=True,
                              preprocess_pysam_on_init=True,
                              update_interval=datetime.timedelta(seconds=5),
                              simulation_timestep=datetime.timedelta(minutes=5))

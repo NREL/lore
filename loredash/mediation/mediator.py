@@ -9,18 +9,18 @@ import PySAM_DAOTk.TcsmoltenSalt as pysam
 from pathlib import Path
 from mediation import data_validator, pysam_wrap, models
 import pandas as pd
+from mediation.models import PlantConfig
+import rapidjson
 # import models
 
 class Mediator:
     pysam_wrap = None
     validated_outputs_prev = None
-    plant_config = {'design': None, 'location': None }
     default_pysam_model = "MSPTSingleOwner"
 
-    def __init__(self, plant_config={'design': None, 'location': None}, override_with_weather_file_location=True,
+    def __init__(self, plant_config_path=None, override_with_weather_file_location=False,
                  weather_file=None, preprocess_pysam=True, preprocess_pysam_on_init=True,
                  update_interval=datetime.timedelta(seconds=5), simulation_timestep=datetime.timedelta(minutes=5)):
-        self.plant_config = plant_config
         self.override_with_weather_file_location = override_with_weather_file_location
         self.weather_file = weather_file
         self.preprocess_pysam = preprocess_pysam
@@ -28,11 +28,24 @@ class Mediator:
         self.update_interval = update_interval
         self.simulation_timestep = simulation_timestep
 
-        if weather_file is not None and override_with_weather_file_location == True:
-            self.plant_config['location'] = GetLocationFromWeatherFile(weather_file)
+        if plant_config_path is None:
+            # Verify plant configuration in database
+            try:
+                data_validator.validate(Plant.GetPlantConfig(), data_validator.plant_config_schema)
+            except Exception as err:
+                raise(err)  # just re-raise for now
+        else:
+            # TODO: Change so it's triggered by the user instead of an automatic initialization
+            Plant.LoadPlantConfig(plant_config_path)
 
-        self.pysam_wrap = pysam_wrap.PysamWrap(plant_config=self.plant_config, model_name=self.default_pysam_model,
-                                               load_defaults=True, weather_file=None,
+        if weather_file is not None and override_with_weather_file_location == True:
+            plant_location = GetLocationFromWeatherFile(weather_file)
+            Plant.LoadPlantLocation(plant_location)
+
+        # TODO: remove plant_config parameter and get from database instead
+        self.pysam_wrap = pysam_wrap.PysamWrap(model_name=self.default_pysam_model,
+                                               load_defaults=True,
+                                               weather_file=None,
                                                enable_preprocessing=self.preprocess_pysam,
                                                preprocess_on_init=self.preprocess_pysam_on_init)
     
@@ -101,7 +114,7 @@ class Mediator:
 
         # a. Set weather values and plant state for PySAM
         weather_dataframe = self.GetWeatherDataframe(datetime_start, datetime_end, tmy3_path=self.weather_file)
-        plant_state = self.GetPlantState()
+        plant_state = Plant.GetPlantState(self.validated_outputs_prev, pysam_wrap=self.pysam_wrap)
         
         # b. Call PySAM using inputs
         tech_outputs = self.pysam_wrap.Simulate(datetime_start, datetime_end, self.simulation_timestep, plant_state, weather_dataframe=weather_dataframe)
@@ -199,12 +212,64 @@ class Mediator:
         tmy3_path = kwargs.get('tmy3_path') if 'tmy3_path' in kwargs else None
         return Tmy3ToDataframe(tmy3_path, datetime_start, datetime_end)
 
-    def GetPlantState(self):
+
+class Plant:
+    @staticmethod
+    def LoadPlantConfig(config_path):
+        if isinstance(config_path, str) and os.path.isfile(config_path):
+            with open(config_path) as f:
+                plant_config = rapidjson.load(f)
+        else:
+            raise Exception('Plant configuration file not found.')
+            
+        validated_outputs = data_validator.validate(plant_config, data_validator.plant_config_schema)
+
+        plant_config_table = PlantConfig()
+        plant_config_table.name = plant_config['name']
+        try:
+            plant_config_table.save()
+            Plant.LoadPlantLocation(plant_config['location'], validate=False)    # already validated above
+        except Exception as err:
+            if format(err) != "no such table: mediation_plantconfig":
+                raise(err)
+            else:
+                # Do nothing. The table hasn't been created yet because we are
+                # running this for the first time.
+                pass
+        del plant_config
+
+    @staticmethod
+    def LoadPlantLocation(plant_location, validate=True):
+        if validate == True:
+            plant_location = data_validator.validate(plant_location, data_validator.plant_location_schema)
+
+        plant_config_table = PlantConfig()
+        plant_config_table.latitude = plant_location['latitude']
+        plant_config_table.longitude = plant_location['longitude']
+        plant_config_table.elevation = plant_location['elevation']
+        plant_config_table.timezone = plant_location['timezone']
+        plant_config_table.save()
+
+    @staticmethod
+    def GetPlantConfig():
+        result = list(PlantConfig.objects.filter(site_id=settings.SITE_ID).values())[0]
+        result['location'] = {}
+        result['location']['latitude'] = result.pop('latitude')
+        result['location']['longitude'] = result.pop('longitude')
+        result['location']['elevation'] = result.pop('elevation')
+        result['location']['timezone'] = result.pop('timezone')
+        return result
+
+    @staticmethod
+    def GetPlantState(validated_outputs_prev, **kwargs):
         """put virtual/real call here instead"""
-        plant_state = self.pysam_wrap.GetSimulatedPlantState(self.validated_outputs_prev)      # for initializing next simulation from a prior one
+        assert 'pysam_wrap' in kwargs
+        pysam_wrap = kwargs.get('pysam_wrap')
+        plant_state = pysam_wrap.GetSimulatedPlantState(validated_outputs_prev)      # for initializing next simulation from a prior one
         if plant_state is None:
-            plant_state = self.pysam_wrap.GetDefaultPlantState()
-        return plant_state
+            plant_state = pysam_wrap.GetDefaultPlantState()
+        return plant_state    
+
 
 def MediateContinuously(update_interval=5):
     mediator = Mediator()
@@ -292,8 +357,8 @@ def Tmy3ToDataframe(tmy3_path, datetime_start=None, datetime_end=None):
 def GetLocationFromWeatherFile(tmy3_path):
     df_meta = pd.read_csv(tmy3_path, sep=',', header=0, nrows=1)
     return {
-        'Latitude': float(df_meta['Latitude'][0]),
-        'Longitude': float(df_meta['Longitude'][0]),
-        'Time Zone': int(df_meta['Time Zone'][0]),
-        'Elevation': float(df_meta['Elevation'][0])
+        'latitude': float(df_meta['Latitude'][0]),
+        'longitude': float(df_meta['Longitude'][0]),
+        'timezone': int(df_meta['Time Zone'][0]),
+        'elevation': float(df_meta['Elevation'][0])
     }

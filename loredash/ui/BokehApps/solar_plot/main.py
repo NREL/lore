@@ -13,7 +13,6 @@ sys.path.insert(1, os.path.join(sys.path[0], '..'))
 import theme.theme as theme
 import bokeh_utils.bokeh_utils as butils
 
-
 # Data manipulation
 import pandas as pd
 import datetime
@@ -23,6 +22,7 @@ from scipy.signal import savgol_filter
 
 # Asyncronous access to Django DB
 from ui.models import ForecastsSolarData as fsd         # TODO: replace ForecastsMarketData with the real data model table
+
 from threading import Thread
 import queue
 
@@ -30,7 +30,7 @@ TIME_BOXES = {
     'NEXT_6_HOURS': 6,
     'NEXT_12_HOURS': 12,
     'NEXT_24_HOURS': 24,
-    'NEXT_48_HOURS': 48
+    'NEXT_48_HOURS': 48,
 }
 
 TIMESTAMP = 'Timestamp'
@@ -91,7 +91,7 @@ def make_dataset(time_box, distribution):
         window, order = 51, 3
         for label in cds.column_names[2:]:
             cds.data[label] = savgol_filter(cds.data[label], window, order)
-    
+
     return cds
 
 def make_plot(src): # Takes in a ColumnDataSource
@@ -126,23 +126,22 @@ def make_plot(src): # Takes in a ColumnDataSource
         )
 
     # Set action to reset plot
-    plot.js_on_event(DoubleTap, CustomJS(args=dict(p=plot), code="""
-        p.reset.emit()
-    """))
+    plot.js_on_event(
+        DoubleTap,
+        CustomJS(args=dict(p=plot), code="p.reset.emit()"),
+    )
 
     plot.toolbar.active_drag = pan_tool
     plot.toolbar.active_scroll = wheel_zoom_tool
 
-    plot.x_range.range_padding=0.005
-    plot.x_range.range_padding_units="percent"
+    plot.x_range.range_padding = 0.005
+    plot.x_range.range_padding_units = "percent"
 
     legend = Legend(orientation='vertical', location='top_left', spacing=10)
-    
-    for label in base_data_labels[2:]:
 
+    for label in base_data_labels[2:]:
         legend_label = butils.col_to_title_upper(label)
         lower_upper_regex = re.compile(label+'(_plus|_minus)')
-
         if len(list(filter(lower_upper_regex.search, data_labels))):
             bands[label] = Band(
                 base=PLOT_LABELS_FOR_DATA_COLS[TIMESTAMP],
@@ -152,17 +151,16 @@ def make_plot(src): # Takes in a ColumnDataSource
                 level = 'underlay',
                 fill_alpha=0.2,
                 fill_color=label_colors[label+'_color'],
-                line_width=1, 
+                line_width=1,
                 line_alpha=0.0,
                 visible = label in [butils.title_to_col(plot_select.labels[i]) for i in plot_select.active],
                 name = legend_label,
                 )
             plot.add_layout(bands[label])
-
-        lines[label] = plot.line( 
+        lines[label] = plot.line(
             x=PLOT_LABELS_FOR_DATA_COLS[TIMESTAMP],
             y=label,
-            line_color = label_colors[label+'_color'], 
+            line_color = label_colors[label+'_color'],
             line_alpha = 1.0,
             line_width=3,
             source=src,
@@ -171,18 +169,14 @@ def make_plot(src): # Takes in a ColumnDataSource
             )
         legend_item = LegendItem(label=legend_label, renderers=[lines[label]])
         legend.items.append(legend_item)
-
     # styling
     plot = butils.style(plot)
-
     plot.add_layout(legend, 'left')
-
     return plot
 
 def update_lines(attr, old, new):
     # Update visible lines
     selected_labels = [plot_select.labels[i] for i in plot_select.active]
-
     for label in lines.keys():
         label_name = butils.col_to_title_upper(label)
         lines[label].visible = label_name in selected_labels
@@ -208,15 +202,15 @@ def live_update():
     new_current_datetime = datetime.datetime.now().replace(year=2010, second=0) # TODO: replace year with microseconds
 
     q = queue.Queue()
-    
+
     # Get updated time block information
     active_time_window = time_window.options.index(time_window.value)
     time_box = list(TIME_BOXES.keys())[active_time_window]
     time_delta = datetime.timedelta(hours=TIME_BOXES[time_box])
 
     # Current Data
-    thread = Thread(target=getForecastSolarData, 
-        args=((current_datetime + time_delta, new_current_datetime + time_delta), 
+    thread = Thread(target=getForecastSolarData,
+        args=((current_datetime + time_delta, new_current_datetime + time_delta),
             q))
     thread.start()
     thread.join()
@@ -242,7 +236,7 @@ def live_update():
 # Create Radio Button Group Widget
 time_window_init = "Next 24 Hours"
 time_window = Select(
-    options=["Next 6 Hours", "Next 12 Hours", "Next 24 Hours", "Next 48 Hours"], 
+    options=["Next 6 Hours", "Next 12 Hours", "Next 24 Hours", "Next 48 Hours"],
     value=time_window_init,
     width=135)
 time_window.on_change('value', update_points)
@@ -291,7 +285,7 @@ widgets = column(
         time_window,
         distribution_select),
         width_policy='max'
-    
+
 )
 
 layout = column(

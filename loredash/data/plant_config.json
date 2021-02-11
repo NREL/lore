@@ -1,0 +1,9 @@
+{
+  "name":           "Crescent Dunes",
+  "location":       {
+                      "latitude":   38.23895540732931,
+                      "longitude":  -117.36368180656123,
+                      "elevation":  1524,
+                      "timezone":   -8
+                    }
+}
