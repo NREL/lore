@@ -132,7 +132,7 @@ class SolarForecast:
     
     def _to_utc(self, t):
         "Convert a timezone-aware `t` to UTC and strip timezone info."
-        return t.astimezone('UTC').tz_localize()
+        return t.astimezone('UTC').replace(tzinfo = None)
 
     def _to_local(self, t):
         "Convert a timezone-naive `t` to local timezone-aware."
@@ -154,15 +154,45 @@ class SolarForecast:
                 clear_sky = row.clear_sky,
                 ratio = row.ratio,
             )
+            # Okay, I know data.iterrows is slow. But the dataframe is never 
+            # very big.
             for (time, row) in data.iterrows()
         ]
         SolarForecastData.objects.bulk_create(instances, ignore_conflicts=True)
         return
 
-    def latest_forecast(self, resolution = '5T'):
+    def _hour_diff(self, t):
+        return (datetime.datetime.utcnow() - t).total_seconds() / 3600
+
+    def _update_latest_forecast(self, resolution = '1h'):
+        self.update_database()
+        return self.latest_forecast(resolution = resolution)
+
+    def latest_forecast(
+        self, 
+        resolution = '1h',
+        update_threshold = 3,
+    ):
+        """
+        Return the latest DNI forecast.
+
+        Parameters
+        ----------
+        resolution : str
+            The resolution passed to `pandas.ressample` for resampling the 
+            NDFD forecast into finer resolution. Defaults to `1h`.
+        update_threshold : int
+            If the latest forecast was retrieved more than `update_threshold` 
+            hours ago, refresh the database before returing the latest forecast.
+        """
         # First, read latest forecast data from database, and convert it to the
         # plant's timezone.
-        latest = SolarForecastData.objects.latest('forecast_made').forecast_made
+        try:
+            latest = SolarForecastData.objects.latest('forecast_made').forecast_made
+        except SolarForecastData.DoesNotExist:
+            return self._update_latest_forecast(resolution = resolution)
+        if self._hour_diff(latest) >= update_threshold:
+            return self._update_latest_forecast(resolution = resolution)
         raw_data = pandas.DataFrame(
             SolarForecastData.objects.filter(forecast_made = latest).values()
         )
@@ -190,4 +220,5 @@ class SolarForecast:
             if k == 'clear_sky':
                 continue
             data[k] = data[k] * data['clear_sky']
+        data.rename(columns = {k: str(k) for k in data.keys()}, inplace=True)
         return data

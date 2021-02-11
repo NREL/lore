@@ -1,7 +1,13 @@
 #!/bin/bash
-
-# Note: if you edit this script, make sure to make the same changes to
-#       `run_bokeh_server.ps1`!
+#
+# Notes
+# -----
+#
+# If you edit this script, make sure to make the same changes to
+# `run_bokeh_server.ps1`!
+#
+# To kill this server on linux, run `$ ps -ef | grep bokeh` to identify the pid,
+# then run `$ kill <pid>`.
 
 conda activate loredash
 
