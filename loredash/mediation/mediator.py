@@ -37,6 +37,16 @@ class Mediator:
             # TODO: Change so it's triggered by the user instead of an automatic initialization
             Plant.LoadPlantConfig(plant_config_path)
 
+        if plant_config_path is None:
+            # Verify plant configuration in database
+            try:
+                data_validator.validate(Plant.GetPlantConfig(), data_validator.plant_config_schema)
+            except Exception as err:
+                raise(err)  # just re-raise for now
+        else:
+            # TODO: Change so it's triggered by the user instead of an automatic initialization
+            Plant.LoadPlantConfig(plant_config_path)
+
         if weather_file is not None and override_with_weather_file_location == True:
             plant_location = GetLocationFromWeatherFile(weather_file)
             Plant.LoadPlantLocation(plant_location)

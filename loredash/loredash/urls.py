@@ -21,7 +21,6 @@ from pathlib import Path
 from mediation import mediator
 import multiprocessing
 import datetime
-
 # TODO(odow): the purpose of this code is to populate the database so we have
 # things to plot. But it shouldn't go here, because this gets run on a `migrate`
 # call, and initially, we don't have a database to store the results in! It
