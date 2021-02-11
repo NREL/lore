@@ -248,6 +248,7 @@ class Plant:
         plant_config_table.longitude = plant_location['longitude']
         plant_config_table.elevation = plant_location['elevation']
         plant_config_table.timezone = plant_location['timezone']
+        plant_config_table.timezone_string = plant_location['timezone_string']
         plant_config_table.save()
 
     @staticmethod
@@ -258,6 +259,7 @@ class Plant:
         result['location']['longitude'] = result.pop('longitude')
         result['location']['elevation'] = result.pop('elevation')
         result['location']['timezone'] = result.pop('timezone')
+        result['location']['timezone_string'] = result.pop('timezone_string')
         return result
 
     @staticmethod
