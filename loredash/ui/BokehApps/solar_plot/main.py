@@ -2,14 +2,14 @@ from bokeh import io as bokeh_io
 from bokeh import layouts
 from bokeh import models as bokeh_models
 from bokeh import plotting
-from bokeh import themes
+from bokeh import themes as bokeh_themes
 from mediation import forecasts
 from mediation import models
 import queue 
-from theme import theme
-from threading import Thread
+import theme
+import threading
 
-def latest_data(queue):
+def latestData(queue):
     plant = models.PlantConfig.objects.get(pk = 1)
     forecaster = forecasts.SolarForecast(
         plant.latitude,
@@ -17,20 +17,20 @@ def latest_data(queue):
         plant.timezone_string,
         plant.elevation,
     )
-    data = forecaster.latest_forecast().reset_index()
+    data = forecaster.latestForecast().reset_index()
     queue.put(data)
     return
 
-def make_dataset():
+def makeDataset():
     q = queue.Queue()
-    thread = Thread(target = latest_data, args = (q,))
+    thread = threading.Thread(target = latestData, args = (q,))
     thread.start()
     thread.join()
     data = q.get()
     return bokeh_models.ColumnDataSource(data = data)
 
-def make_plot():
-    source = make_dataset()
+def makePlot():
+    source = makeDataset()
     hover_tool = bokeh_models.HoverTool(
         line_policy='nearest',
         tooltips=[
@@ -90,7 +90,7 @@ def make_plot():
     plot.add_layout(legend, 'below')
     return plot
 
-plot = make_plot()
+plot = makePlot()
 
 layout = layouts.column(
     bokeh_models.widgets.Div(text="""<h3>Solar Forecast</h3>"""),
@@ -101,5 +101,5 @@ layout = layouts.column(
 
 current_doc = bokeh_io.curdoc()
 current_doc.title = "Solar Forecast Plot"
-current_doc.theme = themes.Theme(json=theme.json)
+current_doc.theme = bokeh_themes.Theme(json=theme.theme.json)
 current_doc.add_root(layout)

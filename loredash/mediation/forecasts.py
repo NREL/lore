@@ -94,7 +94,7 @@ class SolarForecast:
         self.forecast_uncertainty = ForecastUncertainty(uncertainty_bands)
         return
     
-    def _raw_data(self):
+    def _rawData(self):
         """Return a Pandas dataframe of the current DNI forecast and 
         corresponding  clear-sky DNI estimate.
     
@@ -124,17 +124,17 @@ class SolarForecast:
         data['ratio'] = data['dni'] / data['clear_sky']
         return data
     
-    def _to_utc(self, t):
+    def _toUTC(self, t):
         "Convert a timezone-aware `t` to UTC and strip timezone info."
         return t.astimezone('UTC').replace(tzinfo = None)
 
-    def _to_local(self, t):
+    def _toLocal(self, t):
         "Convert a timezone-naive `t` to local timezone-aware."
         return t.tz_localize('UTC').astimezone(self.plant_location.tz)
 
-    def update_database(self):
-        data = self._raw_data()
-        current_time = self._to_utc(
+    def updateDatabase(self):
+        data = self._rawData()
+        current_time = self._toUTC(
             pandas.Timestamp(
                 datetime.datetime.now(), tz = self.plant_location.tz,
             )
@@ -144,7 +144,7 @@ class SolarForecast:
                 # Note how these are now in UTC! Remember this when we get them
                 # back.
                 forecast_made = current_time,
-                forecast_for = self._to_utc(time),
+                forecast_for = self._toUTC(time),
                 clear_sky = row.clear_sky,
                 ratio = row.ratio,
             )
@@ -155,14 +155,14 @@ class SolarForecast:
         SolarForecastData.objects.bulk_create(instances, ignore_conflicts=True)
         return
 
-    def _hour_diff(self, t):
+    def _hourDiff(self, t):
         return (datetime.datetime.utcnow() - t).total_seconds() / 3600
 
-    def _update_latest_forecast(self, resolution):
-        self.update_database()
-        return self.latest_forecast(resolution = resolution)
+    def _updateLatestForecast(self, resolution):
+        self.updateDatabase()
+        return self.latestForecast(resolution = resolution)
 
-    def latest_forecast(
+    def latestForecast(
         self, 
         resolution = '1h',
         update_threshold = 3,
@@ -184,15 +184,15 @@ class SolarForecast:
         try:
             latest = SolarForecastData.objects.latest('forecast_made').forecast_made
         except SolarForecastData.DoesNotExist:
-            return self._update_latest_forecast(resolution = resolution)
-        if self._hour_diff(latest) >= update_threshold:
-            return self._update_latest_forecast(resolution = resolution)
+            return self._updateLatestForecast(resolution = resolution)
+        if self._hourDiff(latest) >= update_threshold:
+            return self._updateLatestForecast(resolution = resolution)
         raw_data = pandas.DataFrame(
             SolarForecastData.objects.filter(forecast_made = latest).values()
         )
         raw_data.drop(columns = ['forecast_made', 'id'], inplace=True)
         raw_data['forecast_for'] = \
-            raw_data['forecast_for'].map(lambda x: self._to_local(x))
+            raw_data['forecast_for'].map(lambda x: self._toLocal(x))
         raw_data.set_index('forecast_for', inplace=True)
         data = raw_data.resample(resolution).mean()
         # Clean up the ratio by imputing any NaNs that arose to the nearest
