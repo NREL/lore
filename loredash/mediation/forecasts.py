@@ -199,7 +199,7 @@ class SolarForecast:
         # non-NaN value. This means we assume that the start of the day acts
         # like the earliest observation, and the end of the day looks like the
         # last observation.
-        data.interpolate(method = 'quadratic', inplace = True)
+        data.interpolate(method = 'linear', inplace = True)
         # However, nearest only works when there are non-NaN values either side.
         # For the first and last NaNs, use bfill and ffill:
         data.fillna(method = 'bfill', inplace = True)
