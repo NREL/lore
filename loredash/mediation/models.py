@@ -35,16 +35,19 @@ class PlantConfig(models.Model):
     longitude = models.FloatField(verbose_name="Longitude, degrees East [deg]", default=-999)
     elevation = models.FloatField(verbose_name="Elevation above sea level [m]", default=-999)
     timezone = models.FloatField(verbose_name="Timezone, UTC offset [hr]", default=-999)
+    timezone_string = models.CharField(max_length = 255, verbose_name="Timezone, [string]", default="UTC")
 
     # shown when entry is generically queried
     def __str__(self):
         return str(self.name)
 
 #-----------Forecasts Solar Data----------------------------
-class SolarForecasts(models.Model):
-    timestamp = models.DateTimeField(verbose_name="Timestamp", db_index=True)
+class SolarForecastData(models.Model):
+    # Make sure to store these times in UTC to reduce confusion!
+    forecast_made = models.DateTimeField(verbose_name="Forecast Made", db_index=True)
+    forecast_for = models.DateTimeField(verbose_name="Forecast For", db_index=True)
     clear_sky = models.FloatField(verbose_name="Clear Sky [W/m2]", default=None)
-    ndfd = models.FloatField(verbose_name="NDFD [W/m2]", default=None)
+    ratio = models.FloatField(verbose_name="Ratio [Predicted/Clear Sky]", default=None)
 
     def __str__(self):
-        return str(self.timestamp)
+        return str(self.forecast_for)
