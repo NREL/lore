@@ -11,6 +11,8 @@ def run_phase_one(input_filenames, include, start, stop, printout = False):
     params_dict["start"] = start
     params_dict["stop"] = stop
     params_dict["transition"] = 0
+    if include["persistence"]:
+        assert "wdot_s_prev" in params_dict and "wdot_s_pen" in params_dict
     params = dispatch_params.getDispatchParamsFromDict(params_dict)
     rt = dispatch_model.RealTimeDispatchModel(params, include)
     rt_results = rt.solveModel()
