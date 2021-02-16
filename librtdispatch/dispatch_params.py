@@ -5,6 +5,8 @@ Data structures for the real-time dispatch model
 
 import pyomo.environ as pe
 #import re
+import sys, os
+sys.path.insert(1, os.path.join(sys.path[0], '..'))
 
 def buildParamsFromFiles(filenames):
     params_dict = {}
@@ -15,7 +17,7 @@ def buildParamsFromFiles(filenames):
     return params_dict
 
 def buildParamsFromAMPLFile(filename, params_dict={}):
-    f = open(filename, 'r')
+    f = open(os.path.join(os.path.dirname(__file__), filename), 'r')
     lines = f.readlines()
     in_param = False
     # lineno = 1
