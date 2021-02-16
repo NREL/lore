@@ -127,10 +127,10 @@ class RealTimeDispatchModel(object):
             self.model.mdot_r_min = pe.Param(mutable=True, initialize=params.mdot_r_min, units=units.kg/units.s)  # Minimum mass flow rate of heat transfer fluid to the receiver [kg/s]
             self.model.mdot_r_max = pe.Param(mutable=True, initialize=params.mdot_r_max, units=units.kg/units.s)  # Maximum mass flow rate of heat transfer fluid to the receiver [kg/s]
             self.model.Pr = pe.Param(mutable=True, initialize=params.Pr, units=(units.kW*units.s)/units.kg)  # Receiver pumping power per unit mass flow rate [kW\sse/ kg/s]
-            self.model.Qrl = pe.Param(mutable=True, initialize=params.Qrl, units=units.kWh)       #Minimum operational thermal power delivered by receiver [kWh\sst]
-            self.model.Qrsb = pe.Param(mutable=True, initialize=params.Qrsb, units=units.kWh)      #Required thermal power for receiver standby [kWh\sst]
+            self.model.Qrl = pe.Param(mutable=True, initialize=params.Qrl, units=units.kW)       #Minimum operational thermal power delivered by receiver [kWh\sst]
+            self.model.Qrsb = pe.Param(mutable=True, initialize=params.Qrsb, units=units.kW)      #Required thermal power for receiver standby [kWh\sst]
             self.model.Qrsd = pe.Param(mutable=True, initialize=params.Qrsd, units=units.kWh)      #Required thermal power for receiver shut down [kWh\sst]
-            self.model.Qru = pe.Param(mutable=True, initialize=params.Qru, units=units.kWh)       #Allowable power per period for receiver start-up [kWh\sst]
+            self.model.Qru = pe.Param(mutable=True, initialize=params.Qru, units=units.kW)       #Allowable power per period for receiver start-up [kWh\sst]
             # self.model.T_rout_min = pe.Param(mutable=True, initialize=params.T_rout_min)  # Minimum allowable receiver outlet temperature [deg C]
             self.model.T_rout_max = pe.Param(mutable=True, initialize=params.T_rout_max, units=units.degK)  # Maximum allowable receiver outlet temperature [deg C]
             self.model.Wh_comm = pe.Param(mutable=True, initialize=params.Wh_comm, units=units.kW)  # Heliostat field communication parasitic loss [kW\sse]
@@ -1513,6 +1513,9 @@ if __name__ == "__main__":
     import dispatch_params
     import dispatch_outputs
     params = dispatch_params.buildParamsFromAMPLFile("./input_files/data_energy.dat")
+    params.start = 1        # as borrowed from run_phase_one.py
+    params.stop = 68        # as borrowed from run_phase_one.py
+    params.transition = 0   # as the default in run_dispatch() signature and as hardcoded in run_phase_one()
     include = {"pv": False, "battery": False, "persistence": False, "force_cycle": True}
     rt = RealTimeDispatchModel(params, include)
     rt_results = rt.solveModel()

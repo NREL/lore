@@ -49,8 +49,8 @@ if __name__ == "__main__":
         "./input_files/init_cycle_on_full_tank.dat",
         "./input_files/time_baseline.dat"
     ]
-    include = {"pv": False, "battery": False, "persistence": False, "force_cycle": False, "op_assumptions": False,
-               "signal": True, "simple_receiver": True}
+    include = {"pv": False, "battery": False, "persistence": True, "force_cycle": False, "op_assumptions": False,
+               "signal": True, "simple_receiver": False}
     start = 1
     stop = 68
     run_phase_one(input_filenames, include, start, stop, True)
