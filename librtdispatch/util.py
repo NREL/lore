@@ -46,9 +46,9 @@ def is_dst(date):
 # Note clean reflectivity is 0 - 100
 def get_field_adjustment_from_CD_data(year, nhel, clean_refl, use_CD_soiling = True, specified_refl = None, use_tracking_and_offline = False):
 
-    offline_file = '../model-validation/input_files/daily_helios_offline_%d.csv'%year  # Daily 
-    tracking_file = '../model-validation/input_files/tracking_from_op_report_%d_1min.csv'%year  # Tracking fractions from daily op reports (when available), or HFCS logs 
-    tracking_file_HFCS = '../model-validation/input_files/tracking_%d_1min.csv'%year   # Tracking fractions from HFCS logs
+    offline_file = './model-validation/input_files/daily_helios_offline_%d.csv'%year  # Daily 
+    tracking_file = './model-validation/input_files/tracking_from_op_report_%d_1min.csv'%year  # Tracking fractions from daily op reports (when available), or HFCS logs 
+    tracking_file_HFCS = './model-validation/input_files/tracking_%d_1min.csv'%year   # Tracking fractions from HFCS logs
     
     nph = 60
     soil_avail_per_day = get_CD_soiling_availability(year, clean_refl) if use_CD_soiling else (specified_refl / clean_refl) * np.ones(365)  # Daily annual array 
@@ -70,7 +70,7 @@ def get_field_adjustment_from_CD_data(year, nhel, clean_refl, use_CD_soiling = T
 
 
 def get_CD_soiling_availability(year, clean_refl):
-    refl_file = '../model-validation/input_files/daily_refl_%d.csv'%year  # Daily measured reflectivity
+    refl_file = './model-validation/input_files/daily_refl_%d.csv'%year  # Daily measured reflectivity
     avail = np.minimum(1.0, np.genfromtxt(refl_file, delimiter = ',', skip_header = 1)[:,2]/ clean_refl)  # soiled / clean reflectivity
     return avail
 
@@ -169,6 +169,7 @@ def read_weather_data(filename):
 
 
 def get_weather_header(filename):
+    # os.chdir(os.path.dirname(__file__))
     df = pd.read_csv(filename, sep=',', header=0, nrows=1, skipinitialspace = True, engine = 'python')
     header = {}
     header['tz'] = int(df['Time Zone'][0])

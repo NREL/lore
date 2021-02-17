@@ -7,7 +7,8 @@ class PySSC:
 		if sys.platform == 'win32' or sys.platform == 'cygwin':
 			#self.pdll = CDLL("C://Users//WHamilt2//Documents//SAM//SAM_build//sam//deploy//x64//sscd.dll")
 			#self.pdll = CDLL("C://Users//WHamilt2//Documents//SAM//SAM_build//sam//deploy//x64//ssc.dll") 
-			self.pdll = CDLL("ssc.dll") 
+			# self.pdll = CDLL("C://Users//mboyd//Documents//SAM//sam_dev//sam//deploy//x64//ssc.dll")
+			self.pdll = CDLL(os.path.join(os.path.dirname(__file__), "ssc.dll")) 
 		elif sys.platform == 'darwin':
 			self.pdll = CDLL("ssc.dylib") 
 		elif sys.platform == 'linux2':
