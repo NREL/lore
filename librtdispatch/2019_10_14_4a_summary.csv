@@ -1,0 +1,2 @@
+revenue,startup_ramping_penalty,n_starts_rec,n_starts_rec_attempted,n_starts_cycle,n_starts_cycle_attempted,cycle_ramp_up,cycle_ramp_down,total_receiver_thermal,total_cycle_gross,total_cycle_net,day_ahead_penalty_tot (ssc),day_ahead_penalty_tot (disp),day_ahead_diff_over_tol_plus (ssc),day_ahead_diff_over_tol_plus (disp),day_ahead_diff_over_tol_minus (ssc),day_ahead_diff_over_tol_minus (disp)
+424363.569938,14400.000000,2.000000,2.000000,2.000000,2.000000,359.730949,359.730949,7.361491,3.321814,2.951634,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000
