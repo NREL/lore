@@ -5,6 +5,7 @@ import define_cases
 import timeit
 import numpy as np
 import os
+import math
 
 
 os.chdir(os.path.dirname(__file__))
@@ -68,7 +69,11 @@ for c in cases:
         #plots.plot_dispatch_soln_singlevar(cs,'tes_soc')
     
     
-    
-
-
-
+    # Basic regression tests for refactoring
+    assert math.isclose(cs.total_receiver_thermal, 7.36, rel_tol=1e-3)
+    assert math.isclose(cs.total_cycle_gross, 3.32, rel_tol=1e-3)
+    assert math.isclose(cs.total_cycle_net, 2.95, rel_tol=1e-3)
+    assert math.isclose(cs.cycle_ramp_up, 359.7, rel_tol=1e-3)
+    assert math.isclose(cs.cycle_ramp_down, 359.7, rel_tol=1e-3)
+    assert math.isclose(cs.revenue, 424364, rel_tol=1e-3)
+    assert math.isclose(cs.startup_ramping_penalty, 14400, rel_tol=1e-3)
