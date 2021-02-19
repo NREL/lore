@@ -755,7 +755,17 @@ class CaseStudy:
                     #--- Set ssc dispatch targets
                     self.ssc_dispatch_targets.set_from_dispatch_solution(self.design, self.properties, self.dispatch_params, self.dispatch_soln, self.plant_state, sscstep/3600., freq/3600.)
                     D.update(vars(self.ssc_dispatch_targets))
-                    
+
+                    # Regression tests for dispatch model outputs (ssc_dispatch_targets)
+                    if j == 0 and D_est['time_stop'] == 24796800:
+                        assert hash(tuple(self.ssc_dispatch_targets.is_pc_sb_allowed_in)) == -4965923453060612375
+                        assert hash(tuple(self.ssc_dispatch_targets.is_pc_su_allowed_in)) == -4965923453060612375
+                        assert hash(tuple(self.ssc_dispatch_targets.is_rec_sb_allowed_in)) == -4965923453060612375
+                        assert hash(tuple(self.ssc_dispatch_targets.is_rec_su_allowed_in)) == -4965923453060612375
+                        assert hash(tuple(self.ssc_dispatch_targets.q_pc_max_in)) == -709626543671595165
+                        assert hash(tuple(self.ssc_dispatch_targets.q_pc_target_on_in)) == -4965923453060612375
+                        assert hash(tuple(self.ssc_dispatch_targets.q_pc_target_su_in)) == -4965923453060612375
+
 
                 else:  # Infeasible solution was returned, revert back to running ssc without dispatch targets
                     print ('Infeasible dispatch solution')
