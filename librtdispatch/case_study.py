@@ -300,18 +300,25 @@ class CaseStudy:
     
     
     # Update dispatch weather data 
-    def update_dispatch_weather_data(self, date, horizon):
-        t = int(util.get_time_of_year(date)/3600)        # Time of year (hr)
-        p = int(t*self.ssc_time_steps_per_hour)          # First time point in annual arrays
-        n = int(horizon * self.ssc_time_steps_per_hour)  # Time steps in optimization horizon
+    def update_dispatch_weather_data(self, weather_data, replacement_real_weather_data, replacement_forecast_weather_data, datetime, total_horizon, dispatch_horizon):
+        """
+        Replace select metrics in weather_data with those from the real and forecast weather data, depending on dispatch horizons
+        """
+        minutes_per_timestep = weather_data['minute'][1] - weather_data['minute'][0]
+        timesteps_per_hour = 1 / minutes_per_timestep * 60
+
+        t = int(util.get_time_of_year(datetime)/3600)        # Time of year (hr)
+        p = int(t*timesteps_per_hour)                        # First time index in weather arrays
+        n = int(total_horizon * timesteps_per_hour)                # Number of time indices in horizon (to replace)
         for j in range(n):
             for k in ['dn', 'wspd', 'tdry', 'rhum', 'pres']:
-                hr = j/self.ssc_time_steps_per_hour
-                if self.dispatch_weather_horizon == -1 or hr<self.dispatch_weather_horizon:  # Use actual weather 
-                    self.weather_data_for_dispatch[k][p+j] = self.ground_truth_weather_data[k][p+j]    
+                hr = j/timesteps_per_hour
+                if dispatch_horizon == -1 or hr < dispatch_horizon:
+                    weather_data[k][p+j] = replacement_real_weather_data[k][p+j]    
                 else:
-                    self.weather_data_for_dispatch[k][p+j] = self.current_forecast_weather_data[k][p+j]    
-        return
+                    weather_data[k][p+j] = replacement_forecast_weather_data[k][p+j]
+
+        return weather_data
     
     def get_dispatch_targets_from_CD_actuals(self, use_avg_flow = False, set_rec_sb = False, ctrl_adj = False):
         # initialize targets stucture
@@ -658,8 +665,27 @@ class CaseStudy:
                 price = self.price_data[startpt:startpt+npts_horizon]  # $/MWh
                 
                 #--- Update weather to use in dispatch optimization for this optimization horizon
-                self.update_dispatch_weather_data(time, horizon/3600.)
+                self.weather_data_for_dispatch = self.update_dispatch_weather_data(
+                    weather_data = self.weather_data_for_dispatch,
+                    replacement_real_weather_data = self.ground_truth_weather_data,
+                    replacement_forecast_weather_data = self.current_forecast_weather_data,
+                    datetime = time,
+                    total_horizon = horizon/3600.,
+                    dispatch_horizon = self.dispatch_weather_horizon
+                    )
                 
+                # ***********************************************************
+                # ***********************************************************
+                def dispatch_wrap(prices, weather, ssc_inputs=None):
+                    return 1
+
+                dispatch_outputs = dispatch_wrap(
+                    prices = self.price_data[startpt:startpt+npts_horizon],
+                    weather = self.weather_data_for_dispatch
+                )
+                # ***********************************************************
+                # ***********************************************************
+
 
                 #--- Run ssc for dispatch estimates: (using weather forecast time resolution for weather data and specified ssc time step)
                 retvars_est = self.default_ssc_vars_for_disp_estimates()
