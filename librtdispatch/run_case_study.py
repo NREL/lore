@@ -14,7 +14,7 @@ CD_raw_data_direc = './input_files/CD_raw'                      # Directory cont
 CD_processed_data_direc = './input_files/CD_processed'          # Directory containing files with 1min data already extracted
 
 start_date = datetime.datetime(2018, 10, 14)  
-sim_days = 2
+sim_days = 1
 save_outputs = True
 create_plot = True
 name = '2019_10_14'
@@ -22,7 +22,7 @@ name = '2019_10_14'
 
 #cases = ['2a', '3a', '4a', '5a', '6a', '7a']   # Note 'a', 'b', 'c' designations are for no day-ahead schedule (a), calculated day-ahead schedule (b), NVE schedule (c)
 # cases = ['1a', '2a', '2b', '3a', '4a', '5a', '6a', '7a', '7b']
-cases = ['4a']
+cases = ['7b']
 
 for c in cases:
     cs = case_study.CaseStudy(isdebug = False)
@@ -70,10 +70,10 @@ for c in cases:
     
     
     # Basic regression tests for refactoring
-    assert math.isclose(cs.total_receiver_thermal, 7.36, rel_tol=1e-3)
-    assert math.isclose(cs.total_cycle_gross, 3.32, rel_tol=1e-3)
-    assert math.isclose(cs.total_cycle_net, 2.95, rel_tol=1e-3)
-    assert math.isclose(cs.cycle_ramp_up, 359.7, rel_tol=1e-3)
-    assert math.isclose(cs.cycle_ramp_down, 359.7, rel_tol=1e-3)
-    assert math.isclose(cs.revenue, 424364, rel_tol=1e-3)
-    assert math.isclose(cs.startup_ramping_penalty, 14400, rel_tol=1e-3)
+    assert math.isclose(cs.total_receiver_thermal, 3.85, rel_tol=1e-3)
+    assert math.isclose(cs.total_cycle_gross, 1.89, rel_tol=1e-3)
+    assert math.isclose(cs.total_cycle_net, 1.74, rel_tol=1e-3)
+    assert math.isclose(cs.cycle_ramp_up, 121, rel_tol=1e-3)
+    assert math.isclose(cs.cycle_ramp_down, 121, rel_tol=1e-3)
+    assert math.isclose(cs.revenue, 243422, rel_tol=1e-3)
+    assert math.isclose(cs.startup_ramping_penalty, 7200, rel_tol=1e-3)

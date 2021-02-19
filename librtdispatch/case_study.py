@@ -10,6 +10,7 @@ import util
 import run_phase_one
 import pandas
 import os
+import math
 
 import datetime
 
@@ -678,6 +679,12 @@ class CaseStudy:
                 if R_est['clearsky'].max() < 1.e-3:  # Clear-sky data wasn't passed through ssc (ssc controlled from actual DNI, or user-defined flow inputs)
                     R_est['clearsky'] = self.clearsky_data[startpt:startpt+npts_horizon]  
 
+                # Some intermediate regression tests for refactoring purposes
+                if j == 0 and D_est['time_stop'] == 24796800:
+                    assert math.isclose(sum(list(R_est["Q_thermal"])), 230346, rel_tol=1e-4)
+                    assert math.isclose(sum(list(R_est["m_dot_rec"])), 599416, rel_tol=1e-4)
+                    assert math.isclose(sum(list(R_est["clearsky"])), 543582, rel_tol=1e-4)
+                    assert math.isclose(sum(list(R_est["P_tower_pump"])), 2460.8, rel_tol=1e-4)
 
                 #--- Set dispatch optimization properties for this time horizon using ssc estimates
                 self.dispatch_params.set_initial_state(self.design, self.plant_state)  # Set initial plant state for dispatch model
