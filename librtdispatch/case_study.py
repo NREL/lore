@@ -675,7 +675,43 @@ class CaseStudy:
                     total_horizon = horizon/3600.,
                     dispatch_horizon = self.dispatch_weather_horizon
                     )
-                
+
+                def estimates_for_dispatch_model(plant_design, toy, horizon, weather_data, N_pts_horizon, clearsky_data, start_pt):
+                    D_est = plant_design.copy()
+                    D_est['time_stop'] = toy + horizon
+                    D_est['is_dispatch_targets'] = False
+                    D_est['tshours'] = 100                      # Inflate TES size so that there is always "somewhere" to put receiver output
+                    D_est['solar_resource_data'] = weather_data
+                    D_est['is_rec_startup_trans'] = False
+                    D_est['rec_su_delay'] = 0.001               # Simulate with no start-up time to get total available solar energy
+                    D_est['rec_qf_delay'] = 0.001
+                    retvars = ['Q_thermal', 'm_dot_rec', 'beam', 'clearsky', 'tdry', 'P_tower_pump', 'pparasi']
+                    ssc_outputs, new_state = ssc_wrapper.call_ssc(D_est, retvars, npts = N_pts_horizon)
+                    if ssc_outputs['clearsky'].max() < 1.e-3:         # Clear-sky data wasn't passed through ssc (ssc controlled from actual DNI, or user-defined flow inputs)
+                        ssc_outputs['clearsky'] = clearsky_data[start_pt : start_pt + N_pts_horizon]
+                    
+                    return ssc_outputs
+
+                #--- Run ssc for dispatch estimates: (using weather forecast time resolution for weather data and specified ssc time step)
+                R_est = estimates_for_dispatch_model(
+                    plant_design = D,
+                    toy = toy,
+                    horizon = horizon,
+                    weather_data = self.weather_data_for_dispatch,
+                    N_pts_horizon = npts_horizon,
+                    clearsky_data = self.clearsky_data,
+                    start_pt = startpt
+                )
+
+                # Some intermediate regression tests for refactoring purposes
+                if j == 0 and toy + horizon == 24796800:
+                    assert math.isclose(sum(list(R_est["Q_thermal"])), 230346, rel_tol=1e-4)
+                    assert math.isclose(sum(list(R_est["m_dot_rec"])), 599416, rel_tol=1e-4)
+                    assert math.isclose(sum(list(R_est["clearsky"])), 543582, rel_tol=1e-4)
+                    assert math.isclose(sum(list(R_est["P_tower_pump"])), 2460.8, rel_tol=1e-4)
+
+
+
                 # ***********************************************************
                 # ***********************************************************
                 def dispatch_wrap(prices, weather, ssc_inputs=None):
@@ -689,28 +725,6 @@ class CaseStudy:
                 # ***********************************************************
 
 
-                #--- Run ssc for dispatch estimates: (using weather forecast time resolution for weather data and specified ssc time step)
-                retvars_est = self.default_ssc_vars_for_disp_estimates()
-                D_est = D.copy()
-                D_est['time_stop'] = toy + horizon
-                D_est['is_dispatch_targets'] = False
-                D_est['tshours'] = 100   # Inflate TES size so that there is always "somewhere" to put receiver output
-                D_est['solar_resource_data'] = self.weather_data_for_dispatch
-                D_est['is_rec_startup_trans'] = False
-                D_est['rec_su_delay'] = 0.001  # Simulate with no start-up time to get total available solar energy
-                D_est['rec_qf_delay'] = 0.001    
-                #if self.control_field == 'CDdata': # Overwrite availability adjustment factors copied from 'D' with those that don't include future knowledge of CD heliostat tracking/offline data per time step (assume full tracking/online)
-                #    D_est['sf_adjust:hourly'] = self.get_field_availability_adjustment('ssc', self.ssc_time_steps_per_hour, time.year)  
-                R_est, new_state = ssc_wrapper.call_ssc(D_est, retvars_est, npts = npts_horizon)  
-                if R_est['clearsky'].max() < 1.e-3:  # Clear-sky data wasn't passed through ssc (ssc controlled from actual DNI, or user-defined flow inputs)
-                    R_est['clearsky'] = self.clearsky_data[startpt:startpt+npts_horizon]  
-
-                # Some intermediate regression tests for refactoring purposes
-                if j == 0 and D_est['time_stop'] == 24796800:
-                    assert math.isclose(sum(list(R_est["Q_thermal"])), 230346, rel_tol=1e-4)
-                    assert math.isclose(sum(list(R_est["m_dot_rec"])), 599416, rel_tol=1e-4)
-                    assert math.isclose(sum(list(R_est["clearsky"])), 543582, rel_tol=1e-4)
-                    assert math.isclose(sum(list(R_est["P_tower_pump"])), 2460.8, rel_tol=1e-4)
 
                 #--- Set dispatch optimization properties for this time horizon using ssc estimates
                 self.dispatch_params.set_initial_state(self.design, self.plant_state)  # Set initial plant state for dispatch model
@@ -783,7 +797,7 @@ class CaseStudy:
                     D.update(vars(self.ssc_dispatch_targets))
 
                     # Regression tests for dispatch model outputs (ssc_dispatch_targets)
-                    if j == 0 and D_est['time_stop'] == 24796800:
+                    if j == 0 and toy + horizon == 24796800:
                         assert hash(tuple(self.ssc_dispatch_targets.is_pc_sb_allowed_in)) == -4965923453060612375
                         assert hash(tuple(self.ssc_dispatch_targets.is_pc_su_allowed_in)) == -4965923453060612375
                         assert hash(tuple(self.ssc_dispatch_targets.is_rec_sb_allowed_in)) == -4965923453060612375
@@ -962,11 +976,6 @@ class CaseStudy:
                    'is_rec_su_allowed', 'is_pc_su_allowed', 'is_pc_sb_allowed',
                    'op_mode_1', 'op_mode_2', 'op_mode_3', 'q_dot_est_cr_on', 'q_dot_est_cr_su', 'q_dot_est_tes_dc', 'q_dot_est_tes_ch', 'q_dot_pc_target_on'
                    ]
-
-
-    def default_ssc_vars_for_disp_estimates(self):
-        return ['Q_thermal', 'm_dot_rec', 'beam', 'clearsky', 'tdry', 'P_tower_pump', 'pparasi']
-
     
     def default_disp_stored_vars(self):
         return ['cycle_on', 'cycle_standby', 'cycle_startup', 'receiver_on', 'receiver_startup', 'receiver_standby', 
