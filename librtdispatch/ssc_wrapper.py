@@ -192,6 +192,21 @@ class DispatchTargets:
 
     
     def set_from_dispatch_solution(self, design, properties, disp_params, disp_soln, initial_state, sscstep, horizon):
+        """
+        Translate to or generate SSC model inputs from select dispatch model outputs
+
+        Inputs:     disp_soln
+        Outputs:    setting object member variables 'is_rec_su_allowed_in', etc.
+
+        TODO
+        - remove unused initial_state parameter
+        - replace 'design' parameter with Q_des_cycle
+        - replace 'properties' with cycle_max_frac
+        - extract this line and the above two parameters as they don't deal with the dispatch solution
+            D['q_pc_max_in'] = [q_pc_max_val for t in range(n)]
+
+        - move 'Set binary inputs' to a subsequent loop
+        """
         n = len(disp_soln.cycle_on)  # Number of time periods in full dispatch solution (variable time steps)
         dt = disp_params.Delta
 
@@ -289,6 +304,19 @@ def set_ssc_data_from_dict(ssc_api, ssc_data, Dict):
 
 # Run ssc simulation using user-defined input parameters in dictionary D (all other input parameters will be set to default values).
 def call_ssc(D, retvars = ['gen'], plant_state_pt = -1, npts = None):
+    """
+    Call SSC via PySSC
+
+    Inputs:
+        D               dict of SSC inputs
+        retvars         names of SSC outputs to return from this function
+        plant_state_pt  time point at which to save plant state
+        npts            number of points in each array to save; None saves all
+
+    Outputs:
+        R               dict of select SSC outputs per those chosen by retvars
+        plant_state     PlantState object representing the final plant state
+    """
 
     ssc = api.PySSC()
     dat = ssc.data_create()
