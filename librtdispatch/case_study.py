@@ -718,16 +718,92 @@ class CaseStudy:
                 # ***********************************************************
 
 
-                def setup_dispatch_model(plant_design, plant_state, dispatch_params, nonlinear_model_time, use_linear_dispatch_at_night,
+                def setup_dispatch_model(plant_design, plant_state, nonlinear_model_time, use_linear_dispatch_at_night,
                                          clearsky_data, night_clearky_cutoff, dispatch_steplength_array, dispatch_steplength_end_time,
                                          disp_time_weighting, price, sscstep, avg_price, avg_price_disp_storage_incentive,
                                          avg_purchase_price, day_ahead_tol_plus, day_ahead_tol_minus,
                                          R_est,
-                                         tod, current_day_schedule, day_ahead_horizon, day_ahead_pen_plus, day_ahead_pen_minus):
+                                         tod, current_day_schedule, day_ahead_pen_plus, day_ahead_pen_minus,
+                                         dispatch_horizon, night_clearsky_cutoff, properties, dispatch_soln):
 
-                    # dispatch_params  ->  disp_in (after a little reformatting)
-                    return 1    # returns disp_in
+                    #--- Set dispatch optimization properties for this time horizon using ssc estimates
+                    ##########
+                    ##  There's already a lot of the dispatch_params member variables set here, which set_initial_state draws from
+                    ##########
+                    # Initialize dispatch model inputs
+                    dispatch_params = dispatch.DispatchParams()            # Structure to contain all inputs for dispatch model 
+                    dispatch_params.set_dispatch_time_arrays(dispatch_steplength_array, dispatch_steplength_end_time,
+                        dispatch_horizon, nonlinear_model_time, disp_time_weighting)
+                    dispatch_params.set_fixed_parameters_from_plant_design(plant_design, properties)
+                    dispatch_params.set_default_grid_limits()
+                    dispatch_params.disp_time_weighting = disp_time_weighting
+                    dispatch_params.set_initial_state(plant_design, plant_state)  # Set initial plant state for dispatch model
+                    
+                    # Update approximate receiver shutdown state from previous dispatch solution (not returned from ssc)
+                    ursd = dispatch_soln.get_value_at_time(dispatch_params, freq/3600, 'ursd') 
+                    yrsd = dispatch_soln.get_value_at_time(dispatch_params, freq/3600, 'yrsd') 
+                    dispatch_params.set_approximate_shutdown_state_parameters(plant_state, ursd = ursd, yrsd = yrsd)  # Set initial state parameters related to shutdown from dispatch model (because this cannot be derived from ssc)
 
+                    nonlinear_time = nonlinear_model_time # Time horizon for nonlinear model (hr)
+                    if use_linear_dispatch_at_night:
+                        endpt = int((toy + nonlinear_time*3600) / sscstep)  # Last point in annual arrays at ssc time step resolution corresponding to nonlinear portion of dispatch model
+                        if clearsky_data[startpt:endpt].max() <= night_clearsky_cutoff:
+                            nonlinear_time = 0.0
+
+                    dispatch_params.set_dispatch_time_arrays(dispatch_steplength_array, dispatch_steplength_end_time, horizon/3600., nonlinear_time, disp_time_weighting)
+                    dispatch_params.set_default_grid_limits()
+                    dispatch_params.P = util.translate_to_variable_timestep([p/1000. for p in price], sscstep/3600., dispatch_params.Delta)  # $/kWh
+                    dispatch_params.avg_price = avg_price/1000.
+                    dispatch_params.avg_price_disp_storage_incentive = avg_price_disp_storage_incentive / 1000.  # $/kWh  # Only used in storage inventory incentive -> high values cause the solutions to max out storage rather than generate electricity
+                    dispatch_params.avg_purchase_price = avg_purchase_price/1000    # $/kWh 
+                    dispatch_params.day_ahead_tol_plus = day_ahead_tol_plus*1000    # kWhe
+                    dispatch_params.day_ahead_tol_minus = day_ahead_tol_minus*1000  # kWhe
+
+                    dispatch_params.set_estimates_from_ssc_data(plant_design, R_est, sscstep/3600.) 
+                    
+                    
+                    #--- Set day-ahead schedule in dispatch parameters
+                    if include_day_ahead_in_dispatch:  
+                        day_ahead_horizon = 24 - int(tod/3600)   # Number of hours of day-ahead schedule to use.  This probably only works in the dispatch model if time horizons are updated at integer multiples of an hour
+                        use_schedule = [current_day_schedule[s]*1000 for s in range(24-day_ahead_horizon, 24)]   # kWhe
+                        dispatch_params.set_day_ahead_schedule(use_schedule, day_ahead_pen_plus/1000, day_ahead_pen_minus/1000)
+                        
+
+                    #--- Run dispatch optimization and set ssc dispatch targets
+                    disp_in = dispatch_params.copy_and_format_indexed_inputs()     # dispatch.DispatchParams object
+
+                    return disp_in
+
+
+                disp_in_2 = setup_dispatch_model(
+                    dispatch_steplength_array = self.dispatch_steplength_array,
+                    dispatch_steplength_end_time = self.dispatch_steplength_end_time,
+                    dispatch_horizon = self.dispatch_horizon,
+                    plant_design = self.design,
+                    plant_state = self.plant_state,
+                    #dispatch_params = self.,
+                    nonlinear_model_time = self.nonlinear_model_time,
+                    use_linear_dispatch_at_night = self.use_linear_dispatch_at_night,
+                    clearsky_data = self.clearsky_data,
+                    night_clearky_cutoff = self.night_clearsky_cutoff,
+                    disp_time_weighting = self.disp_time_weighting,
+                    price = price,
+                    sscstep = sscstep,
+                    avg_price = self.avg_price,
+                    avg_price_disp_storage_incentive = self.avg_price_disp_storage_incentive,
+                    avg_purchase_price = self.avg_purchase_price,
+                    day_ahead_tol_plus = self.day_ahead_tol_plus,
+                    day_ahead_tol_minus = self.day_ahead_tol_minus,
+                    R_est = R_est,
+                    tod = tod,
+                    current_day_schedule = self.current_day_schedule,
+                    day_ahead_pen_plus = self.day_ahead_pen_plus,
+                    day_ahead_pen_minus = self.day_ahead_pen_minus,
+                    night_clearsky_cutoff = self.night_clearsky_cutoff,
+                    properties = self.properties,
+                    dispatch_soln = self.dispatch_soln
+                )
+                
 
                 #--- Set dispatch optimization properties for this time horizon using ssc estimates
                 ##########
@@ -735,7 +811,8 @@ class CaseStudy:
                 ##########
                 # Initialize dispatch model inputs
                 self.dispatch_params = dispatch.DispatchParams()            # Structure to contain all inputs for dispatch model 
-                self.dispatch_params.set_dispatch_time_arrays(self.dispatch_steplength_array, self.dispatch_steplength_end_time, self.dispatch_horizon, self.nonlinear_model_time, self.disp_time_weighting)
+                self.dispatch_params.set_dispatch_time_arrays(self.dispatch_steplength_array, self.dispatch_steplength_end_time,
+                    self.dispatch_horizon, self.nonlinear_model_time, self.disp_time_weighting)
                 self.dispatch_params.set_fixed_parameters_from_plant_design(self.design, self.properties)
                 self.dispatch_params.set_default_grid_limits()
                 self.dispatch_params.disp_time_weighting = self.disp_time_weighting
@@ -776,6 +853,8 @@ class CaseStudy:
                 include = {"pv": False, "battery": False, "persistence": False, "force_cycle": False, "op_assumptions": False,
                            "signal":include_day_ahead_in_dispatch, "simple_receiver": False}
                 disp_out = run_phase_one.run_dispatch(disp_in, include, disp_in.start, disp_in.stop, transition=0)
+
+                disp_out_2 = run_phase_one.run_dispatch(disp_in_2, include, disp_in_2.start, disp_in_2.stop, transition=0)
 
 
                 if disp_out is not False:  
