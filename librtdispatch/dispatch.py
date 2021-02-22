@@ -549,6 +549,12 @@ class DispatchParams:
         return etamult, wmult
     
     def copy_and_format_indexed_inputs(self):
+        """
+        Return a copy of the dispatch params, first converting all lists and numpy arrays
+         into dicts, where each value has a key equal to the index + 1
+        e.g.,  [10, 11, 12]  ->  {1: 10, 2: 11, 3: 12}
+        """
+
         newparams = deepcopy(self)
         for k in vars(newparams).keys():
             val = getattr(newparams,k)
