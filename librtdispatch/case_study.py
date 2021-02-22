@@ -115,7 +115,6 @@ class CaseStudy:
         #--- Calculated values
         self.plant_state = ssc_wrapper.PlantState()                 # Structure to contain current plant state
         self.flux_maps = ssc_wrapper.FluxMaps()                     # Structure to contain computed flux maps
-        self.dispatch_params = dispatch.DispatchParams()            # Structure to contain all inputs for dispatch model 
         self.dispatch_soln = dispatch.DispatchSoln()                # Structure to contain current dispatch optimization solution
         self.ssc_dispatch_targets = ssc_wrapper.DispatchTargets()   # Structure to contain dispatch targets used for ssc
 
@@ -191,16 +190,10 @@ class CaseStudy:
             print ('Warning: Dispatch optimization is being used with field or receiver operation derived from CD data. Receiver can only operate when original CD receiver was operating')
         if self.control_receiver == 'CD_data' and self.control_field != 'CD_data':
             print ('Warning: Receiver flow is controlled from CD data, but field tracking fraction is controlled by ssc. Temperatures will likely be unrealistically high')
-
-
         
-        # Initialize design parameters and dispatch model inputs
+        # Initialize design parameters
         self.design.initialize()
-        self.dispatch_params.set_dispatch_time_arrays(self.dispatch_steplength_array, self.dispatch_steplength_end_time, self.dispatch_horizon, self.nonlinear_model_time, self.disp_time_weighting)
-        self.dispatch_params.set_fixed_parameters_from_plant_design(self.design, self.properties)
-        self.dispatch_params.set_default_grid_limits()
-        self.dispatch_params.disp_time_weighting = self.disp_time_weighting
-        
+
         # Read in historical weather data
         self.ground_truth_weather_data = util.read_weather_data(self.ground_truth_weather_file)
         if self.ssc_time_steps_per_hour != 60:
@@ -725,8 +718,27 @@ class CaseStudy:
                 # ***********************************************************
 
 
+                def setup_dispatch_model(plant_design, plant_state, dispatch_params, nonlinear_model_time, use_linear_dispatch_at_night,
+                                         clearsky_data, night_clearky_cutoff, dispatch_steplength_array, dispatch_steplength_end_time,
+                                         disp_time_weighting, price, sscstep, avg_price, avg_price_disp_storage_incentive,
+                                         avg_purchase_price, day_ahead_tol_plus, day_ahead_tol_minus,
+                                         R_est,
+                                         tod, current_day_schedule, day_ahead_horizon, day_ahead_pen_plus, day_ahead_pen_minus):
+
+                    # dispatch_params  ->  disp_in (after a little reformatting)
+                    return 1    # returns disp_in
+
 
                 #--- Set dispatch optimization properties for this time horizon using ssc estimates
+                ##########
+                ##  There's already a lot of the dispatch_params member variables set here, which set_initial_state draws from
+                ##########
+                # Initialize dispatch model inputs
+                self.dispatch_params = dispatch.DispatchParams()            # Structure to contain all inputs for dispatch model 
+                self.dispatch_params.set_dispatch_time_arrays(self.dispatch_steplength_array, self.dispatch_steplength_end_time, self.dispatch_horizon, self.nonlinear_model_time, self.disp_time_weighting)
+                self.dispatch_params.set_fixed_parameters_from_plant_design(self.design, self.properties)
+                self.dispatch_params.set_default_grid_limits()
+                self.dispatch_params.disp_time_weighting = self.disp_time_weighting
                 self.dispatch_params.set_initial_state(self.design, self.plant_state)  # Set initial plant state for dispatch model
                 
                 # Update approximate receiver shutdown state from previous dispatch solution (not returned from ssc)
@@ -760,9 +772,9 @@ class CaseStudy:
                     
 
                 #--- Run dispatch optimization and set ssc dispatch targets
-                disp_in = self.dispatch_params.copy_and_format_indexed_inputs()
-                use_simple_receiver = True if self.control_receiver == 'CD_data' else False
-                include = {"pv": False, "battery": False, "persistence": False, "force_cycle": False, "op_assumptions": False, "signal":include_day_ahead_in_dispatch, "simple_receiver":use_simple_receiver}
+                disp_in = self.dispatch_params.copy_and_format_indexed_inputs()     # dispatch.DispatchParams object
+                include = {"pv": False, "battery": False, "persistence": False, "force_cycle": False, "op_assumptions": False,
+                           "signal":include_day_ahead_in_dispatch, "simple_receiver": False}
                 disp_out = run_phase_one.run_dispatch(disp_in, include, disp_in.start, disp_in.stop, transition=0)
 
 
@@ -815,9 +827,6 @@ class CaseStudy:
                         self.disp_soln_tracking.append(None)
                         self.plant_state_tracking.append(deepcopy(self.plant_state))
                         self.infeasible_count+=1
-
-  
-
 
 
             #--- Run ssc and collect results
