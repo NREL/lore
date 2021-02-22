@@ -850,9 +850,9 @@ class CaseStudy:
                 disp_in = self.dispatch_params.copy_and_format_indexed_inputs()     # dispatch.DispatchParams object
                 include = {"pv": False, "battery": False, "persistence": False, "force_cycle": False, "op_assumptions": False,
                            "signal":include_day_ahead_in_dispatch, "simple_receiver": False}
-                disp_out = run_phase_one.run_dispatch(disp_in, include, disp_in.start, disp_in.stop, transition=0)
+                # disp_out = run_phase_one.run_dispatch(disp_in, include, disp_in.start, disp_in.stop, transition=0)
 
-                disp_out_2 = run_phase_one.run_dispatch(disp_in_2, include, disp_in_2.start, disp_in_2.stop, transition=0)
+                disp_out = run_phase_one.run_dispatch(disp_in_2, include, disp_in_2.start, disp_in_2.stop, transition=0)
 
 
                 if disp_out is not False:  
