@@ -790,33 +790,39 @@ class CaseStudy:
                     dispatch_soln = self.dispatch_soln
                 )
                 
+                def run_dispatch_model(disp_in, include, dispatch_soln, transition=0):
+                    disp_out = run_phase_one.run_dispatch(disp_in, include, disp_in.start, disp_in.stop, transition=0)
+                    if disp_out is not False:  
+                        dispatch_soln.set_from_dispatch_outputs(disp_out)
+                        # D['is_dispatch_targets'] = True
+                    else:  # Infeasible solution was returned, revert back to running ssc without dispatch targets
+                        print ('Infeasible dispatch solution')
+                        return None
+                        # D['is_dispatch_targets'] = False
+
+                    return dispatch_soln
+
                 include = {"pv": False, "battery": False, "persistence": False, "force_cycle": False, "op_assumptions": False,
                            "signal":include_day_ahead_in_dispatch, "simple_receiver": False}
+
+                self.dispatch_soln = run_dispatch_model(disp_in, include, self.dispatch_soln)
+
+
+                # def get_day_ahead_schedule():
+                #     return next_day_schedule
+
+
+
                 # disp_out = run_phase_one.run_dispatch(disp_in, include, disp_in.start, disp_in.stop, transition=0)
-
-                disp_out = run_phase_one.run_dispatch(disp_in, include, disp_in.start, disp_in.stop, transition=0)
-
-
-                # ***********************************************************
-                # ***********************************************************
-                def dispatch_wrap(prices, weather, ssc_inputs=None):
-                    return 1
-
-                dispatch_outputs = dispatch_wrap(
-                    prices = self.price_data[startpt:startpt+npts_horizon],
-                    weather = self.weather_data_for_dispatch
-                )
-                # ***********************************************************
-                # ***********************************************************
-
-
-                if disp_out is not False:  
-                    D['is_dispatch_targets'] = True
-                    self.dispatch_soln.set_from_dispatch_outputs(disp_out)
-                    if self.store_full_dispatch_solns:  # Store complete dispatch solutions for debugging
-                        self.disp_params_tracking.append(deepcopy(self.dispatch_params))
-                        self.disp_soln_tracking.append(deepcopy(self.dispatch_soln))
-                        self.plant_state_tracking.append(deepcopy(self.plant_state))
+                # if disp_out is not False:  
+                if self.dispatch_soln is not None:
+                    # D['is_dispatch_targets'] = True
+                    # self.dispatch_soln.set_from_dispatch_outputs(disp_out)
+                    # if self.store_full_dispatch_solns:  # Store complete dispatch solutions for debugging
+                    #     self.disp_params_tracking.append(deepcopy(self.dispatch_params))
+                    #     self.disp_soln_tracking.append(deepcopy(self.dispatch_soln))
+                    #     self.plant_state_tracking.append(deepcopy(self.plant_state))
+                    
 
                     #--- Store day-ahead generation schedule
                     if self.use_day_ahead_schedule and self.day_ahead_schedule_from == 'calculated' and tod/3600 == self.day_ahead_schedule_time:
@@ -852,13 +858,29 @@ class CaseStudy:
 
 
                 else:  # Infeasible solution was returned, revert back to running ssc without dispatch targets
-                    print ('Infeasible dispatch solution')
-                    D['is_dispatch_targets'] = False
-                    if self.store_full_dispatch_solns:  # Store complete dispatch solutions for debugging
-                        self.disp_params_tracking.append(deepcopy(self.dispatch_params))
-                        self.disp_soln_tracking.append(None)
-                        self.plant_state_tracking.append(deepcopy(self.plant_state))
-                        self.infeasible_count+=1
+                    pass
+                    # print ('Infeasible dispatch solution')
+                    # D['is_dispatch_targets'] = False
+                    # if self.store_full_dispatch_solns:  # Store complete dispatch solutions for debugging
+                    #     self.disp_params_tracking.append(deepcopy(self.dispatch_params))
+                    #     self.disp_soln_tracking.append(None)
+                    #     self.plant_state_tracking.append(deepcopy(self.plant_state))
+                    #     self.infeasible_count+=1
+
+
+
+            # ***********************************************************
+            # ***********************************************************
+            def dispatch_wrap(prices, weather, ssc_inputs=None):
+                return 1
+
+            dispatch_outputs = dispatch_wrap(
+                prices = self.price_data[startpt:startpt+npts_horizon],
+                weather = self.weather_data_for_dispatch
+            )
+            # ***********************************************************
+            # ***********************************************************
+
 
 
             #--- Run ssc and collect results
