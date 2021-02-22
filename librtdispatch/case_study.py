@@ -115,6 +115,7 @@ class CaseStudy:
         #--- Calculated values
         self.plant_state = ssc_wrapper.PlantState()                 # Structure to contain current plant state
         self.flux_maps = ssc_wrapper.FluxMaps()                     # Structure to contain computed flux maps
+        self.dispatch_params = dispatch.DispatchParams()            # Structure to contain all inputs for dispatch model 
         self.dispatch_soln = dispatch.DispatchSoln()                # Structure to contain current dispatch optimization solution
         self.ssc_dispatch_targets = ssc_wrapper.DispatchTargets()   # Structure to contain dispatch targets used for ssc
 
@@ -718,7 +719,7 @@ class CaseStudy:
                 # ***********************************************************
 
 
-                def setup_dispatch_model(plant_design, plant_state, nonlinear_model_time, use_linear_dispatch_at_night,
+                def setup_dispatch_model(dispatch_params, plant_design, plant_state, nonlinear_model_time, use_linear_dispatch_at_night,
                                          clearsky_data, night_clearky_cutoff, dispatch_steplength_array, dispatch_steplength_end_time,
                                          disp_time_weighting, price, sscstep, avg_price, avg_price_disp_storage_incentive,
                                          avg_purchase_price, day_ahead_tol_plus, day_ahead_tol_minus,
@@ -731,7 +732,6 @@ class CaseStudy:
                     ##  There's already a lot of the dispatch_params member variables set here, which set_initial_state draws from
                     ##########
                     # Initialize dispatch model inputs
-                    dispatch_params = dispatch.DispatchParams()            # Structure to contain all inputs for dispatch model 
                     dispatch_params.set_dispatch_time_arrays(dispatch_steplength_array, dispatch_steplength_end_time,
                         dispatch_horizon, nonlinear_model_time, disp_time_weighting)
                     dispatch_params.set_fixed_parameters_from_plant_design(plant_design, properties)
@@ -776,6 +776,7 @@ class CaseStudy:
 
 
                 disp_in_2 = setup_dispatch_model(
+                    dispatch_params = self.dispatch_params,
                     dispatch_steplength_array = self.dispatch_steplength_array,
                     dispatch_steplength_end_time = self.dispatch_steplength_end_time,
                     dispatch_horizon = self.dispatch_horizon,
@@ -809,8 +810,6 @@ class CaseStudy:
                 ##########
                 ##  There's already a lot of the dispatch_params member variables set here, which set_initial_state draws from
                 ##########
-                # Initialize dispatch model inputs
-                self.dispatch_params = dispatch.DispatchParams()            # Structure to contain all inputs for dispatch model 
                 self.dispatch_params.set_dispatch_time_arrays(self.dispatch_steplength_array, self.dispatch_steplength_end_time,
                     self.dispatch_horizon, self.nonlinear_model_time, self.disp_time_weighting)
                 self.dispatch_params.set_fixed_parameters_from_plant_design(self.design, self.properties)
