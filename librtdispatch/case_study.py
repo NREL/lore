@@ -434,25 +434,27 @@ class CaseStudy:
 
 
     #--- Simulate flux maps
-    def simulate_flux_maps(self):
+    @staticmethod
+    def simulate_flux_maps(plant_design, plant_properties, ssc_time_steps_per_hour, ground_truth_weather_data):
         print ('Simulating flux maps')
         start = timeit.default_timer()
-        D0 = vars(self.design)  
+        D0 = vars(plant_design)  
         D = D0.copy()
-        D.update(vars(self.properties))
-        D['time_steps_per_hour'] = self.ssc_time_steps_per_hour
+        D.update(vars(plant_properties))
+        D['time_steps_per_hour'] = ssc_time_steps_per_hour
         #D['solar_resource_file'] = self.ground_truth_weather_file
-        D['solar_resource_data'] = self.ground_truth_weather_data
+        D['solar_resource_data'] = ground_truth_weather_data
         D['time_start'] = 0.0
         D['time_stop'] = 1.0*3600  
         D['field_model_type'] = 2
-        if self.is_debug:
-            D['delta_flux_hrs'] = 4
-            D['n_flux_days'] = 2
-        R, state = ssc_wrapper.call_ssc(D, ['eta_map_out', 'flux_maps_for_import', 'A_sf'])  
-        self.flux_maps.set_from_ssc(R)
+        # if self.is_debug:
+        #     D['delta_flux_hrs'] = 4
+        #     D['n_flux_days'] = 2
+        R, state = ssc_wrapper.call_ssc(D, ['eta_map_out', 'flux_maps_for_import', 'A_sf'])
+        flux_maps = ssc_wrapper.FluxMaps()
+        flux_maps.set_from_ssc(R)
         print('Time to simulate flux maps = %.2fs'%(timeit.default_timer() - start))
-        return 
+        return flux_maps
     
 
     
@@ -463,7 +465,12 @@ class CaseStudy:
         self.initialize()
             
         if self.flux_maps.A_sf_in == 0.0 or rerun_flux_maps:
-            self.simulate_flux_maps()
+            self.flux_maps = CaseStudy.simulate_flux_maps(
+                plant_design = self.design,
+                plant_properties = self.properties,
+                ssc_time_steps_per_hour = self.ssc_time_steps_per_hour,
+                ground_truth_weather_data = self.ground_truth_weather_data
+                )
             
         self.current_time = datetime.datetime(self.start_date.year, self.start_date.month, self.start_date.day)  # Start simulation at midnight (standard time) on the specifed day.  Note that annual arrays derived from CD data will not have "real" data after 11pm standard time during DST (unless data also exists for the following day)
         start_time = util.get_time_of_year(self.current_time)  # Time (sec) elapsed since beginning of year
