@@ -802,12 +802,6 @@ class CaseStudy:
 
                     return dispatch_soln
 
-                include = {"pv": False, "battery": False, "persistence": False, "force_cycle": False, "op_assumptions": False,
-                           "signal":include_day_ahead_in_dispatch, "simple_receiver": False}
-
-                self.dispatch_soln = run_dispatch_model(disp_in, include, self.dispatch_soln)
-
-
                 def get_day_ahead_schedule(day_ahead_schedule_steps_per_hour, Delta, Delta_e, net_electrical_output, day_ahead_schedule_time):
                     print ('Storing day-ahead schedule')
                     day_ahead_step = 1./day_ahead_schedule_steps_per_hour  # Time step for day-ahead schedule (hr)
@@ -819,10 +813,19 @@ class CaseStudy:
                         next_day_schedule = wnet[inds]
                         if diff.max() > 1.e-3:
                             next_day_schedule = util.translate_to_fixed_timestep(wnet[inds], disp_steps[inds], day_ahead_step) 
-                    return next_day_schedule
+                        return next_day_schedule
+                    else:
+                        return None
 
                 def get_weather_at_day_ahead_schedule(weather_data_for_dispatch, startpt, npts_horizon):
                     return {k:weather_data_for_dispatch[k][startpt:startpt+npts_horizon] for k in ['dn', 'tdry', 'wspd']}
+
+
+
+                include = {"pv": False, "battery": False, "persistence": False, "force_cycle": False, "op_assumptions": False,
+                           "signal":include_day_ahead_in_dispatch, "simple_receiver": False}
+                    
+                self.dispatch_soln = run_dispatch_model(disp_in, include, self.dispatch_soln)
 
                 if self.dispatch_soln is not None:
                     if self.use_day_ahead_schedule and self.day_ahead_schedule_from == 'calculated' and tod/3600 == self.day_ahead_schedule_time:
@@ -837,49 +840,20 @@ class CaseStudy:
                         weather_at_day_ahead_schedule = get_weather_at_day_ahead_schedule(self.weather_data_for_dispatch, startpt, npts_horizon)
                         self.weather_at_schedule.append(weather_at_day_ahead_schedule)  # Store weather used at the point in time the day ahead schedule was generated
 
-
-                # disp_out = run_phase_one.run_dispatch(disp_in, include, disp_in.start, disp_in.stop, transition=0)
-                # if disp_out is not False:  
-                if self.dispatch_soln is not None:
-                    # D['is_dispatch_targets'] = True
-                    # self.dispatch_soln.set_from_dispatch_outputs(disp_out)
-                    # if self.store_full_dispatch_solns:  # Store complete dispatch solutions for debugging
-                    #     self.disp_params_tracking.append(deepcopy(self.dispatch_params))
-                    #     self.disp_soln_tracking.append(deepcopy(self.dispatch_soln))
-                    #     self.plant_state_tracking.append(deepcopy(self.plant_state))
-                    
-
-                    #--- Store day-ahead generation schedule
-                    # if self.use_day_ahead_schedule and self.day_ahead_schedule_from == 'calculated' and tod/3600 == self.day_ahead_schedule_time:
-                    #     print ('Storing day-ahead schedule')
-                    #     day_ahead_step = 1./self.day_ahead_schedule_steps_per_hour  # Time step for day-ahead schedule (hr)
-                    #     disp_steps = np.array(self.dispatch_params.Delta)
-                    #     wnet = np.array(self.dispatch_soln.net_electrical_output) / 1000.   # Net electricity to the grid (MWe) at dispatch time steps
-                    #     inds = np.where(np.array(self.dispatch_params.Delta_e) > (24 - self.day_ahead_schedule_time))[0]    # Find time points corresponding to the 24-hour period starting at midnight on the next day
-                    #     if len(inds) >0:  # Last-day simulation won't have any points in day-ahead period
-                    #         diff = np.abs(disp_steps[inds] - day_ahead_step)
-                    #         self.next_day_schedule = wnet[inds]
-                    #         if diff.max() > 1.e-3:
-                    #             self.next_day_schedule = util.translate_to_fixed_timestep(wnet[inds], disp_steps[inds], day_ahead_step)  
-                                
-                    #         # Store weather used at the point int ime the day ahead schedule was generated
-                    #         weather = {k:self.weather_data_for_dispatch[k][startpt:startpt+npts_horizon] for k in ['dn', 'tdry', 'wspd']}
-                    #         self.weather_at_schedule.append(weather)
-
-
                     #--- Set ssc dispatch targets
-                    self.ssc_dispatch_targets.set_from_dispatch_solution(self.design, self.properties, self.dispatch_params, self.dispatch_soln, self.plant_state, sscstep/3600., freq/3600.)
-                    D.update(vars(self.ssc_dispatch_targets))
+                    ssc_dispatch_targets = ssc_wrapper.DispatchTargets()
+                    ssc_dispatch_targets.set_from_dispatch_solution(self.design, self.properties, self.dispatch_params, self.dispatch_soln, self.plant_state, sscstep/3600., freq/3600.)
+                    D.update(vars(ssc_dispatch_targets))
 
                     # Regression tests for dispatch model outputs (ssc_dispatch_targets)
                     if j == 0 and toy + horizon == 24796800:
-                        assert hash(tuple(self.ssc_dispatch_targets.is_pc_sb_allowed_in)) == -4965923453060612375
-                        assert hash(tuple(self.ssc_dispatch_targets.is_pc_su_allowed_in)) == -4965923453060612375
-                        assert hash(tuple(self.ssc_dispatch_targets.is_rec_sb_allowed_in)) == -4965923453060612375
-                        assert hash(tuple(self.ssc_dispatch_targets.is_rec_su_allowed_in)) == -4965923453060612375
-                        assert hash(tuple(self.ssc_dispatch_targets.q_pc_max_in)) == -709626543671595165
-                        assert hash(tuple(self.ssc_dispatch_targets.q_pc_target_on_in)) == -4965923453060612375
-                        assert hash(tuple(self.ssc_dispatch_targets.q_pc_target_su_in)) == -4965923453060612375
+                        assert hash(tuple(ssc_dispatch_targets.is_pc_sb_allowed_in)) == -4965923453060612375
+                        assert hash(tuple(ssc_dispatch_targets.is_pc_su_allowed_in)) == -4965923453060612375
+                        assert hash(tuple(ssc_dispatch_targets.is_rec_sb_allowed_in)) == -4965923453060612375
+                        assert hash(tuple(ssc_dispatch_targets.is_rec_su_allowed_in)) == -4965923453060612375
+                        assert hash(tuple(ssc_dispatch_targets.q_pc_max_in)) == -709626543671595165
+                        assert hash(tuple(ssc_dispatch_targets.q_pc_target_on_in)) == -4965923453060612375
+                        assert hash(tuple(ssc_dispatch_targets.q_pc_target_su_in)) == -4965923453060612375
 
 
                 else:  # Infeasible solution was returned, revert back to running ssc without dispatch targets
@@ -894,17 +868,6 @@ class CaseStudy:
 
 
 
-            # ***********************************************************
-            # ***********************************************************
-            def dispatch_wrap(prices, weather, ssc_inputs=None):
-                return 1
-
-            dispatch_outputs = dispatch_wrap(
-                prices = self.price_data[startpt:startpt+npts_horizon],
-                weather = self.weather_data_for_dispatch
-            )
-            # ***********************************************************
-            # ***********************************************************
 
 
 
@@ -918,7 +881,7 @@ class CaseStudy:
                 
 
             #--- Add dispatch model solution to results
-            if self.is_optimize and disp_out is not False:
+            if self.is_optimize and self.dispatch_soln is not None:
                 Rdisp = self.dispatch_soln.get_solution_at_ssc_steps(self.dispatch_params, sscstep/3600., freq/3600.)
                 for k in retvars_disp:
                     if k in Rdisp.keys():
