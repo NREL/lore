@@ -3,6 +3,8 @@ from math import ceil, pi, log, isnan
 import numpy as np
 import util
 from copy import deepcopy
+import ssc_wrapper
+import run_phase_one
 
 class DispatchParams:
     def __init__(self):
@@ -670,9 +672,129 @@ class DispatchSoln:
 
 
 
-        
-        
-    
+def update_dispatch_weather_data(weather_data, replacement_real_weather_data, replacement_forecast_weather_data, datetime, total_horizon, dispatch_horizon):
+        """
+        Replace select metrics in weather_data with those from the real and forecast weather data, depending on dispatch horizons
+        """
+        minutes_per_timestep = weather_data['minute'][1] - weather_data['minute'][0]
+        timesteps_per_hour = 1 / minutes_per_timestep * 60
 
+        t = int(util.get_time_of_year(datetime)/3600)        # Time of year (hr)
+        p = int(t*timesteps_per_hour)                        # First time index in weather arrays
+        n = int(total_horizon * timesteps_per_hour)                # Number of time indices in horizon (to replace)
+        for j in range(n):
+            for k in ['dn', 'wspd', 'tdry', 'rhum', 'pres']:
+                hr = j/timesteps_per_hour
+                if dispatch_horizon == -1 or hr < dispatch_horizon:
+                    weather_data[k][p+j] = replacement_real_weather_data[k][p+j]    
+                else:
+                    weather_data[k][p+j] = replacement_forecast_weather_data[k][p+j]
+
+        return weather_data
+
+
+def estimates_for_dispatch_model(plant_design, toy, horizon, weather_data, N_pts_horizon, clearsky_data, start_pt):
+    D_est = plant_design.copy()
+    D_est['time_stop'] = toy + horizon
+    D_est['is_dispatch_targets'] = False
+    D_est['tshours'] = 100                      # Inflate TES size so that there is always "somewhere" to put receiver output
+    D_est['solar_resource_data'] = weather_data
+    D_est['is_rec_startup_trans'] = False
+    D_est['rec_su_delay'] = 0.001               # Simulate with no start-up time to get total available solar energy
+    D_est['rec_qf_delay'] = 0.001
+    retvars = ['Q_thermal', 'm_dot_rec', 'beam', 'clearsky', 'tdry', 'P_tower_pump', 'pparasi']
+    ssc_outputs, new_state = ssc_wrapper.call_ssc(D_est, retvars, npts = N_pts_horizon)
+    if ssc_outputs['clearsky'].max() < 1.e-3:         # Clear-sky data wasn't passed through ssc (ssc controlled from actual DNI, or user-defined flow inputs)
+        ssc_outputs['clearsky'] = clearsky_data[start_pt : start_pt + N_pts_horizon]
+
+    return ssc_outputs
+
+
+def setup_dispatch_model(R_est, freq, horizon, include_day_ahead_in_dispatch,
+    dispatch_params, plant_design, plant_state, nonlinear_model_time, use_linear_dispatch_at_night,
+    clearsky_data, night_clearky_cutoff, dispatch_steplength_array, dispatch_steplength_end_time,
+    disp_time_weighting, price, sscstep, avg_price, avg_price_disp_storage_incentive,
+    avg_purchase_price, day_ahead_tol_plus, day_ahead_tol_minus,
+    tod, current_day_schedule, day_ahead_pen_plus, day_ahead_pen_minus,
+    dispatch_horizon, night_clearsky_cutoff, properties, dispatch_soln):
+
+    #--- Set dispatch optimization properties for this time horizon using ssc estimates
+    ##########
+    ##  There's already a lot of the dispatch_params member variables set here, which set_initial_state draws from
+    ##########
+    # Initialize dispatch model inputs
+    dispatch_params.set_dispatch_time_arrays(dispatch_steplength_array, dispatch_steplength_end_time,
+        dispatch_horizon, nonlinear_model_time, disp_time_weighting)
+    dispatch_params.set_fixed_parameters_from_plant_design(plant_design, properties)
+    dispatch_params.set_default_grid_limits()
+    dispatch_params.disp_time_weighting = disp_time_weighting
+    dispatch_params.set_initial_state(plant_design, plant_state)  # Set initial plant state for dispatch model
+    
+    # Update approximate receiver shutdown state from previous dispatch solution (not returned from ssc)
+    ursd = dispatch_soln.get_value_at_time(dispatch_params, freq/3600, 'ursd') 
+    yrsd = dispatch_soln.get_value_at_time(dispatch_params, freq/3600, 'yrsd') 
+    dispatch_params.set_approximate_shutdown_state_parameters(plant_state, ursd = ursd, yrsd = yrsd)  # Set initial state parameters related to shutdown from dispatch model (because this cannot be derived from ssc)
+
+    nonlinear_time = nonlinear_model_time # Time horizon for nonlinear model (hr)
+    if use_linear_dispatch_at_night:
+        endpt = int((toy + nonlinear_time*3600) / sscstep)  # Last point in annual arrays at ssc time step resolution corresponding to nonlinear portion of dispatch model
+        if clearsky_data[startpt:endpt].max() <= night_clearsky_cutoff:
+            nonlinear_time = 0.0
+
+    dispatch_params.set_dispatch_time_arrays(dispatch_steplength_array, dispatch_steplength_end_time, horizon/3600., nonlinear_time, disp_time_weighting)
+    dispatch_params.set_default_grid_limits()
+    dispatch_params.P = util.translate_to_variable_timestep([p/1000. for p in price], sscstep/3600., dispatch_params.Delta)  # $/kWh
+    dispatch_params.avg_price = avg_price/1000.
+    dispatch_params.avg_price_disp_storage_incentive = avg_price_disp_storage_incentive / 1000.  # $/kWh  # Only used in storage inventory incentive -> high values cause the solutions to max out storage rather than generate electricity
+    dispatch_params.avg_purchase_price = avg_purchase_price/1000    # $/kWh 
+    dispatch_params.day_ahead_tol_plus = day_ahead_tol_plus*1000    # kWhe
+    dispatch_params.day_ahead_tol_minus = day_ahead_tol_minus*1000  # kWhe
+
+    dispatch_params.set_estimates_from_ssc_data(plant_design, R_est, sscstep/3600.) 
+    
+    
+    #--- Set day-ahead schedule in dispatch parameters
+    if include_day_ahead_in_dispatch:  
+        day_ahead_horizon = 24 - int(tod/3600)   # Number of hours of day-ahead schedule to use.  This probably only works in the dispatch model if time horizons are updated at integer multiples of an hour
+        use_schedule = [current_day_schedule[s]*1000 for s in range(24-day_ahead_horizon, 24)]   # kWhe
+        dispatch_params.set_day_ahead_schedule(use_schedule, day_ahead_pen_plus/1000, day_ahead_pen_minus/1000)
         
-        
+
+    #--- Run dispatch optimization and set ssc dispatch targets
+    disp_in = dispatch_params.copy_and_format_indexed_inputs()     # dispatch.DispatchParams object
+
+    return disp_in
+
+
+def run_dispatch_model(disp_in, include, dispatch_soln, transition=0):
+    disp_out = run_phase_one.run_dispatch(disp_in, include, disp_in.start, disp_in.stop, transition=0)
+    if disp_out is not False:  
+        dispatch_soln.set_from_dispatch_outputs(disp_out)
+        # D['is_dispatch_targets'] = True
+    else:  # Infeasible solution was returned, revert back to running ssc without dispatch targets
+        print ('Infeasible dispatch solution')
+        return None
+        # D['is_dispatch_targets'] = False
+
+    return dispatch_soln
+
+
+def get_day_ahead_schedule(day_ahead_schedule_steps_per_hour, Delta, Delta_e, net_electrical_output, day_ahead_schedule_time):
+    print ('Storing day-ahead schedule')
+    day_ahead_step = 1./day_ahead_schedule_steps_per_hour  # Time step for day-ahead schedule (hr)
+    disp_steps = np.array(Delta)
+    wnet = np.array(net_electrical_output) / 1000.   # Net electricity to the grid (MWe) at dispatch time steps
+    inds = np.where(np.array(Delta_e) > (24 - day_ahead_schedule_time))[0]    # Find time points corresponding to the 24-hour period starting at midnight on the next day
+    if len(inds) >0:  # Last-day simulation won't have any points in day-ahead period
+        diff = np.abs(disp_steps[inds] - day_ahead_step)
+        next_day_schedule = wnet[inds]
+        if diff.max() > 1.e-3:
+            next_day_schedule = util.translate_to_fixed_timestep(wnet[inds], disp_steps[inds], day_ahead_step) 
+        return next_day_schedule
+    else:
+        return None
+
+
+def get_weather_at_day_ahead_schedule(weather_data_for_dispatch, startpt, npts_horizon):
+    return {k:weather_data_for_dispatch[k][startpt:startpt+npts_horizon] for k in ['dn', 'tdry', 'wspd']}
+
