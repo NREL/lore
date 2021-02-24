@@ -1,3 +1,4 @@
+from bokeh import events as bokeh_events
 from bokeh import io as bokeh_io
 from bokeh import layouts as bokeh_layouts
 from bokeh import models as bokeh_models
@@ -52,13 +53,24 @@ def makePlot():
             '$x':'datetime'
         }
     )
+    wheel_zoom_tool = bokeh_models.WheelZoomTool(maintain_focus=False)
+    pan_tool = bokeh_models.PanTool()
     plot = bokeh_plotting.figure(
-        tools = [hover_tool],
+        tools = [hover_tool, wheel_zoom_tool, pan_tool],
         x_axis_type = 'datetime',
         width = 650,
         height = 525,
         y_axis_label = 'Power [W/m^2]',
+        output_backend='webgl',
+        sizing_mode='stretch_both',
     )
+    # Set action to reset plot
+    plot.js_on_event(
+        bokeh_events.DoubleTap,
+        bokeh_models.CustomJS(args=dict(p=plot), code="p.reset.emit()"),
+    )
+    plot.toolbar.active_drag = pan_tool
+    plot.toolbar.active_scroll = wheel_zoom_tool
     clear_sky = plot.line(
         x = 'forecast_for',
         y = 'clear_sky',
