@@ -709,9 +709,8 @@ class CaseStudy:
                         self.weather_at_schedule.append(weather_at_day_ahead_schedule)  # Store weather used at the point in time the day ahead schedule was generated
 
                     #--- Set ssc dispatch targets
-                    ssc_dispatch_targets = ssc_wrapper.DispatchTargets()
-                    ssc_dispatch_targets.set_from_dispatch_solution(self.design, self.properties, self.dispatch_params, self.dispatch_soln, self.plant_state, sscstep/3600., freq/3600.)
-                    D.update(vars(ssc_dispatch_targets))                       
+                    ssc_dispatch_targets = ssc_wrapper.extract_ssc_dispatch_targets(self.dispatch_soln, self.design, self.properties, self.dispatch_params, sscstep, freq/3600.)
+                    D.update(vars(ssc_dispatch_targets))
                 else:  # Infeasible solution was returned, revert back to running ssc without dispatch targets
                     pass
                     # print ('Infeasible dispatch solution')
