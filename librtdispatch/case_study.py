@@ -559,21 +559,19 @@ class CaseStudy:
     #      Time at which the weather forecast is updated coincides with the start of an optimization interval
     #      Time at which the day-ahead generation schedule is due coincides with the start of an optimization interval
     def run_rolling_horizon(self, D, total_horizon):
-        start_time = util.get_time_of_year(self.current_time)  # Time (sec) elapsed since beginning of year
-        start_hour = int(start_time / 3600)   # Time (hours) elapsed since beginning of year
+        # Calculate time-related values
+        start_time = util.get_time_of_year(self.current_time)       # Time (sec) elapsed since beginning of year
+        start_hour = int(start_time / 3600)                         # Time (hours) elapsed since beginning of year
         end_hour = start_hour + self.sim_days*24
-        
-        nph = int(self.ssc_time_steps_per_hour)         # Number of time steps per hour
-        ntot = int(nph*total_horizon)                   # Total number of time points in full horizon
-        napply = int(nph*self.dispatch_frequency)       # Number of ssc time points accepted after each solution 
-        nupdate = int(total_horizon / self.dispatch_frequency)    # Number of update intervals
-        startpt = int(start_hour*nph)                             # Start point in annual arrays
-        
-        
-        sscstep = 3600/nph                              # ssc time step (s)
+        nph = int(self.ssc_time_steps_per_hour)                     # Number of time steps per hour
+        ntot = int(nph*total_horizon)                               # Total number of time points in full horizon
+        napply = int(nph*self.dispatch_frequency)                   # Number of ssc time points accepted after each solution 
+        nupdate = int(total_horizon / self.dispatch_frequency)      # Number of update intervals
+        startpt = int(start_hour*nph)                               # Start point in annual arrays
+        sscstep = 3600/nph                                          # ssc time step (s)
         nominal_horizon = int(self.dispatch_horizon*3600)  
         horizon_update = int(self.dispatch_horizon_update*3600)
-        freq = int(self.dispatch_frequency*3600)    # Frequency of rolling horizon update (s)
+        freq = int(self.dispatch_frequency*3600)                    # Frequency of rolling horizon update (s)
 
         # Initialize results
         retvars = self.default_ssc_return_vars()
@@ -583,40 +581,36 @@ class CaseStudy:
         R = {k:np.zeros(ntot) for k in retvars}    
         for k in retvars_disp:
             R['disp_'+k] =np.zeros(ntot)
-
         self.disp_params_tracking = []
         self.disp_soln_tracking = []
-        for j in range(nupdate):
 
-  
+        for j in range(nupdate):
             #--- Update input dictionary from current plant state
             D.update(vars(self.plant_state))
             
-            #--- Set time horizon
+            #--- Calculate times
             time = self.current_time
             tod = int(util.get_time_of_day(time))  # Current time of day (s)
             toy = int(util.get_time_of_year(time))  # Current time of year (s)
             D['time_start'] = toy
             startpt = int(toy/3600)*nph  # First point in annual arrays corresponding to this time
+
+            #--- Set time horizon
             horizon = nominal_horizon 
             if self.dispatch_horizon_update != self.dispatch_frequency:
                 horizon = nominal_horizon  - int((j*freq) % horizon_update)   # Reduce dispatch horizon if re-optimization interval and horizon update interval are different
-            
             # Restrict horizon to the end of the final simulation day (otherwise the dispatch often defers generation to the next day outside of the simulation window)
             if (toy+horizon)/3600 > end_hour:
-                horizon = end_hour*3600 - toy  
-                
-            npts_horizon = int(horizon/3600 * nph)
+                horizon = end_hour*3600 - toy            
             
-            print (j, time, horizon/3600, npts_horizon, napply)
-            
+            npts_horizon = int(horizon/3600 * nph)           
 
             #--- Update "forecasted" weather data (if relevant)
             if self.is_optimize and (tod == self.forecast_issue_time*3600):
                 self.update_forecast_weather_data(time)
 
             #--- Update stored day-ahead generation schedule for current day (if relevant)
-            if tod == 0 and self.use_day_ahead_schedule:  
+            if tod == 0 and self.use_day_ahead_schedule:
                 if self.day_ahead_schedule_from == 'calculated':
                     if j == 0:
                         self.schedules.append(None)  
