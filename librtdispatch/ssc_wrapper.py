@@ -92,7 +92,21 @@ class PlantState:
     # Update state persistence: S is a dictionary containing array outputs from ssc (Q_thermal, 'q_startup', 'P_cycle', 'q_pb', 'q_dot_pc_startup') with look-ahead points removed
     # Should be called after plant state has been updated based on conditions at the end of the simulation
     def update_persistence(self, previous_state, S, ssc_time_step):
-        
+        """
+        Calculates:
+            self.disp_rec_persist0
+            self.disp_rec_off0
+            self.disp_pc_persist0
+            self.disp_pc_off0
+
+        Inputs:
+            previous_state                      previous plant state
+            S                                   subset of ssc solution
+            ssc_time_step
+            self.rec_op_mode_initial
+            self.pc_op_mode_initial
+        """
+
         previous_rec_state = previous_state.rec_op_mode_initial  # Receiver state before start of most recent simulation call
         previous_cycle_state = previous_state.pc_op_mode_initial   # Cycle state before start of most recent simulation call
         

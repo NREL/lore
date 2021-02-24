@@ -561,7 +561,7 @@ class CaseStudy:
     #      Time at which the weather forecast is updated coincides with the start of an optimization interval
     #      Time at which the day-ahead generation schedule is due coincides with the start of an optimization interval
     def run_rolling_horizon(self, D, total_horizon):
-        # Calculate time-related values
+        #--- Calculate time-related values
         start_time = util.get_time_of_year(self.current_time)       # Time (sec) elapsed since beginning of year
         start_hour = int(start_time / 3600)                         # Time (hours) elapsed since beginning of year
         end_hour = start_hour + self.sim_days*24
@@ -575,7 +575,7 @@ class CaseStudy:
         horizon_update = int(self.dispatch_horizon_update*3600)
         freq = int(self.dispatch_frequency*3600)                    # Frequency of rolling horizon update (s)
 
-        # Initialize results
+        #--- Initialize results
         retvars = self.default_ssc_return_vars()
         retvars_disp = self.default_disp_stored_vars()
         if self.is_optimize:
@@ -741,20 +741,19 @@ class CaseStudy:
 
             #--- Run ssc and collect results
             D['time_stop'] = toy+freq
-            Rsub, new_plant_state = ssc_wrapper.call_ssc(D, retvars, plant_state_pt = napply-1, npts = napply) 
-            new_plant_state.update_persistence(self.plant_state, Rsub, sscstep/3600.)
-            self.plant_state = new_plant_state
+            Rsub, new_plant_state = ssc_wrapper.call_ssc(D, retvars, plant_state_pt = napply-1, npts = napply)
+            
+            #--- Prune ssc and dispatch solutions in the current update interval and add to compiled results (R)
             for k in Rsub.keys():
                 R[k][j*napply:(j+1)*napply] = Rsub[k][0:napply]
-                
-
-            #--- Add dispatch model solution to results
             if self.is_optimize and self.dispatch_soln is not None:
                 Rdisp = self.dispatch_soln.get_solution_at_ssc_steps(self.dispatch_params, sscstep/3600., freq/3600.)
                 for k in retvars_disp:
                     if k in Rdisp.keys():
                         R['disp_'+k][j*napply:(j+1)*napply] = Rdisp[k]
                     
+            #--- Update saved plant state
+            self.plant_state = new_plant_state.update_persistence(self.plant_state, Rsub, sscstep/3600.)
 
             #--- Update current time
             self.current_time = self.current_time + datetime.timedelta(seconds = freq)
