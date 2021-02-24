@@ -191,7 +191,7 @@ class DispatchTargets:
         return
 
     
-    def set_from_dispatch_solution(self, design, properties, disp_params, disp_soln, initial_state, sscstep, horizon):
+    def set_from_dispatch_solution(self, design, properties, disp_params, disp_soln, sscstep, horizon):
         """
         Translate to or generate SSC model inputs from select dispatch model outputs
 
@@ -199,7 +199,6 @@ class DispatchTargets:
         Outputs:    setting object member variables 'is_rec_su_allowed_in', etc.
 
         TODO
-        - remove unused initial_state parameter
         - replace 'design' parameter with Q_des_cycle
         - replace 'properties' with cycle_max_frac
         - extract this line and the above two parameters as they don't deal with the dispatch solution
@@ -251,6 +250,11 @@ class DispatchTargets:
             setattr(self, k, vals)
 
         return
+
+def extract_ssc_dispatch_targets(dispatch_soln, plant_design, plant_properties, dispatch_params, sscstep, horizon):
+    ssc_dispatch_targets = DispatchTargets()
+    ssc_dispatch_targets.set_from_dispatch_solution(plant_design, plant_properties, dispatch_params, dispatch_soln, sscstep/3600., horizon)
+    return ssc_dispatch_targets
         
         
 
