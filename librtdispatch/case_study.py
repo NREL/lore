@@ -586,6 +586,7 @@ class CaseStudy:
         self.disp_params_tracking = []
         self.disp_soln_tracking = []
 
+        #--- For the total horizon, at the dispatch frequency:
         for j in range(nupdate):
             #--- Update input dictionary from current plant state
             D.update(vars(self.plant_state))
