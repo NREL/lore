@@ -716,7 +716,7 @@ def setup_dispatch_model(R_est, freq, horizon, include_day_ahead_in_dispatch,
     disp_time_weighting, price, sscstep, avg_price, avg_price_disp_storage_incentive,
     avg_purchase_price, day_ahead_tol_plus, day_ahead_tol_minus,
     tod, current_day_schedule, day_ahead_pen_plus, day_ahead_pen_minus,
-    dispatch_horizon, night_clearsky_cutoff, properties, dispatch_soln):
+    dispatch_horizon, night_clearsky_cutoff, properties, ursd_last, yrsd_last):
 
     #--- Set dispatch optimization properties for this time horizon using ssc estimates
     ##########
@@ -731,9 +731,7 @@ def setup_dispatch_model(R_est, freq, horizon, include_day_ahead_in_dispatch,
     dispatch_params.set_initial_state(plant_design, plant_state)  # Set initial plant state for dispatch model
     
     # Update approximate receiver shutdown state from previous dispatch solution (not returned from ssc)
-    ursd = dispatch_soln.get_value_at_time(dispatch_params, freq/3600, 'ursd') 
-    yrsd = dispatch_soln.get_value_at_time(dispatch_params, freq/3600, 'yrsd') 
-    dispatch_params.set_approximate_shutdown_state_parameters(plant_state, ursd = ursd, yrsd = yrsd)  # Set initial state parameters related to shutdown from dispatch model (because this cannot be derived from ssc)
+    dispatch_params.set_approximate_shutdown_state_parameters(plant_state, ursd = ursd_last, yrsd = yrsd_last)  # Set initial state parameters related to shutdown from dispatch model (because this cannot be derived from ssc)
 
     nonlinear_time = nonlinear_model_time # Time horizon for nonlinear model (hr)
     if use_linear_dispatch_at_night:

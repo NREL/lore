@@ -103,9 +103,9 @@ class PlantState:
         Inputs:
             previous_state                      previous plant state
             S                                   subset of ssc solution
+            rec_op_mode_initial
+            pc_op_mode_initial
             ssc_time_step
-            self.rec_op_mode_initial
-            self.pc_op_mode_initial
         """
         # TODO: note that this doesn't consider subdivision of time steps
         
