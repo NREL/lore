@@ -151,6 +151,9 @@ class CaseStudy:
         self.total_cycle_gross = 0          # Total gross generation by cycle (GWhe)
         self.total_cycle_net = 0            # Total net generation by cycle (GWhe)
 
+        self.ursd_last = []
+        self.yrsd_last = []
+
         return
 
 
@@ -686,7 +689,8 @@ class CaseStudy:
                     day_ahead_pen_minus = self.day_ahead_pen_minus,
                     night_clearsky_cutoff = self.night_clearsky_cutoff,
                     properties = self.properties,
-                    dispatch_soln = self.dispatch_soln
+                    ursd_last = self.ursd_last,
+                    yrsd_last = self.yrsd_last
                 )
 
                 include = {"pv": False, "battery": False, "persistence": False, "force_cycle": False, "op_assumptions": False,
@@ -710,6 +714,11 @@ class CaseStudy:
                     #--- Set ssc dispatch targets
                     ssc_dispatch_targets = ssc_wrapper.extract_ssc_dispatch_targets(self.dispatch_soln, self.design, self.properties, self.dispatch_params, sscstep, freq/3600.)
                     D.update(vars(ssc_dispatch_targets))
+
+                    #--- Save these values for next estimates
+                    self.ursd_last = self.dispatch_soln.get_value_at_time(self.dispatch_params, freq/3600, 'ursd')      # set to False when it doesn't exists 
+                    self.yrsd_last = self.dispatch_soln.get_value_at_time(self.dispatch_params, freq/3600, 'yrsd')      # set to False when it doesn't exists
+
                 else:  # Infeasible solution was returned, revert back to running ssc without dispatch targets
                     pass
                     # print ('Infeasible dispatch solution')
