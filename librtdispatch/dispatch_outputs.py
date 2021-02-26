@@ -6,44 +6,44 @@ import pyomo.environ as pe
 import numpy
 
 
-class SimpleDispatchOutputs(object):
-    def __init__(self, model):
-        """
-        only records receiver thermal power and power cycle outputs.
-        :param model:
-        """
-        self.objective_value = pe.value(model.OBJ)
-        self.cycle_on = numpy.array([pe.value(model.y[t]) for t in model.T])
-        self.cycle_standby = numpy.array([pe.value(model.ycsb[t]) for t in model.T])
-        self.cycle_startup = numpy.array([pe.value(model.ycsu[t]) for t in model.T])
-        self.receiver_power = numpy.array([pe.value(model.xr[t]) for t in model.T])
-        self.thermal_input_to_cycle = numpy.zeros_like(self.receiver_power)
-        for t in model.T:
-            if t in model.T_nl:
-                self.thermal_input_to_cycle[t-model.t_start] = pe.value(model.x_calc[t])
-            else:
-                self.thermal_input_to_cycle[t-model.t_start] = pe.value(model.x[t])
-        self.electrical_output_from_cycle = numpy.array([pe.value(model.wdot[t]) for t in model.T])
-        self.net_electrical_output = numpy.array([pe.value(model.wdot_s[t]) for t in model.T])
-        self.tes_soc = numpy.array([pe.value(model.s[t]) for t in model.T])
+# class SimpleDispatchOutputs(object):
+#     def __init__(self, model):
+#         """
+#         only records receiver thermal power and power cycle outputs.
+#         :param model:
+#         """
+#         self.objective_value = pe.value(model.OBJ)
+#         self.cycle_on = numpy.array([pe.value(model.y[t]) for t in model.T])
+#         self.cycle_standby = numpy.array([pe.value(model.ycsb[t]) for t in model.T])
+#         self.cycle_startup = numpy.array([pe.value(model.ycsu[t]) for t in model.T])
+#         self.receiver_power = numpy.array([pe.value(model.xr[t]) for t in model.T])
+#         self.thermal_input_to_cycle = numpy.zeros_like(self.receiver_power)
+#         for t in model.T:
+#             if t in model.T_nl:
+#                 self.thermal_input_to_cycle[t-model.t_start] = pe.value(model.x_calc[t])
+#             else:
+#                 self.thermal_input_to_cycle[t-model.t_start] = pe.value(model.x[t])
+#         self.electrical_output_from_cycle = numpy.array([pe.value(model.wdot[t]) for t in model.T])
+#         self.net_electrical_output = numpy.array([pe.value(model.wdot_s[t]) for t in model.T])
+#         self.tes_soc = numpy.array([pe.value(model.s[t]) for t in model.T])
 
-    def print_outputs(self):
-        print("objective_value: ")
-        print(self.objective_value)
-        print("cycle_on: ")
-        print(self.cycle_on)
-        print("cycle_standby: ")
-        print(self.cycle_standby)
-        print("cycle_startup: ")
-        print(self.cycle_startup)
-        print("receiver_power: ")
-        print(self.receiver_power)
-        print("thermal_input_to_cycle: ")
-        print(self.thermal_input_to_cycle)
-        print("electrical_output_from_cycle: ")
-        print(self.electrical_output_from_cycle)
-        print("tes_soc: ")
-        print(self.tes_soc)
+#     def print_outputs(self):
+#         print("objective_value: ")
+#         print(self.objective_value)
+#         print("cycle_on: ")
+#         print(self.cycle_on)
+#         print("cycle_standby: ")
+#         print(self.cycle_standby)
+#         print("cycle_startup: ")
+#         print(self.cycle_startup)
+#         print("receiver_power: ")
+#         print(self.receiver_power)
+#         print("thermal_input_to_cycle: ")
+#         print(self.thermal_input_to_cycle)
+#         print("electrical_output_from_cycle: ")
+#         print(self.electrical_output_from_cycle)
+#         print("tes_soc: ")
+#         print(self.tes_soc)
 
 class RTDispatchOutputs(object):
     def __init__(self, model):
