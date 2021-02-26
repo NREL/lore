@@ -91,7 +91,8 @@ class PlantState:
     
     # Update state persistence: S is a dictionary containing array outputs from ssc (Q_thermal, 'q_startup', 'P_cycle', 'q_pb', 'q_dot_pc_startup') with look-ahead points removed
     # Should be called after plant state has been updated based on conditions at the end of the simulation
-    def update_persistence(self, previous_state, S, ssc_time_step):
+    @staticmethod
+    def update_persistence(previous_state, S, rec_op_mode_initial, pc_op_mode_initial, ssc_time_step):
         """
         Calculates:
             self.disp_rec_persist0
@@ -106,70 +107,84 @@ class PlantState:
             self.rec_op_mode_initial
             self.pc_op_mode_initial
         """
-
-        previous_rec_state = previous_state.rec_op_mode_initial  # Receiver state before start of most recent simulation call
-        previous_cycle_state = previous_state.pc_op_mode_initial   # Cycle state before start of most recent simulation call
-        
-        current_rec_state = self.rec_op_mode_initial    # Receiver state at the end of the the most recent simulation call
-        current_cycle_state = self.pc_op_mode_initial  # Cycle state at the end of the the most recent simulation call
-        
-
-        # Update duration cycle and receiver have been in current state
         # TODO: note that this doesn't consider subdivision of time steps
         
-        n = len(S['Q_thermal'])
+        def disp_rec_persist0():
+            # Receiver state persistence disp_rec_persist0
+            #  set the respective is_rec_current array values true if their state is the same as the final/current state
+            previous_rec_state = previous_state.rec_op_mode_initial  # Receiver state before start of most recent set of simulation calls
+            current_rec_state = rec_op_mode_initial    # Receiver state at the end of the the most recent simulation call
+            if current_rec_state== 2:     # On
+                is_rec_current = S['Q_thermal'] > 1.e-3
+            elif current_rec_state == 1:  # Startup
+                is_rec_current = S['q_startup']  > 1.e-3
+            elif current_rec_state == 0:  # Off
+                is_rec_current = (S['Q_thermal'] + S['q_startup']) <= 1.e-3
+
+            n = len(S['Q_thermal'])
+            if np.abs(np.diff(is_rec_current)).max() == 0:  # Receiver did not change state over this simulation window:
+                disp_rec_persist0 = n*ssc_time_step if previous_rec_state != current_rec_state else previous_state.disp_rec_persist0 + n*ssc_time_step
+            else:
+                i = np.where(np.abs(np.diff(is_rec_current)) == 1)[0][-1]
+                disp_rec_persist0 = int(n-1-i)*ssc_time_step
+            return disp_rec_persist0
         
-        # Receiver state persistence
-        is_rec_not_on = S['Q_thermal'] <= 1.e-3  # Time points receiver is not generating thermal power
-        if current_rec_state== 2:  # On
-            is_rec_current = S['Q_thermal'] > 1.e-3
-        elif current_rec_state == 1: # Startup
-            is_rec_current = S['q_startup']  > 1.e-3
-        elif current_rec_state == 0: # Off
-            is_rec_current = (S['Q_thermal'] + S['q_startup']) <= 1.e-3
-
-        if np.abs(np.diff(is_rec_current)).max() == 0:  # Receiver did not change state over this simulation window:
-            self.disp_rec_persist0 = n*ssc_time_step if previous_rec_state != current_rec_state else previous_state.disp_rec_persist0 + n*ssc_time_step
-        else:
-            i = np.where(np.abs(np.diff(is_rec_current)) == 1)[0][-1]
-            self.disp_rec_persist0 = int(n-1-i)*ssc_time_step
-        
-        if current_rec_state == 2:  # Receiver is on
-            self.disp_rec_off0 = 0.0
-        elif is_rec_not_on.min() == 1:  # Receiver was off for the full simulated horizon
-            self.disp_rec_off0 = previous_state.disp_rec_off0 + n*ssc_time_step  
-        else: # Receiver shut off sometime during the current horizon
-            i = np.where(np.abs(np.diff(is_rec_not_on)) == 1)[0][-1]
-            self.disp_rec_off0 = int(n-1-i)*ssc_time_step        
+        def disp_rec_off0():
+            # Receiver state persistence disp_rec_off0
+            current_rec_state = rec_op_mode_initial    # Receiver state at the end of the the most recent simulation call
+            is_rec_not_on = S['Q_thermal'] <= 1.e-3  # Array of time points receiver is not generating thermal power
+            n = len(S['Q_thermal'])
+            if current_rec_state == 2:  # Receiver is on
+                disp_rec_off0 = 0.0
+            elif is_rec_not_on.min() == 1:  # Receiver was off for the full simulated horizon
+                disp_rec_off0 = previous_state.disp_rec_off0 + n*ssc_time_step  
+            else: # Receiver shut off sometime during the current horizon
+                i = np.where(np.abs(np.diff(is_rec_not_on)) == 1)[0][-1]
+                disp_rec_off0 = int(n-1-i)*ssc_time_step
+            return disp_rec_off0
             
+        def disp_pc_persist0():
+            # Cycle state persistence disp_pc_persist0
+            previous_cycle_state = previous_state.pc_op_mode_initial   # Cycle state before start of most recent set of simulation calls
+            current_cycle_state = pc_op_mode_initial  # Cycle state at the end of the the most recent simulation call
+            if current_cycle_state == 1: # On
+                is_pc_current = S['P_cycle'] > 1.e-3 
+            elif current_cycle_state == 2: # Standby
+                is_pc_current = np.logical_and(np.logical_and(S['P_cycle']<=1.e-3, S['q_pb']>= 1.e-3), S['q_dot_pc_startup']<=1.e-3)
+            elif current_cycle_state == 0 or pc_op_mode_initial == 4: # Startup
+                is_pc_current = S['q_dot_pc_startup'] > 1.e-3
+            elif current_cycle_state == 3:  # Off
+                is_pc_current = (S['q_dot_pc_startup'] + S['q_pb']) <= 1.e-3
 
-        # Cycle state persistence
-        is_pc_not_on = S['P_cycle'] <=1.e-3
-        if current_cycle_state == 1: # On
-            is_pc_current = S['P_cycle'] > 1.e-3 
-        elif current_cycle_state == 2: # Standby
-            is_pc_current = np.logical_and(np.logical_and(S['P_cycle']<=1.e-3, S['q_pb']>= 1.e-3), S['q_dot_pc_startup']<=1.e-3)
-        elif current_cycle_state == 0 or self.pc_op_mode_initial == 4: # Startup
-            is_pc_current = S['q_dot_pc_startup'] > 1.e-3
-        elif current_cycle_state == 3:  # Off
-            is_pc_current = (S['q_dot_pc_startup'] + S['q_pb']) <= 1.e-3
+            n = len(S['P_cycle'])
+            if np.abs(np.diff(is_pc_current)).max() == 0:  # Plant has not changed state over this simulation window:
+                disp_pc_persist0 = n*ssc_time_step if previous_cycle_state != current_cycle_state else previous_state.disp_pc_persist0 + n*ssc_time_step
+            else:
+                i = np.where(np.abs(np.diff(is_pc_current)) == 1)[0][-1]
+                disp_pc_persist0 = int(n-1-i)*ssc_time_step
+            return disp_pc_persist0
 
-        if np.abs(np.diff(is_pc_current)).max() == 0:  # Plant has not changed state over this simulation window:
-            self.disp_pc_persist0 = n*ssc_time_step if previous_cycle_state != current_cycle_state else previous_state.disp_pc_persist0 + n*ssc_time_step
-        else:
-            i = np.where(np.abs(np.diff(is_pc_current)) == 1)[0][-1]
-            self.disp_pc_persist0 = int(n-1-i)*ssc_time_step
-            
-        if current_cycle_state == 1:  # Cycle is on
-            self.disp_pc_off0 = 0.0
-        elif is_pc_not_on.min() == 1:  # Cycle was off for the full simulated horizon
-            self.disp_pc_off0 = previous_state.disp_pc_off0 + n*ssc_time_step  
-        else: # Cycle shut off sometime during the current horizon
-            i = np.where(np.abs(np.diff(is_pc_not_on)) == 1)[0][-1]
-            self.disp_pc_off0 = int(n-1-i)*ssc_time_step        
-                        
+        def disp_pc_off0():
+            # Cycle state persistence disp_pc_off0
+            current_cycle_state = pc_op_mode_initial  # Cycle state at the end of the the most recent simulation call
+            is_pc_not_on = S['P_cycle'] <=1.e-3
+            n = len(S['P_cycle'])
+            if current_cycle_state == 1:  # Cycle is on
+                disp_pc_off0 = 0.0
+            elif is_pc_not_on.min() == 1:  # Cycle was off for the full simulated horizon
+                disp_pc_off0 = previous_state.disp_pc_off0 + n*ssc_time_step  
+            else: # Cycle shut off sometime during the current horizon
+                i = np.where(np.abs(np.diff(is_pc_not_on)) == 1)[0][-1]
+                disp_pc_off0 = int(n-1-i)*ssc_time_step                        
+            return disp_pc_off0
 
-        return
+        outputs = {
+            'disp_rec_persist0': disp_rec_persist0(),
+            'disp_rec_off0': disp_rec_off0(),
+            'disp_pc_persist0': disp_pc_persist0(),
+            'disp_pc_off0': disp_pc_off0()
+            }
+        return outputs
     
     
 

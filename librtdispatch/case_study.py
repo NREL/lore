@@ -745,7 +745,14 @@ class CaseStudy:
             Rsub, new_plant_state = ssc_wrapper.call_ssc(D, retvars, plant_state_pt = napply-1, npts = napply)
             
             #--- Update saved plant state
-            new_plant_state.update_persistence(self.plant_state, Rsub, sscstep/3600.)
+            persistance_vars = new_plant_state.update_persistence(
+                self.plant_state,
+                Rsub,
+                new_plant_state.rec_op_mode_initial,
+                new_plant_state.pc_op_mode_initial,
+                sscstep/3600.)
+            for key,value in persistance_vars.items():
+                setattr(new_plant_state, key, value)
             self.plant_state = new_plant_state
 
             #--- Prune ssc and dispatch solutions in the current update interval and add to compiled results (R)
