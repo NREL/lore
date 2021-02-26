@@ -742,6 +742,10 @@ class CaseStudy:
             D['time_stop'] = toy+freq
             Rsub, new_plant_state = ssc_wrapper.call_ssc(D, retvars, plant_state_pt = napply-1, npts = napply)
             
+            #--- Update saved plant state
+            new_plant_state.update_persistence(self.plant_state, Rsub, sscstep/3600.)
+            self.plant_state = new_plant_state
+
             #--- Prune ssc and dispatch solutions in the current update interval and add to compiled results (R)
             for k in Rsub.keys():
                 R[k][j*napply:(j+1)*napply] = Rsub[k][0:napply]
@@ -751,9 +755,6 @@ class CaseStudy:
                     if k in Rdisp.keys():
                         R['disp_'+k][j*napply:(j+1)*napply] = Rdisp[k]
                     
-            #--- Update saved plant state
-            self.plant_state = new_plant_state.update_persistence(self.plant_state, Rsub, sscstep/3600.)
-
             #--- Update current time
             self.current_time = self.current_time + datetime.timedelta(seconds = freq)
             
