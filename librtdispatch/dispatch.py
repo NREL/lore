@@ -4,7 +4,7 @@ import numpy as np
 import util
 from copy import deepcopy
 import ssc_wrapper
-import run_phase_one
+# import run_phase_one
 import pyomo.environ as pe
 import dispatch_model
 import dispatch_outputs
@@ -719,19 +719,7 @@ class DispatchSoln:
         self.ycsup = np.array([pe.value(results.ycsup[t]) for t in results.T])
         self.ycgb = np.array([pe.value(results.ycgb[t]) for t in results.T])
         self.ycge = np.array([pe.value(results.ycge[t]) for t in results.T])
-
-
-
-
-    # Don't need this anymore?
-    # def set_from_dispatch_outputs(self, disp_outputs):
-    #     for k in vars(self):
-    #         if k in vars(disp_outputs).keys():
-    #             setattr(self, k, getattr(disp_outputs,k))
-    #         else:
-    #             setattr(self, k, [])
-    #     return
-    
+  
     
     def get_solution_at_ssc_steps(self, disp_params, sscstep, horizon):
         inds = np.where(np.array(disp_params.Delta_e) <= horizon+0.0001)[0]
