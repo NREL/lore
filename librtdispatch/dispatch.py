@@ -4,10 +4,8 @@ import numpy as np
 import util
 from copy import deepcopy
 import ssc_wrapper
-# import run_phase_one
 import pyomo.environ as pe
 import dispatch_model
-import dispatch_outputs
 from pyomo.opt import TerminationCondition
 
 class DispatchParams:
