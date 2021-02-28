@@ -1509,16 +1509,16 @@ class RealTimeDispatchModel(object):
             if self.model.ycgb[t].value > 1e-3:
                 print("Cycle on at period ", t, " - Time = ", self.model.Delta_e[t])
     
-if __name__ == "__main__": 
-    import dispatch_params
-    import dispatch_outputs
-    params = dispatch_params.buildParamsFromAMPLFile("./input_files/data_energy.dat")
-    params.start = 1        # as borrowed from run_phase_one.py
-    params.stop = 68        # as borrowed from run_phase_one.py
-    params.transition = 0   # as the default in run_dispatch() signature and as hardcoded in run_phase_one()
-    include = {"pv": False, "battery": False, "persistence": False, "force_cycle": True}
-    rt = RealTimeDispatchModel(params, include)
-    rt_results = rt.solveModel()
-    outputs = dispatch_outputs.RTDispatchOutputs(rt.model)
-    outputs.print_outputs()
+# if __name__ == "__main__": 
+#     import dispatch_params
+#     import dispatch_outputs
+#     params = dispatch_params.buildParamsFromAMPLFile("./input_files/data_energy.dat")
+#     params.start = 1        # as borrowed from run_phase_one.py
+#     params.stop = 68        # as borrowed from run_phase_one.py
+#     params.transition = 0   # as the default in run_dispatch() signature and as hardcoded in run_phase_one()
+#     include = {"pv": False, "battery": False, "persistence": False, "force_cycle": True}
+#     rt = RealTimeDispatchModel(params, include)
+#     rt_results = rt.solveModel()
+#     outputs = dispatch_outputs.RTDispatchOutputs(rt.model)
+#     outputs.print_outputs()
     
