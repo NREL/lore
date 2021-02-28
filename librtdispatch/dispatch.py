@@ -575,7 +575,7 @@ class DispatchParams:
 
 #=============================================================================
 class DispatchSoln:
-    def __init__(self):
+    def __init__(self, dispatch_results=None):
         self.objective_value = 0
         self.num_nl_periods = None
         self.t_start = None
@@ -643,91 +643,94 @@ class DispatchSoln:
         self.ycge = []      # Did cycle stop electric power generation?
         self.ycsd = []      # Brought over from RTDispatchOutputs
  
+        if dispatch_results is not None:
+            self.import_dispatch_results(dispatch_results)
+
         return
 
-    def import_dispatch_results(results):
+    def import_dispatch_results(self, results):
         self.objective_value = pe.value(results.OBJ)
-        self.cycle_on = numpy.array([pe.value(results.y[t]) for t in results.T])
-        self.cycle_standby = numpy.array([pe.value(results.ycsb[t]) for t in results.T])
-        self.cycle_startup = numpy.array([pe.value(results.ycsu[t]) for t in results.T])
-        self.receiver_on = numpy.array([pe.value(results.yr[t]) for t in results.T])
-        self.receiver_startup = numpy.array([pe.value(results.yrsu[t]) for t in results.T])
-        self.receiver_standby = numpy.array([pe.value(results.yrsb[t]) for t in results.T])
-        self.receiver_power = numpy.array([pe.value(results.xr[t]) for t in results.T])
-        self.thermal_input_to_cycle = numpy.zeros_like(self.receiver_power)
+        self.cycle_on = np.array([pe.value(results.y[t]) for t in results.T])
+        self.cycle_standby = np.array([pe.value(results.ycsb[t]) for t in results.T])
+        self.cycle_startup = np.array([pe.value(results.ycsu[t]) for t in results.T])
+        self.receiver_on = np.array([pe.value(results.yr[t]) for t in results.T])
+        self.receiver_startup = np.array([pe.value(results.yrsu[t]) for t in results.T])
+        self.receiver_standby = np.array([pe.value(results.yrsb[t]) for t in results.T])
+        self.receiver_power = np.array([pe.value(results.xr[t]) for t in results.T])
+        self.thermal_input_to_cycle = np.zeros_like(self.receiver_power)
         for t in results.T:
             if t in results.T_nl:
                 self.thermal_input_to_cycle[t-results.t_start] = pe.value(results.x_calc[t])
             else:
                 self.thermal_input_to_cycle[t-results.t_start] = pe.value(results.x[t])
-        self.electrical_output_from_cycle = numpy.array([pe.value(results.wdot[t]) for t in results.T])
-        self.net_electrical_output = numpy.array([pe.value(results.wdot_s[t]) for t in results.T])
-        self.tes_soc = numpy.array([pe.value(results.s[t]) for t in results.T])
+        self.electrical_output_from_cycle = np.array([pe.value(results.wdot[t]) for t in results.T])
+        self.net_electrical_output = np.array([pe.value(results.wdot_s[t]) for t in results.T])
+        self.tes_soc = np.array([pe.value(results.s[t]) for t in results.T])
         self.num_nl_periods = results.t_transition - results.t_start + 1    # track num_nl_periods
         self.t_start = results.t_start
         #Additional outputs from optimization model (note some repeat from above)
         self.s0 = pe.value(results.s0)
         #Continuous
-        self.drsu = numpy.array([pe.value(results.drsu[t]) for t in results.T])
-        self.drsd = numpy.array([pe.value(results.drsd[t]) for t in results.T])
-        self.frsd = numpy.array([pe.value(results.frsd[t]) for t in results.T])
-        self.frsu = numpy.array([pe.value(results.frsu[t]) for t in results.T])
-        self.lr = numpy.array([pe.value(results.lr[t]) for t in results.T_nl])
-        self.lc = numpy.array([pe.value(results.lc[t]) for t in results.T_nl])
-        self.lfw = numpy.array([pe.value(results.lfw[t]) for t in results.T_nl])
-        self.mass_cs = numpy.array([pe.value(results.mass_cs[t]) for t in results.T_nl])
-        self.mass_hs = numpy.array([pe.value(results.mass_hs[t]) for t in results.T_nl])
-        self.mdot_c = numpy.array([pe.value(results.mdot_c[t]) for t in results.T_nl])
-        self.mdot_r_cs = numpy.array([pe.value(results.mdot_r_cs[t]) for t in results.T_nl])
-        self.mdot_r_hs= numpy.array([pe.value(results.mdot_r_hs[t]) for t in results.T_nl])
-        self.s = numpy.array([pe.value(results.s[t]) for t in results.T_l])
-        self.T_cout = numpy.array([pe.value(results.T_cout[t]) for t in results.T_nl])
-        self.T_cs = numpy.array([pe.value(results.T_cs[t]) for t in results.T_nl])
-        self.T_hs = numpy.array([pe.value(results.T_hs[t]) for t in results.T_nl])
-        self.T_rout = numpy.array([pe.value(results.T_rout[t]) for t in results.T_nl])
-        self.ucsu = numpy.array([pe.value(results.ucsu[t]) for t in results.T])
-        #self.ucsd = numpy.array([pe.value(results.ucsd[t]) for t in results.T])
-        self.ursu = numpy.array([pe.value(results.ursu[t]) for t in results.T])
-        self.ursd = numpy.array([pe.value(results.ursd[t]) for t in results.T])
-        self.wdot = numpy.array([pe.value(results.wdot[t]) for t in results.T])
-        self.wdot_delta_plus = numpy.array([pe.value(results.wdot_delta_plus[t]) for t in results.T])
-        self.wdot_delta_minus = numpy.array([pe.value(results.wdot_delta_minus[t]) for t in results.T])
-        self.wdot_v_plus = numpy.array([pe.value(results.wdot_v_plus[t]) for t in results.T])
-        self.wdot_v_minus = numpy.array([pe.value(results.wdot_v_minus[t]) for t in results.T])
-        self.wdot_s = numpy.array([pe.value(results.wdot_s[t]) for t in results.T])
-        self.wdot_p = numpy.array([pe.value(results.wdot_p[t]) for t in results.T])
-        self.x = numpy.array([pe.value(results.x[t]) for t in results.T_l])
-        self.xr = numpy.array([pe.value(results.xr[t]) for t in results.T])
-        #self.xrsu = numpy.array([pe.value(results.xrsu[t]) for t in results.T])
+        self.drsu = np.array([pe.value(results.drsu[t]) for t in results.T])
+        self.drsd = np.array([pe.value(results.drsd[t]) for t in results.T])
+        self.frsd = np.array([pe.value(results.frsd[t]) for t in results.T])
+        self.frsu = np.array([pe.value(results.frsu[t]) for t in results.T])
+        self.lr = np.array([pe.value(results.lr[t]) for t in results.T_nl])
+        self.lc = np.array([pe.value(results.lc[t]) for t in results.T_nl])
+        self.lfw = np.array([pe.value(results.lfw[t]) for t in results.T_nl])
+        self.mass_cs = np.array([pe.value(results.mass_cs[t]) for t in results.T_nl])
+        self.mass_hs = np.array([pe.value(results.mass_hs[t]) for t in results.T_nl])
+        self.mdot_c = np.array([pe.value(results.mdot_c[t]) for t in results.T_nl])
+        self.mdot_r_cs = np.array([pe.value(results.mdot_r_cs[t]) for t in results.T_nl])
+        self.mdot_r_hs= np.array([pe.value(results.mdot_r_hs[t]) for t in results.T_nl])
+        self.s = np.array([pe.value(results.s[t]) for t in results.T_l])
+        self.T_cout = np.array([pe.value(results.T_cout[t]) for t in results.T_nl])
+        self.T_cs = np.array([pe.value(results.T_cs[t]) for t in results.T_nl])
+        self.T_hs = np.array([pe.value(results.T_hs[t]) for t in results.T_nl])
+        self.T_rout = np.array([pe.value(results.T_rout[t]) for t in results.T_nl])
+        self.ucsu = np.array([pe.value(results.ucsu[t]) for t in results.T])
+        #self.ucsd = np.array([pe.value(results.ucsd[t]) for t in results.T])
+        self.ursu = np.array([pe.value(results.ursu[t]) for t in results.T])
+        self.ursd = np.array([pe.value(results.ursd[t]) for t in results.T])
+        self.wdot = np.array([pe.value(results.wdot[t]) for t in results.T])
+        self.wdot_delta_plus = np.array([pe.value(results.wdot_delta_plus[t]) for t in results.T])
+        self.wdot_delta_minus = np.array([pe.value(results.wdot_delta_minus[t]) for t in results.T])
+        self.wdot_v_plus = np.array([pe.value(results.wdot_v_plus[t]) for t in results.T])
+        self.wdot_v_minus = np.array([pe.value(results.wdot_v_minus[t]) for t in results.T])
+        self.wdot_s = np.array([pe.value(results.wdot_s[t]) for t in results.T])
+        self.wdot_p = np.array([pe.value(results.wdot_p[t]) for t in results.T])
+        self.x = np.array([pe.value(results.x[t]) for t in results.T_l])
+        self.xr = np.array([pe.value(results.xr[t]) for t in results.T])
+        #self.xrsu = np.array([pe.value(results.xrsu[t]) for t in results.T])
         #Binary
-        self.yr = numpy.array([pe.value(results.yr[t]) for t in results.T])
-        self.yrhsp = numpy.array([pe.value(results.yrhsp[t]) for t in results.T])
-        self.yrsb = numpy.array([pe.value(results.yrsb[t]) for t in results.T])
-        self.yrsd = numpy.array([pe.value(results.yrsd[t]) for t in results.T])
-        self.yrsdp = numpy.array([pe.value(results.yrsdp[t]) for t in results.T])
-        self.yrsu = numpy.array([pe.value(results.yrsu[t]) for t in results.T])
-        self.yrsup = numpy.array([pe.value(results.yrsup[t]) for t in results.T])
-        self.y = numpy.array([pe.value(results.y[t]) for t in results.T])
-        self.ychsp = numpy.array([pe.value(results.ychsp[t]) for t in results.T])
-        self.ycsb = numpy.array([pe.value(results.ycsb[t]) for t in results.T])
-        self.ycsd = numpy.array([pe.value(results.ycsd[t]) for t in results.T])
-        self.ycsdp = numpy.array([pe.value(results.ycsdp[t]) for t in results.T])
-        self.ycsu = numpy.array([pe.value(results.ycsu[t]) for t in results.T])
-        self.ycsup = numpy.array([pe.value(results.ycsup[t]) for t in results.T])
-        self.ycgb = numpy.array([pe.value(results.ycgb[t]) for t in results.T])
-        self.ycge = numpy.array([pe.value(results.ycge[t]) for t in results.T])
+        self.yr = np.array([pe.value(results.yr[t]) for t in results.T])
+        self.yrhsp = np.array([pe.value(results.yrhsp[t]) for t in results.T])
+        self.yrsb = np.array([pe.value(results.yrsb[t]) for t in results.T])
+        self.yrsd = np.array([pe.value(results.yrsd[t]) for t in results.T])
+        self.yrsdp = np.array([pe.value(results.yrsdp[t]) for t in results.T])
+        self.yrsu = np.array([pe.value(results.yrsu[t]) for t in results.T])
+        self.yrsup = np.array([pe.value(results.yrsup[t]) for t in results.T])
+        self.y = np.array([pe.value(results.y[t]) for t in results.T])
+        self.ychsp = np.array([pe.value(results.ychsp[t]) for t in results.T])
+        self.ycsb = np.array([pe.value(results.ycsb[t]) for t in results.T])
+        self.ycsd = np.array([pe.value(results.ycsd[t]) for t in results.T])
+        self.ycsdp = np.array([pe.value(results.ycsdp[t]) for t in results.T])
+        self.ycsu = np.array([pe.value(results.ycsu[t]) for t in results.T])
+        self.ycsup = np.array([pe.value(results.ycsup[t]) for t in results.T])
+        self.ycgb = np.array([pe.value(results.ycgb[t]) for t in results.T])
+        self.ycge = np.array([pe.value(results.ycge[t]) for t in results.T])
 
 
 
 
     # Don't need this anymore?
-    def set_from_dispatch_outputs(self, disp_outputs):
-        for k in vars(self):
-            if k in vars(disp_outputs).keys():
-                setattr(self, k, getattr(disp_outputs,k))
-            else:
-                setattr(self, k, [])
-        return
+    # def set_from_dispatch_outputs(self, disp_outputs):
+    #     for k in vars(self):
+    #         if k in vars(disp_outputs).keys():
+    #             setattr(self, k, getattr(disp_outputs,k))
+    #         else:
+    #             setattr(self, k, [])
+    #     return
     
     
     def get_solution_at_ssc_steps(self, disp_params, sscstep, horizon):
@@ -842,7 +845,7 @@ def setup_dispatch_model(R_est, freq, horizon, include_day_ahead_in_dispatch,
     return disp_in
 
 
-def run_dispatch_model(disp_in, include, dispatch_soln, transition=0):
+def run_dispatch_model(disp_in, include, transition=0):
     disp_in.transition = transition
     rt = dispatch_model.RealTimeDispatchModel(disp_in, include)
     rt_results = rt.solveModel()
@@ -850,20 +853,7 @@ def run_dispatch_model(disp_in, include, dispatch_soln, transition=0):
     if rt_results.solver.termination_condition == TerminationCondition.infeasible:
         return False
 
-    if include["simple_receiver"]:
-        disp_out = dispatch_outputs.SimpleDispatchOutputs(rt.model)
-    else:
-        disp_out = dispatch_outputs.RTDispatchOutputs(rt.model)
-
-    if disp_out is not False:  
-        dispatch_soln.set_from_dispatch_outputs(disp_out)
-        # D['is_dispatch_targets'] = True
-    else:  # Infeasible solution was returned, revert back to running ssc without dispatch targets
-        print ('Infeasible dispatch solution')
-        return None
-        # D['is_dispatch_targets'] = False
-
-    return dispatch_soln
+    return DispatchSoln(rt.model)
 
 
 def get_day_ahead_schedule(day_ahead_schedule_steps_per_hour, Delta, Delta_e, net_electrical_output, day_ahead_schedule_time):

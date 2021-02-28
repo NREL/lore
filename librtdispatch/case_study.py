@@ -116,7 +116,6 @@ class CaseStudy:
         self.plant_state = ssc_wrapper.PlantState()                 # Structure to contain current plant state
         self.flux_maps = ssc_wrapper.FluxMaps()                     # Structure to contain computed flux maps
         self.dispatch_params = dispatch.DispatchParams()            # Structure to contain all inputs for dispatch model 
-        self.dispatch_soln = dispatch.DispatchSoln()                # Structure to contain current dispatch optimization solution
         self.ssc_dispatch_targets = ssc_wrapper.DispatchTargets()   # Structure to contain dispatch targets used for ssc
 
         self.current_time = 0                           # Current time (tracked in standard time, not local time)
@@ -698,15 +697,15 @@ class CaseStudy:
                 include = {"pv": False, "battery": False, "persistence": False, "force_cycle": False, "op_assumptions": False,
                            "signal":include_day_ahead_in_dispatch, "simple_receiver": False}
                     
-                self.dispatch_soln = dispatch.run_dispatch_model(disp_in, include, self.dispatch_soln)
+                dispatch_soln = dispatch.run_dispatch_model(disp_in, include)
 
-                if self.dispatch_soln is not None:
+                if dispatch_soln is not None:
                     if self.use_day_ahead_schedule and self.day_ahead_schedule_from == 'calculated' and tod/3600 == self.day_ahead_schedule_time:
                         self.next_day_schedule = dispatch.get_day_ahead_schedule(
                             day_ahead_schedule_steps_per_hour = self.day_ahead_schedule_steps_per_hour,
                             Delta = self.dispatch_params.Delta,
                             Delta_e = self.dispatch_params.Delta_e,
-                            net_electrical_output = self.dispatch_soln.net_electrical_output,
+                            net_electrical_output = dispatch_soln.net_electrical_output,
                             day_ahead_schedule_time = self.day_ahead_schedule_time
                             )
 
@@ -714,12 +713,12 @@ class CaseStudy:
                         self.weather_at_schedule.append(weather_at_day_ahead_schedule)  # Store weather used at the point in time the day ahead schedule was generated
 
                     #--- Set ssc dispatch targets
-                    ssc_dispatch_targets = ssc_wrapper.extract_ssc_dispatch_targets(self.dispatch_soln, self.design, self.properties, self.dispatch_params, sscstep, freq/3600.)
+                    ssc_dispatch_targets = ssc_wrapper.extract_ssc_dispatch_targets(dispatch_soln, self.design, self.properties, self.dispatch_params, sscstep, freq/3600.)
                     D.update(vars(ssc_dispatch_targets))
 
                     #--- Save these values for next estimates
-                    self.ursd_last = self.dispatch_soln.get_value_at_time(self.dispatch_params, freq/3600, 'ursd')      # set to False when it doesn't exists 
-                    self.yrsd_last = self.dispatch_soln.get_value_at_time(self.dispatch_params, freq/3600, 'yrsd')      # set to False when it doesn't exists
+                    self.ursd_last = dispatch_soln.get_value_at_time(self.dispatch_params, freq/3600, 'ursd')      # set to False when it doesn't exists 
+                    self.yrsd_last = dispatch_soln.get_value_at_time(self.dispatch_params, freq/3600, 'yrsd')      # set to False when it doesn't exists
 
                 else:  # Infeasible solution was returned, revert back to running ssc without dispatch targets
                     pass
@@ -767,8 +766,8 @@ class CaseStudy:
             #--- Prune ssc and dispatch solutions in the current update interval and add to compiled results (R)
             for k in Rsub.keys():
                 R[k][j*napply:(j+1)*napply] = Rsub[k][0:napply]
-            if self.is_optimize and self.dispatch_soln is not None:
-                Rdisp = self.dispatch_soln.get_solution_at_ssc_steps(self.dispatch_params, sscstep/3600., freq/3600.)
+            if self.is_optimize and dispatch_soln is not None:
+                Rdisp = dispatch_soln.get_solution_at_ssc_steps(self.dispatch_params, sscstep/3600., freq/3600.)
                 for k in retvars_disp:
                     if k in Rdisp.keys():
                         R['disp_'+k][j*napply:(j+1)*napply] = Rdisp[k]
