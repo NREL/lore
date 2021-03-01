@@ -1,11 +1,10 @@
-
 import PySSC as api
-from mspt_2020_defaults import vartab as V
-import dispatch
-import util
 import copy
 import numpy as np
 
+import util
+import dispatch
+from mspt_2020_defaults import vartab as V
 
 
 class PlantState:
@@ -206,7 +205,7 @@ class FluxMaps:
 
        
 class DispatchTargets:
-    def __init__(self):
+    def __init__(self, dispatch_soln=None, plant_design=None, plant_properties=None, dispatch_params=None, sscstep=None, horizon=None):
         self.q_pc_target_su_in = []         # Target thermal power to cycle for startup (MWt)
         self.q_pc_target_on_in = []         # Target thermal power to cycle for operation (MWt)
         self.q_pc_max_in = []               # Max thermal power to cycle (MWt)
@@ -217,10 +216,13 @@ class DispatchTargets:
 
         #TODO: Any additional targets from new dispatch model?
 
+        if dispatch_soln is not None:
+            self.set_from_dispatch_solution(dispatch_soln, plant_design, plant_properties, dispatch_params, sscstep/3600., horizon)
+
         return
 
-    
-    def set_from_dispatch_solution(self, design, properties, disp_params, disp_soln, sscstep, horizon):
+
+    def set_from_dispatch_solution(self, disp_soln, design, properties, disp_params, sscstep, horizon):
         """
         Translate to or generate SSC model inputs from select dispatch model outputs
 
@@ -279,11 +281,6 @@ class DispatchTargets:
             setattr(self, k, vals)
 
         return
-
-def extract_ssc_dispatch_targets(dispatch_soln, plant_design, plant_properties, dispatch_params, sscstep, horizon):
-    ssc_dispatch_targets = DispatchTargets()
-    ssc_dispatch_targets.set_from_dispatch_solution(plant_design, plant_properties, dispatch_params, dispatch_soln, sscstep/3600., horizon)
-    return ssc_dispatch_targets
         
         
 
