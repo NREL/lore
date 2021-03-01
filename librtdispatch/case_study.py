@@ -114,7 +114,7 @@ class CaseStudy:
         self.plant_state = ssc_wrapper.PlantState()                 # Structure to contain current plant state
         self.flux_maps = ssc_wrapper.FluxMaps()                     # Structure to contain computed flux maps
         self.dispatch_params = dispatch.DispatchParams()            # Structure to contain all inputs for dispatch model 
-        self.ssc_dispatch_targets = ssc_wrapper.DispatchTargets()   # Structure to contain dispatch targets used for ssc
+        self.ssc_dispatch_targets = dispatch.DispatchTargets()   # Structure to contain dispatch targets used for ssc
 
         self.current_time = 0                           # Current time (tracked in standard time, not local time)
         self.is_initialized = False                     # Has solution already been initalized?        
@@ -296,7 +296,7 @@ class CaseStudy:
     
     def get_dispatch_targets_from_CD_actuals(self, use_avg_flow = False, set_rec_sb = False, ctrl_adj = False):
         # initialize targets stucture
-        targets = ssc_wrapper.DispatchTargets()
+        targets = dispatch.DispatchTargets()
 
         CD_plot_data = ['Gross Power [MW]', 'Net Power [MW]', 'E charge TES [MWht]', 'Hot Tank Temp [C]', 'Cold Tank Temp [C]', 'Rec avg Tout [C]']
         for key in CD_plot_data:
@@ -711,7 +711,7 @@ class CaseStudy:
                         self.weather_at_schedule.append(weather_at_day_ahead_schedule)  # Store weather used at the point in time the day ahead schedule was generated
 
                     #--- Set ssc dispatch targets
-                    ssc_dispatch_targets = ssc_wrapper.DispatchTargets(dispatch_soln, self.design, self.properties, self.dispatch_params, sscstep, freq/3600.)
+                    ssc_dispatch_targets = dispatch.DispatchTargets(dispatch_soln, self.design, self.properties, self.dispatch_params, sscstep, freq/3600.)
                     D.update(vars(ssc_dispatch_targets))
 
                     #--- Save these values for next estimates
