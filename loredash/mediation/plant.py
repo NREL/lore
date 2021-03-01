@@ -49,6 +49,12 @@ class Plant:
         self.state['cycle_startup_duration_remaining'] = self.design['startup_time']
         self.state['cycle_startup_energy_remaining'] = self.design['startup_frac'] * self.get_cycle_thermal_rating() * 1000.
 
+    def set_flux_maps(self, S):
+        """ S = dictionary of ssc ouputs """
+        self.design['A_sf_in'] = S['A_sf']
+        self.design['eta_map'] = S['eta_map_out']
+        self.design['flux_maps'] = [x[2:] for x in S['flux_maps_for_import']]
+        return
     
     def set_solar_multiple(self):
         self.design['solarm'] = self.design['Qrec'] / (self.design['P_ref'] / self.design['design_eff'])
@@ -299,6 +305,9 @@ plant_design = {
     'helio_reflectance':            0.943,          # Clean heliostat reflectivity
     'p_start':                      0.0,            # TODO: Heliostat field startup energy (per heliostat) (kWe-hr) Currently using SAM defaults, update based on CD data?
     'p_track':                      0.0477,         # Heliostat tracking power (per heliostat) (kWe)
+    'A_sf_in':                      0.0,            # m2 area of solar field, used with flux maps
+    'eta_map':                      [],             # efficiency map, used with flux maps
+    'flux_maps':                    [],             # flux maps
 
     # Receiver
     # --TODO: Find a meaningful value for energy requirement (default is 0.25)... set to a low value so that time requirement is binding?
