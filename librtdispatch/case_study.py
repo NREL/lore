@@ -711,7 +711,7 @@ class CaseStudy:
                         self.weather_at_schedule.append(weather_at_day_ahead_schedule)  # Store weather used at the point in time the day ahead schedule was generated
 
                     #--- Set ssc dispatch targets
-                    ssc_dispatch_targets = ssc_wrapper.extract_ssc_dispatch_targets(dispatch_soln, self.design, self.properties, self.dispatch_params, sscstep, freq/3600.)
+                    ssc_dispatch_targets = ssc_wrapper.DispatchTargets(dispatch_soln, self.design, self.properties, self.dispatch_params, sscstep, freq/3600.)
                     D.update(vars(ssc_dispatch_targets))
 
                     #--- Save these values for next estimates
