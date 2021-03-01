@@ -1,3 +1,6 @@
+import sys, os
+sys.path.insert(1, os.path.join(sys.path[0], '..'))
+
 import numpy as np
 from csv import reader
 from copy import deepcopy
@@ -11,6 +14,7 @@ import util
 import dispatch
 import plant_design
 import ssc_wrapper
+from loredash.mediation.plant import Plant
 
 
 class CaseStudy:
@@ -750,7 +754,7 @@ class CaseStudy:
             Rsub, new_plant_state = ssc_wrapper.call_ssc(D, retvars, plant_state_pt = napply-1, npts = napply)
             
             #--- Update saved plant state
-            persistance_vars = new_plant_state.update_persistence(
+            persistance_vars = Plant.update_persistence(
                 self.plant_state,
                 Rsub,
                 new_plant_state.rec_op_mode_initial,
