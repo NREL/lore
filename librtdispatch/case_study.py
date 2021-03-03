@@ -12,17 +12,15 @@ import datetime
 
 import util
 import dispatch
-import plant_design
 import ssc_wrapper
-from loredash.mediation.plant import Plant
+import loredash.mediation.plant as plant
 
 
 class CaseStudy:
     def __init__(self, isdebug = False):
 
-        #--- Plant design and operating properties
-        self.design = plant_design.PlantDesign()           # Default parameters contain best representation of CD plant -> updated in "initialize" depending on specified cycle type
-        self.properties = plant_design.PlantProperties()   # Default parameters contain best representation of CD plant and dispatch properties
+        #--- Plant design and operating properties      
+        self.plant = plant.Plant(design=plant.plant_design, initial_state=plant.plant_initial_state)   # Default parameters contain best representation of CD plant and dispatch properties
 
         #--- Simulation start point and duration
         self.start_date = datetime.datetime(2018, 8, 31)   # Start date for simulations
@@ -114,7 +112,6 @@ class CaseStudy:
         
         
         #--- Calculated values
-        self.plant_state = ssc_wrapper.PlantState()                 # Structure to contain current plant state
         self.flux_maps = ssc_wrapper.FluxMaps()                     # Structure to contain computed flux maps
         self.dispatch_params = dispatch.DispatchParams()            # Structure to contain all inputs for dispatch model 
         self.ssc_dispatch_targets = dispatch.DispatchTargets()   # Structure to contain dispatch targets used for ssc
@@ -165,28 +162,28 @@ class CaseStudy:
         
         # Set cycle specifications (from model validation code)
         if self.cycle_type == 'user_defined':
-            self.design.P_ref = 120
-            self.design.design_eff = 0.409
-            self.design.T_htf_cold_des = 295.0 # [C]      # This sets design mass flowrate to that in CD's data
-            self.design.pc_config = 1
+            self.plant.design['P_ref'] = 120
+            self.plant.design['design_eff'] = 0.409
+            self.plant.design['T_htf_cold_des'] = 295.0 # [C]      # This sets design mass flowrate to that in CD's data
+            self.plant.design['pc_config'] = 1
             with open(os.path.join(os.path.dirname(__file__), self.user_defined_cycle_input_file), 'r') as read_obj:
                 csv_reader = reader(read_obj)
-                self.design.ud_ind_od = list(csv_reader)        
-            for i in range(len(self.design.ud_ind_od)):
-                self.design.ud_ind_od[i] = [float(item) for item in self.design.ud_ind_od[i]]
+                self.plant.design['ud_ind_od'] = list(csv_reader)        
+            for i in range(len(self.plant.design['ud_ind_od'])):
+                self.plant.design['ud_ind_od'][i] = [float(item) for item in self.plant.design['ud_ind_od'][i]]
                 
         elif self.cycle_type == 'sliding':  
             ### For sliding pressure
             ## These parameters work with heat input calculated using 290 as the lower temperature - however, there are a couple of controller issues
-            self.design.P_ref = 125
-            self.design.design_eff = 0.378
-            self.design.tech_type = 3
+            self.plant.design['P_ref'] = 125
+            self.plant.design['design_eff'] = 0.378
+            self.plant.design['tech_type'] = 3
         
         else:
             ### For fixed pressure
-            self.design.P_ref = 120.
-            self.design.design_eff = 0.409  # 0.385
-            self.design.tech_type = 1
+            self.plant.design['P_ref'] = 120.
+            self.plant.design['design_eff'] = 0.409  # 0.385
+            self.plant.design['tech_type'] = 1
             
         
         # Check combinations of control conditions
@@ -194,9 +191,6 @@ class CaseStudy:
             print ('Warning: Dispatch optimization is being used with field or receiver operation derived from CD data. Receiver can only operate when original CD receiver was operating')
         if self.control_receiver == 'CD_data' and self.control_field != 'CD_data':
             print ('Warning: Receiver flow is controlled from CD data, but field tracking fraction is controlled by ssc. Temperatures will likely be unrealistically high')
-        
-        # Initialize design parameters
-        self.design.initialize()
 
         # Read in historical weather data
         self.ground_truth_weather_data = util.read_weather_data(self.ground_truth_weather_file)
@@ -230,11 +224,10 @@ class CaseStudy:
         self.update_forecast_weather_data(forecast_time)
 
         # Initalize plant state
-        self.plant_state.set_default(self.design, self.properties)
         if self.set_initial_state_from_CD_data:
-            initial_state = util.get_initial_state_from_CD_data(self.start_date, self.CD_raw_data_direc, self.CD_processed_data_direc, self.design, self.properties)
+            initial_state = util.get_initial_state_from_CD_data(self.start_date, self.CD_raw_data_direc, self.CD_processed_data_direc, self.plant.design)
             if initial_state is not None:
-                self.plant_state = initial_state
+                self.plant.state = initial_state
 
         
         # Initialize day-ahead generation schedules
@@ -339,7 +332,7 @@ class CaseStudy:
             for ind in np.where(pc_su[:-1] != pc_su[1:])[0]:        # cycle changes condition
                 if pc_su[ind + 1] == 1:
                     buffer = 20 #10
-                    pc_su[int(ind - self.properties.startup_time*60 + buffer): ind+1] = 1   # push start-up forward
+                    pc_su[int(ind - self.plant.design['startup_time']*60 + buffer): ind+1] = 1   # push start-up forward
 
             targets.is_pc_su_allowed_in.extend(pc_su.tolist())   # Is cycle running?
 
@@ -373,7 +366,7 @@ class CaseStudy:
 
             date += datetime.timedelta(days=1)  # advance a day
         
-        max_pc_qin = (self.design.P_ref/self.design.design_eff)*self.properties.cycle_max_frac
+        max_pc_qin = (self.plant.design['P_ref']/self.plant.design['design_eff'])*self.plant.design['cycle_max_frac']
         n = len(targets.is_pc_su_allowed_in)
         targets.q_pc_target_on_in = [targets.q_pc_target_on_in[j] if pc_on[j] == 1 else 0.0 for j in range(n)]
         targets.q_pc_target_su_in = [max_pc_qin if (targets.is_pc_su_allowed_in[j] == 1 and pc_on[j] == 0) else 0.0 for j in range(n)]
@@ -397,16 +390,16 @@ class CaseStudy:
     def get_field_availability_adjustment(self, steps_per_hour, year):
         if self.control_field == 'ssc':
             if self.use_CD_measured_reflectivity:
-                adjust = util.get_field_adjustment_from_CD_data(year, self.design.N_hel, self.properties.helio_reflectance*100, True, None, False)            
+                adjust = util.get_field_adjustment_from_CD_data(year, self.plant.design['N_hel'], self.plant.design['helio_reflectance']*100, True, None, False)            
             else:
                 adjust = (self.fixed_soiling_loss * 100 * np.ones(steps_per_hour*24*365))  
 
         elif self.control_field == 'CD_data':
             if self.use_CD_measured_reflectivity:
-                adjust = util.get_field_adjustment_from_CD_data(year, self.design.N_hel, self.properties.helio_reflectance*100, True, None, True)
+                adjust = util.get_field_adjustment_from_CD_data(year, self.plant.design['N_hel'], self.plant.design['helio_reflectance']*100, True, None, True)
             else:
-                refl = (1-self.fixed_soiling_loss) * self.properties.helio_reflectance * 100  # Simulated heliostat reflectivity
-                adjust = util.get_field_adjustment_from_CD_data(year, self.design.N_hel, self.properties.helio_reflectance*100, False, refl, True)
+                refl = (1-self.fixed_soiling_loss) * self.plant.design['helio_reflectance'] * 100  # Simulated heliostat reflectivity
+                adjust = util.get_field_adjustment_from_CD_data(year, self.plant.design['N_hel'], self.plant.design['helio_reflectance']*100, False, refl, True)
  
         adjust = adjust.tolist()
         data_steps_per_hour = len(adjust)/8760  
@@ -418,12 +411,10 @@ class CaseStudy:
 
     #--- Simulate flux maps
     @staticmethod
-    def simulate_flux_maps(plant_design, plant_properties, ssc_time_steps_per_hour, ground_truth_weather_data):
+    def simulate_flux_maps(plant_design, ssc_time_steps_per_hour, ground_truth_weather_data):
         print ('Simulating flux maps')
         start = timeit.default_timer()
-        D0 = vars(plant_design)  
-        D = D0.copy()
-        D.update(vars(plant_properties))
+        D = plant_design.copy()
         D['time_steps_per_hour'] = ssc_time_steps_per_hour
         #D['solar_resource_file'] = self.ground_truth_weather_file
         D['solar_resource_data'] = ground_truth_weather_data
@@ -449,8 +440,7 @@ class CaseStudy:
             
         if self.flux_maps.A_sf_in == 0.0 or rerun_flux_maps:
             self.flux_maps = CaseStudy.simulate_flux_maps(
-                plant_design = self.design,
-                plant_properties = self.properties,
+                plant_design = self.plant.design,
                 ssc_time_steps_per_hour = self.ssc_time_steps_per_hour,
                 ground_truth_weather_data = self.ground_truth_weather_data
                 )
@@ -461,10 +451,10 @@ class CaseStudy:
         ntot = self.sim_days*24*self.ssc_time_steps_per_hour  # Total number of time points in solution
         retvars = self.default_ssc_return_vars()
 
-        D0 = vars(self.design)  
-        D = D0.copy()
-        D.update(vars(self.properties))
-        D.update(vars(self.flux_maps))
+        D = self.plant.design.copy()
+        D['A_sf_in'] = self.flux_maps.A_sf_in
+        D['eta_map'] = self.flux_maps.eta_map
+        D['flux_maps'] = self.flux_maps.flux_maps
         D['ppa_multiplier_model'] = 1
         D['dispatch_factors_ts'] = self.price_data
         D['time_steps_per_hour'] = self.ssc_time_steps_per_hour
@@ -478,7 +468,7 @@ class CaseStudy:
         D['rec_control_per_path'] = True
 
         #--- Initialize plant state at the start of the simulation period
-        D.update(vars(self.plant_state))
+        D.update(self.plant.state)
         
         #--- Set field control parameters
         D['sf_adjust:hourly'] = self.get_field_availability_adjustment(self.ssc_time_steps_per_hour, self.current_time.year)
@@ -494,9 +484,9 @@ class CaseStudy:
 
             mult = np.ones_like(self.CD_mflow_path2_data)
             if not self.use_CD_measured_reflectivity:  # Scale mass flow based on simulated reflectivity vs. CD actual reflectivity
-                rho = (1-self.fixed_soiling_loss) * self.properties.helio_reflectance   # Simulated heliostat reflectivity
-                CDavail = util.get_CD_soiling_availability(self.current_time.year, self.properties.helio_reflectance * 100)  # CD soiled / clean reflectivity (daily array)
-                mult = rho*np.ones(365) / (CDavail*self.properties.helio_reflectance)  # Ratio of simulated / CD reflectivity
+                rho = (1-self.fixed_soiling_loss) * self.plant.design['helio_reflectance']   # Simulated heliostat reflectivity
+                CDavail = util.get_CD_soiling_availability(self.current_time.year, self.plant.design['helio_reflectance'] * 100)  # CD soiled / clean reflectivity (daily array)
+                mult = rho*np.ones(365) / (CDavail*self.plant.design['helio_reflectance'])  # Ratio of simulated / CD reflectivity
                 mult = np.repeat(mult, 24*self.ssc_time_steps_per_hour)  # Annual array at ssc resolution
 
             D['rec_user_mflow_path_1'] = (self.CD_mflow_path2_data * mult).tolist()  # Note ssc path numbers are reversed relative to CD path numbers
@@ -592,7 +582,7 @@ class CaseStudy:
         #--- For the total horizon, at the dispatch frequency:
         for j in range(nupdate):
             #--- Update input dictionary from current plant state
-            D.update(vars(self.plant_state))
+            D.update(self.plant.state)
             
             #--- Calculate times
             time = self.current_time
@@ -660,8 +650,6 @@ class CaseStudy:
                     assert math.isclose(sum(list(self.weather_data_for_dispatch['gh'])), 0, rel_tol=1e-4)
                     assert math.isclose(sum(list(self.weather_data_for_dispatch['tdry'])), 10522.8, rel_tol=1e-4)
 
-                util.write_dict_as_csv(D, csv_path='./mydictD.csv')
-
                 #--- Run ssc for dispatch estimates: (using weather forecast time resolution for weather data and specified ssc time step)
                 R_est = dispatch.estimates_for_dispatch_model(
                     plant_design = D,
@@ -689,8 +677,7 @@ class CaseStudy:
                     dispatch_steplength_array = self.dispatch_steplength_array,
                     dispatch_steplength_end_time = self.dispatch_steplength_end_time,
                     dispatch_horizon = self.dispatch_horizon,
-                    plant_design = self.design,
-                    plant_state = self.plant_state,
+                    plant = self.plant,
                     nonlinear_model_time = self.nonlinear_model_time,
                     use_linear_dispatch_at_night = self.use_linear_dispatch_at_night,
                     clearsky_data = self.clearsky_data,
@@ -708,7 +695,6 @@ class CaseStudy:
                     day_ahead_pen_plus = self.day_ahead_pen_plus,
                     day_ahead_pen_minus = self.day_ahead_pen_minus,
                     night_clearsky_cutoff = self.night_clearsky_cutoff,
-                    properties = self.properties,
                     ursd_last = self.ursd_last,
                     yrsd_last = self.yrsd_last
                 )
@@ -741,7 +727,7 @@ class CaseStudy:
                         self.weather_at_schedule.append(weather_at_day_ahead_schedule)  # Store weather used at the point in time the day ahead schedule was generated
 
                     #--- Set ssc dispatch targets
-                    ssc_dispatch_targets = dispatch.DispatchTargets(dispatch_soln, self.design, self.properties, self.dispatch_params, sscstep, freq/3600.)
+                    ssc_dispatch_targets = dispatch.DispatchTargets(dispatch_soln, self.plant, self.dispatch_params, sscstep, freq/3600.)
                     D.update(vars(ssc_dispatch_targets))
 
                     if j == 0 and toy + horizon == 24796800:
@@ -765,25 +751,24 @@ class CaseStudy:
             Rsub, new_plant_state = ssc_wrapper.call_ssc(D, retvars, plant_state_pt = napply-1, npts = napply)
             
             #--- Update saved plant state
-            persistance_vars = Plant.update_persistence(
-                self.plant_state,
+            persistance_vars = plant.Plant.update_persistence(
+                self.plant.state,
                 Rsub,
-                new_plant_state.rec_op_mode_initial,
-                new_plant_state.pc_op_mode_initial,
+                new_plant_state['rec_op_mode_initial'],
+                new_plant_state['pc_op_mode_initial'],
                 sscstep/3600.)
-            for key,value in persistance_vars.items():
-                setattr(new_plant_state, key, value)
-            self.plant_state = new_plant_state
+            new_plant_state.update(persistance_vars)
+            self.plant.state.update(new_plant_state)
 
             if j == 0 and toy + horizon == 24796800:
-                assert math.isclose(self.plant_state.pc_startup_energy_remain_initial, 29339.9, rel_tol=1e-4)
-                assert math.isclose(self.plant_state.pc_startup_time_remain_init, 0.5, rel_tol=1e-4)
-                assert math.isclose(self.plant_state.rec_startup_energy_remain_init, 141250000, rel_tol=1e-4)
-                assert math.isclose(self.plant_state.rec_startup_time_remain_init, 1.15, rel_tol=1e-4)
-                assert math.isclose(self.plant_state.disp_rec_persist0, 1001, rel_tol=1e-4)
-                assert math.isclose(self.plant_state.disp_rec_off0, 1001, rel_tol=1e-4)
-                assert math.isclose(self.plant_state.disp_pc_persist0, 1001, rel_tol=1e-4)
-                assert math.isclose(self.plant_state.disp_pc_off0, 1001, rel_tol=1e-4)
+                assert math.isclose(self.plant.state['pc_startup_energy_remain_initial'], 29339.9, rel_tol=1e-4)
+                assert math.isclose(self.plant.state['pc_startup_time_remain_init'], 0.5, rel_tol=1e-4)
+                assert math.isclose(self.plant.state['rec_startup_energy_remain_init'], 141250000, rel_tol=1e-4)
+                assert math.isclose(self.plant.state['rec_startup_time_remain_init'], 1.15, rel_tol=1e-4)
+                assert math.isclose(self.plant.state['disp_rec_persist0'], 1001, rel_tol=1e-4)
+                assert math.isclose(self.plant.state['disp_rec_off0'], 1001, rel_tol=1e-4)
+                assert math.isclose(self.plant.state['disp_pc_persist0'], 1001, rel_tol=1e-4)
+                assert math.isclose(self.plant.state['disp_pc_off0'], 1001, rel_tol=1e-4)
 
             #--- Prune ssc and dispatch solutions in the current update interval and add to compiled results (R)
             for k in Rsub.keys():
@@ -916,8 +901,8 @@ class CaseStudy:
             elif diff < 0:
                 self.cycle_ramp_down += (-diff)
         
-        self.startup_ramping_penalty = self.n_starts_rec*self.properties.Crsu + self.n_starts_cycle*self.properties.Ccsu 
-        self.startup_ramping_penalty += self.cycle_ramp_up*self.properties.C_delta_w*1000 + self.cycle_ramp_down*self.properties.C_delta_w*1000
+        self.startup_ramping_penalty = self.n_starts_rec*self.plant.design['Crsu'] + self.n_starts_cycle*self.plant.design['Ccsu'] 
+        self.startup_ramping_penalty += self.cycle_ramp_up*self.plant.design['C_delta_w']*1000 + self.cycle_ramp_down*self.plant.design['C_delta_w']*1000
         return
         
       

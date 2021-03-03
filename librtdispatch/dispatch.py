@@ -233,156 +233,156 @@ class DispatchParams:
         return
     
     # Set fixed dispatch parameters from plant design and operating property specifications (call this after setting up time step arrays)
-    def set_fixed_parameters_from_plant_design(self, design, properties):
-        q_pb_design = design.get_cycle_thermal_rating()  #MWt
-        m_pb_design = design.get_cycle_design_mass_flow()   # kg/s
-        q_rec_design = design.Qrec  # MWt
-        m_rec_design = design.get_receiver_design_mass_flow() #kg/s
-        nhel = design.get_number_of_heliostats()
+    def set_fixed_parameters_from_plant_design(self, plant):
+        q_pb_design = plant.get_cycle_thermal_rating()  #MWt
+        m_pb_design = plant.get_cycle_design_mass_flow()   # kg/s
+        q_rec_design = plant.design['Qrec']  # MWt
+        m_rec_design = plant.get_receiver_design_mass_flow() #kg/s
+        nhel = plant.get_number_of_heliostats()
         
-        m_active_hot_max, m_active_cold_max, m_inactive_hot, m_inactive_cold = design.get_storage_mass()
+        m_active_hot_max, m_active_cold_max, m_inactive_hot, m_inactive_cold = plant.get_storage_mass()
         
         # Receiver parameters
-        self.Drsu = properties.rec_su_delay 
-        self.Drsd = properties.rec_sd_delay  
-        self.Er = properties.rec_qf_delay * q_rec_design * 1000. 
-        self.Qrl = properties.f_rec_min * q_rec_design * 1000.
-        self.Qrsb = properties.q_rec_standby_fraction * q_rec_design * 1000.
-        self.Qrsd = properties.q_rec_shutdown_fraction * q_rec_design * 1000   
-        self.Qru = self.Er / properties.rec_su_delay
-        self.mdot_r_min = properties.f_rec_min * m_rec_design
-        self.mdot_r_max = properties.csp_pt_rec_max_oper_frac * m_rec_design  
-        self.T_rout_min = properties.T_rout_min  
-        self.T_rout_max = properties.T_rout_max 
+        self.Drsu = plant.design['rec_su_delay']
+        self.Drsd = plant.design['rec_sd_delay']
+        self.Er = plant.design['rec_qf_delay'] * q_rec_design * 1000. 
+        self.Qrl = plant.design['f_rec_min'] * q_rec_design * 1000.
+        self.Qrsb = plant.design['q_rec_standby_fraction'] * q_rec_design * 1000.
+        self.Qrsd = plant.design['q_rec_shutdown_fraction'] * q_rec_design * 1000   
+        self.Qru = self.Er / plant.design['rec_su_delay']
+        self.mdot_r_min = plant.design['f_rec_min'] * m_rec_design
+        self.mdot_r_max = plant.design['csp_pt_rec_max_oper_frac'] * m_rec_design  
+        self.T_rout_min = plant.design['T_rout_min']  
+        self.T_rout_max = plant.design['T_rout_max'] 
 
         # TES parameters
-        self.Eu = q_pb_design * design.tshours  * 1000.
-        self.Cp = design.get_cp_htf(0.5*(design.T_htf_cold_des+design.T_htf_hot_des)) * 1.e-3  
-        self.mass_cs_min = properties.mass_cs_min_frac * m_active_cold_max
+        self.Eu = q_pb_design * plant.design['tshours']  * 1000.
+        self.Cp = plant.get_cp_htf(0.5*(plant.design['T_htf_cold_des']+plant.design['T_htf_hot_des'])) * 1.e-3  
+        self.mass_cs_min = plant.design['mass_cs_min_frac'] * m_active_cold_max
         self.mass_cs_max = m_active_cold_max
-        self.mass_hs_min = properties.mass_hs_min_frac * m_active_hot_max
+        self.mass_hs_min = plant.design['mass_hs_min_frac'] * m_active_hot_max
         self.mass_hs_max = m_active_hot_max
-        self.T_cs_min = properties.T_cs_min 
-        self.T_cs_max = properties.T_cs_max
-        self.T_hs_min = properties.T_hs_min 
-        self.T_hs_max = properties.T_hs_max   
-        self.T_cs_des = design.T_htf_cold_des
-        self.T_hs_des = design.T_htf_hot_des
+        self.T_cs_min = plant.design['T_cs_min'] 
+        self.T_cs_max = plant.design['T_cs_max']
+        self.T_hs_min = plant.design['T_hs_min'] 
+        self.T_hs_max = plant.design['T_hs_max']   
+        self.T_cs_des = plant.design['T_htf_cold_des']
+        self.T_hs_des = plant.design['T_htf_hot_des']
         
         # Cycle parameters
-        self.Ec = properties.startup_frac * q_pb_design * 1000.  
-        self.Ew = properties.startup_frac_warm * q_pb_design * 1000. 
-        self.eta_des = design.design_eff    # TODO: Probably good enough for now. ssc calls the power cycle model at full load and design point ambient T to exactly match full-load performance
-        self.Qb = properties.q_sby_frac * q_pb_design * 1000.     
-        self.Qc = self.Ec / ceil(properties.startup_time / min(self.Delta)) / min(self.Delta)      # TODO: Not clear how to best define this with variable time steps.  Using minimum time step for maximum allowable startup energy rate
-        self.Ql = properties.cycle_cutoff_frac * q_pb_design * 1000. 
-        self.Qu = properties.cycle_max_frac * q_pb_design * 1000.   
-        self.kl = m_pb_design * properties.cycle_cutoff_frac * self.Cp 
-        self.ku = m_pb_design * properties.cycle_max_frac * self.Cp 
-        self.Wdot_design = q_pb_design * design.design_eff * 1000.  
+        self.Ec = plant.design['startup_frac'] * q_pb_design * 1000.  
+        self.Ew = plant.design['startup_frac_warm'] * q_pb_design * 1000. 
+        self.eta_des = plant.design['design_eff']    # TODO: Probably good enough for now. ssc calls the power cycle model at full load and design point ambient T to exactly match full-load performance
+        self.Qb = plant.design['q_sby_frac'] * q_pb_design * 1000.     
+        self.Qc = self.Ec / ceil(plant.design['startup_time'] / min(self.Delta)) / min(self.Delta)      # TODO: Not clear how to best define this with variable time steps.  Using minimum time step for maximum allowable startup energy rate
+        self.Ql = plant.design['cycle_cutoff_frac'] * q_pb_design * 1000. 
+        self.Qu = plant.design['cycle_max_frac'] * q_pb_design * 1000.   
+        self.kl = m_pb_design * plant.design['cycle_cutoff_frac'] * self.Cp 
+        self.ku = m_pb_design * plant.design['cycle_max_frac'] * self.Cp 
+        self.Wdot_design = q_pb_design * plant.design['design_eff'] * 1000.  
         self.Wdot_p_max = 25000.  # TODO: Fixing this for now, but probably should base off of design parameters
         self.mdot_c_design = m_pb_design
-        self.mdot_c_min = properties.cycle_cutoff_frac*m_pb_design 
-        self.mdot_c_max = properties.cycle_max_frac*m_pb_design  
-        self.T_cin_design = design.T_htf_hot_des 
-        self.T_cout_min = properties.T_cs_min 
-        self.T_cout_max = properties.T_cs_max
-        self.delta_T_design = design.T_htf_hot_des - design.T_htf_cold_des
-        self.delta_T_max = max(abs(properties.alpha_b * self.delta_T_design), properties.T_hs_max - properties.T_cs_min)
+        self.mdot_c_min = plant.design['cycle_cutoff_frac']*m_pb_design 
+        self.mdot_c_max = plant.design['cycle_max_frac']*m_pb_design  
+        self.T_cin_design = plant.design['T_htf_hot_des'] 
+        self.T_cout_min = plant.design['T_cs_min'] 
+        self.T_cout_max = plant.design['T_cs_max']
+        self.delta_T_design = plant.design['T_htf_hot_des'] - plant.design['T_htf_cold_des']
+        self.delta_T_max = max(abs(plant.design['alpha_b'] * self.delta_T_design), plant.design['T_hs_max'] - plant.design['T_cs_min'])
 
-        if design.pc_config == 1: # User-defined cycle
-            self.set_linearized_params_from_udpc_inputs(design, properties)
+        if plant.design['pc_config'] == 1: # User-defined cycle
+            self.set_linearized_params_from_udpc_inputs(plant)
         else:
             print ('Warning: Dispatch optimization parameters are currently only set up for user-defined power cycle. Defaulting to constant efficiency vs load')
             self.etap = self.eta_des  
             self.Wdotl = self.Ql*self.eta_des  
             self.Wdotu = self.Qu*self.eta_des
     
-        self.W_delta_plus = (properties.pc_rampup) * self.Wdotu 
-        self.W_delta_minus = (properties.pc_rampdown) * self.Wdotu 
-        self.W_v_plus = (properties.pc_rampup_vl) * self.Wdotu 
-        self.W_v_minus = (properties.pc_rampdown_vl) * self.Wdotu 
-        self.Yu = properties.Yu  
-        self.Yd = properties.Yd  
+        self.W_delta_plus = (plant.design['pc_rampup']) * self.Wdotu 
+        self.W_delta_minus = (plant.design['pc_rampdown']) * self.Wdotu 
+        self.W_v_plus = (plant.design['pc_rampup_vl']) * self.Wdotu 
+        self.W_v_minus = (plant.design['pc_rampdown_vl']) * self.Wdotu 
+        self.Yu = plant.design['Yu']  
+        self.Yd = plant.design['Yd']  
         
         # Parastic loads
-        self.Ehs = properties.p_start * nhel 
-        self.Wh_track = properties.p_track * nhel    
-        self.Wh_comm = properties.p_comm * nhel  
-        self.estimate_receiver_pumping_parasitic(design)  # Sets Lr, Pr
-        #self.Lr = properties.Lr      
-        #self.Pr = properties.Pr       
-        self.Wht_full = properties.Wht_fract * design.Qrec * 1000.
-        self.Wht_part = properties.Wht_fract_partload * design.Qrec * 1000.
-        self.Lc = properties.pb_pump_coef * m_pb_design / (q_pb_design * 1000) 
-        self.Wb = properties.Wb_fract* design.P_ref*1000.
-        self.Wc = properties.Wc_fract* design.P_ref*1000.
+        self.Ehs = plant.design['p_start'] * nhel 
+        self.Wh_track = plant.design['p_track'] * nhel    
+        self.Wh_comm = plant.design['p_comm'] * nhel  
+        self.estimate_receiver_pumping_parasitic(plant)  # Sets Lr, Pr
+        #self.Lr = plant.design['Lr']      
+        #self.Pr = plant.design['Pr']       
+        self.Wht_full = plant.design['Wht_fract'] * plant.design['Qrec'] * 1000.
+        self.Wht_part = plant.design['Wht_fract_partload'] * plant.design['Qrec'] * 1000.
+        self.Lc = plant.design['pb_pump_coef'] * m_pb_design / (q_pb_design * 1000) 
+        self.Wb = plant.design['Wb_fract']* plant.design['P_ref']*1000.
+        self.Wc = plant.design['Wc_fract']* plant.design['P_ref']*1000.
         
         # Cost parameters
         self.alpha = 1.0  
-        self.Crec = properties.Crec   
-        self.Crsu = properties.Crsu  
-        self.Crhsp = properties.Crhsp     
-        self.Cpc = properties.Cpc
-        self.Ccsu = properties.Ccsu 
-        self.Cchsp = properties.Cchsp
-        self.C_delta_w = properties.C_delta_w
-        self.C_v_w  = properties.C_v_w  
-        self.Ccsb = properties.Ccsb 
+        self.Crec = plant.design['Crec']   
+        self.Crsu = plant.design['Crsu']  
+        self.Crhsp = plant.design['Crhsp']     
+        self.Cpc = plant.design['Cpc']
+        self.Ccsu = plant.design['Ccsu'] 
+        self.Cchsp = plant.design['Cchsp']
+        self.C_delta_w = plant.design['C_delta_w']
+        self.C_v_w  = plant.design['C_v_w']  
+        self.Ccsb = plant.design['Ccsb'] 
         
         # Indexing and piecewise-linear indexed parameters
-        self.nc = len(properties.Pc)
-        self.Pc = properties.Pc 
-        self.Bc = properties.Bc      
-        self.nfw = len(properties.Pfw)
-        self.Pfw = properties.Pfw    
-        self.Bfw = properties.Bfw 
+        self.nc = len(plant.design['Pc'])
+        self.Pc = plant.design['Pc'] 
+        self.Bc = plant.design['Bc']      
+        self.nfw = len(plant.design['Pfw'])
+        self.Pfw = plant.design['Pfw']    
+        self.Bfw = plant.design['Bfw'] 
         
         # Other parameters
-        self.alpha_b = properties.alpha_b
-        self.alpha_T = properties.alpha_T
-        self.alpha_m = properties.alpha_m
-        self.beta_b = properties.beta_b
-        self.beta_T = properties.beta_T
-        self.beta_m = properties.beta_m
-        self.beta_mT = properties.beta_mT
+        self.alpha_b = plant.design['alpha_b']
+        self.alpha_T = plant.design['alpha_T']
+        self.alpha_m = plant.design['alpha_m']
+        self.beta_b = plant.design['beta_b']
+        self.beta_T = plant.design['beta_T']
+        self.beta_m = plant.design['beta_m']
+        self.beta_mT = plant.design['beta_mT']
 
         return
         
   
-    def estimate_receiver_pumping_parasitic(self, design, nonheated_length = 0.2):
-        m_rec_design = design.get_receiver_design_mass_flow() #kg/s
-        Tavg = 0.5*(design.T_htf_cold_des + design.T_htf_hot_des)
-        rho = design.get_density_htf(Tavg)
-        visc = design.get_visc_htf(Tavg)
+    def estimate_receiver_pumping_parasitic(self, plant, nonheated_length = 0.2):
+        m_rec_design = plant.get_receiver_design_mass_flow() #kg/s
+        Tavg = 0.5*(plant.design['T_htf_cold_des'] + plant.design['T_htf_hot_des'])
+        rho = plant.get_density_htf(Tavg)
+        visc = plant.get_visc_htf(Tavg)
 
         npath = 1
-        nperpath = design.N_panels
-        if design.Flow_type == 1 or design.Flow_type == 2:
+        nperpath = plant.design['N_panels']
+        if plant.design['Flow_type'] == 1 or plant.design['Flow_type'] == 2:
             npath = 2
-            nperpath = int(design.N_panels/2)
-        elif design.Flow_type == 9:
-            npath = int(design.N_panels/2)
+            nperpath = int(plant.design['N_panels']/2)
+        elif plant.design['Flow_type'] == 9:
+            npath = int(plant.design['N_panels']/2)
             nperpath = 2
             
-        ntube = int(pi * design.D_rec/design.N_panels / (design.d_tube_out*1.e-3))  # Number of tubes per panel
+        ntube = int(pi * plant.design['D_rec']/plant.design['N_panels'] / (plant.design['d_tube_out']*1.e-3))  # Number of tubes per panel
         m_per_tube = m_rec_design / npath / ntube  # kg/s per tube
-        tube_id = (design.d_tube_out - 2*design.th_tube) / 1000.  # Tube ID in m
+        tube_id = (plant.design['d_tube_out'] - 2*plant.design['th_tube']) / 1000.  # Tube ID in m
         Ac = 0.25*pi*(tube_id**2)
         vel = m_per_tube / rho / Ac  # HTF velocity
         Re = rho * vel * tube_id / visc
         eD = 4.6e-5 / tube_id
         ff = (-1.737*log(0.269*eD - 2.185/Re*log(0.269*eD+14.5/Re)))**-2
         fd = 4*ff 
-        Htot = design.rec_height* (1+nonheated_length)
+        Htot = plant.design['rec_height']* (1+nonheated_length)
         dp = 0.5*fd*rho*(vel**2) * (Htot/tube_id + 4*30 + 2*16) * nperpath  # Frictional pressure drop (Pa) (straight tube, 90deg bends, 45def bends)
-        dp += rho * 9.8 * design.h_tower  # Add pressure drop from pumping up the tower
+        dp += rho * 9.8 * plant.design['h_tower']  # Add pressure drop from pumping up the tower
         if nperpath%2 == 1:   
             dp += rho * 9.8 * Htot  
             
-        wdot = dp * m_rec_design / rho / design.eta_pump / 1.e6   # Pumping parasitic at design point reciever mass flow rate (MWe)
+        wdot = dp * m_rec_design / rho / plant.design['eta_pump'] / 1.e6   # Pumping parasitic at design point reciever mass flow rate (MWe)
         
-        self.Lr = wdot / design.Qrec # MWe / MWt
+        self.Lr = wdot / plant.design['Qrec'] # MWe / MWt
         self.Pr = wdot * 1000. / m_rec_design  # kWe / kg/s
         
         return
@@ -398,47 +398,47 @@ class DispatchParams:
         self.D = [wt**(self.Delta_e[j]) for j in range(n)]
         return
     
-    def set_initial_state(self, design, state):
-        m_des = design.get_design_storage_mass()
+    def set_initial_state(self, plant):
+        m_des = plant.get_design_storage_mass()
 
-        m_hot = (state.csp_pt_tes_init_hot_htf_percent/100) * m_des  # Available active mass in hot tank
-        m_cold = ((100 - state.csp_pt_tes_init_hot_htf_percent)/100) * m_des   # Available active mass in cold tank
-        cp = design.get_cp_htf(0.5*(state.T_tank_hot_init+design.T_htf_cold_des)) # J/kg/K
+        m_hot = (plant.state['csp_pt_tes_init_hot_htf_percent']/100) * m_des  # Available active mass in hot tank
+        m_cold = ((100 - plant.state['csp_pt_tes_init_hot_htf_percent'])/100) * m_des   # Available active mass in cold tank
+        cp = plant.get_cp_htf(0.5*(plant.state['T_tank_hot_init']+plant.design['T_htf_cold_des'])) # J/kg/K
 
-        self.T_cs0 = min(max(self.T_cs_min, state.T_tank_cold_init), self.T_cs_max)
-        self.T_hs0 = min(max(self.T_hs_min, state.T_tank_hot_init), self.T_hs_max)    
-        self.s0 = min(self.Eu,  m_hot * cp * (state.T_tank_hot_init - design.T_htf_cold_des) * 1.e-3 / 3600)  # Note s0 is calculated internally in the pyomo dispatch model
+        self.T_cs0 = min(max(self.T_cs_min, plant.state['T_tank_cold_init']), self.T_cs_max)
+        self.T_hs0 = min(max(self.T_hs_min, plant.state['T_tank_hot_init']), self.T_hs_max)    
+        self.s0 = min(self.Eu,  m_hot * cp * (plant.state['T_tank_hot_init'] - plant.design['T_htf_cold_des']) * 1.e-3 / 3600)  # Note s0 is calculated internally in the pyomo dispatch model
         self.mass_cs0 = min(max(self.mass_cs_min, m_cold), self.mass_cs_max)
         self.mass_hs0 = min(max(self.mass_hs_min, m_hot), self.mass_hs_max)
         max_allowable_mass = 0.995*self.Eu*3600 /self.Cp/(self.T_hs0 - self.T_cs_des) + self.mass_hs_min  # Max allowable mass for s0 = Eu from dispatch model s0 calculation in pyomo
         self.mass_hs0 = min(self.mass_hs0, max_allowable_mass)
-        self.wdot0 = state.wdot0 * 1000.          
+        self.wdot0 = plant.state['wdot0'] * 1000.          
         
         
-        self.yr0 = (state.rec_op_mode_initial == 2)
+        self.yr0 = (plant.state['rec_op_mode_initial'] == 2)
         self.yrsb0 = False      # TODO: no official receiver "standby" mode currently exists in ssc.  Might be able to use the new cold-tank recirculation to define this
-        self.yrsu0 = (state.rec_op_mode_initial == 1)
+        self.yrsu0 = (plant.state['rec_op_mode_initial'] == 1)
         self.yrsd0 = False     # TODO: no official receiver "shutdown" mode currently exists in ssc. 
-        self.y0 = (state.pc_op_mode_initial == 1) 
-        self.ycsb0 = (state.pc_op_mode_initial == 2) 
-        self.ycsu0 = (state.pc_op_mode_initial == 0 or state.pc_op_mode_initial == 4) 
+        self.y0 = (plant.state['pc_op_mode_initial'] == 1) 
+        self.ycsb0 = (plant.state['pc_op_mode_initial'] == 2) 
+        self.ycsu0 = (plant.state['pc_op_mode_initial'] == 0 or plant.state['pc_op_mode_initial'] == 4) 
 
-        self.drsu0 = state.disp_rec_persist0 if self.yrsu0 else 0.0   
-        self.drsd0 = state.disp_rec_persist0 if state.rec_op_mode_initial == 0 else 0.0 # TODO: defining time in shutdown mode as time "off", will this work in the dispatch model?
-        self.Yu0 = state.disp_pc_persist0 if self.y0 else 0.0
-        self.Yd0 = state.disp_pc_off0 if (not self.y0) else 0.0
+        self.drsu0 = plant.state['disp_rec_persist0'] if self.yrsu0 else 0.0   
+        self.drsd0 = plant.state['disp_rec_persist0'] if plant.state['rec_op_mode_initial'] == 0 else 0.0 # TODO: defining time in shutdown mode as time "off", will this work in the dispatch model?
+        self.Yu0 = plant.state['disp_pc_persist0'] if self.y0 else 0.0
+        self.Yd0 = plant.state['disp_pc_off0'] if (not self.y0) else 0.0
         
         
         # Initial startup energy accumulated
-        if isnan(state.pc_startup_energy_remain_initial):  # ssc seems to report nan when startup is completed
+        if isnan(plant.state['pc_startup_energy_remain_initial']):  # ssc seems to report nan when startup is completed
             self.ucsu = self.Ec
         else:   
-            self.ucsu0 = max(0.0, self.Ec - state.pc_startup_energy_remain_initial) 
+            self.ucsu0 = max(0.0, self.Ec - plant.state['pc_startup_energy_remain_initial']) 
             if self.ucsu0 > (1.0 - 1.e-6)*self.Ec:
                 self.ucsu0 = self.Ec
             
-        rec_accum_time = max(0.0, self.Drsu - state.rec_startup_time_remain_init)
-        rec_accum_energy = max(0.0, self.Er - state.rec_startup_energy_remain_init/1000.)
+        rec_accum_time = max(0.0, self.Drsu - plant.state['rec_startup_time_remain_init'])
+        rec_accum_energy = max(0.0, self.Er - plant.state['rec_startup_energy_remain_init']/1000.)
         self.ursu0 = min(rec_accum_energy, rec_accum_time * self.Qru)  # Note, SS receiver model in ssc assumes full available power is used for startup (even if, time requirement is binding)
         if self.ursu0 > (1.0 - 1.e-6)*self.Er:
             self.ursu0 = self.Er
@@ -449,7 +449,7 @@ class DispatchParams:
     
     # Approximate initial state of receiver "shutdown" variables using yrsd and ursd at last time point accepted from previous dispatch solution
     def set_approximate_shutdown_state_parameters(self, state, ursd = 0.0, yrsd = 0):
-        if state.rec_op_mode_initial == 3:  # Receiver is off, use ursd, yrsd from previous dispatch solution to define initial properties
+        if state['rec_op_mode_initial'] == 3:  # Receiver is off, use ursd, yrsd from previous dispatch solution to define initial properties
             self.yrsd0 = yrsd
             self.ursd0 = ursd
         else:  # Receiver is not off, ignore previous dispatch solution
@@ -479,14 +479,14 @@ class DispatchParams:
         self.P_field_rec = util.translate_to_variable_timestep((S['P_tower_pump']+S['pparasi'])*1000, sscstep, self.Delta)
 
         # Set time-series ambient temperature corrections
-        if design.pc_config == 1: # User-defined cycle
+        if design['pc_config'] == 1: # User-defined cycle
             # TODO: Note that current user-defined cycle neglects ambient T effects
             Tdry = util.translate_to_variable_timestep(S['tdry'], sscstep, self.Delta)
             etamult, wmult = self.get_ambient_T_corrections_from_udpc_inputs(design, Tdry)
      
             #TODO: Make sure these should be efficiency values and not mulipliers
-            self.etaamb  = etamult * design.design_eff
-            self.etac = wmult * design.ud_f_W_dot_cool_des/100.
+            self.etaamb  = etamult * design['design_eff']
+            self.etac = wmult * design['ud_f_W_dot_cool_des']/100.
 
             
         else:
@@ -506,21 +506,21 @@ class DispatchParams:
         return 
     
 
-    def set_linearized_params_from_udpc_inputs(self, design, properties):
-        q_pb_design = design.get_cycle_thermal_rating()  #MWt
-        D = util.interpret_user_defined_cycle_data(design.ud_ind_od)
-        eta_adj_pts = [design.ud_ind_od[p][3]/design.ud_ind_od[p][4] for p in range(len(design.ud_ind_od)) ]
+    def set_linearized_params_from_udpc_inputs(self, plant):
+        q_pb_design = plant.get_cycle_thermal_rating()  #MWt
+        D = util.interpret_user_defined_cycle_data(plant.design['ud_ind_od'])
+        eta_adj_pts = [plant.design['ud_ind_od'][p][3]/plant.design['ud_ind_od'][p][4] for p in range(len(plant.design['ud_ind_od'])) ]
         xpts = D['mpts']
         step = xpts[1] - xpts[0]
         
         # Interpolate for cycle performance at specified min/max load points
-        fpts = [properties.cycle_cutoff_frac, properties.cycle_max_frac]
+        fpts = [plant.design['cycle_cutoff_frac'], plant.design['cycle_max_frac']]
         q, eta = [ [] for v in range(2)]
         for j in range(2):
             p = max(0, min(int((fpts[j] - xpts[0]) / step), len(xpts)-2) )  # Find first point in user-defined array of load fractions for interpolation
             i = 3*D['nT'] + D['nm'] + p    # Index of point in full list of udpc points (at design point ambient T)
             eta_adj = eta_adj_pts[i] + (eta_adj_pts[i+1] - eta_adj_pts[i])/step * (fpts[j] - xpts[p])
-            eta.append(eta_adj * design.design_eff)
+            eta.append(eta_adj * plant.design['design_eff'])
             q.append(fpts[j]*q_pb_design * 1000.)
 
         etap = (q[1]*eta[1]-q[0]*eta[0])/(q[1]-q[0])
@@ -533,13 +533,13 @@ class DispatchParams:
     # Use off-design ambient T performance in user-defined cycle data to interpolate of ambient temperature corrections. Assumes off-design tempertures are specified at a constant interval
     def get_ambient_T_corrections_from_udpc_inputs(self, design, Tamb):
         n = len(Tamb)  # Tamb = set of ambient temperature points for each dispatch time step
-        D = util.interpret_user_defined_cycle_data(design.ud_ind_od)
+        D = util.interpret_user_defined_cycle_data(design['ud_ind_od'])
         
         Tambpts = np.array(D['Tambpts'])
         i0 = 3*D['nT']+3*D['nm']+D['nTamb']  # first index in udpc data corresponding to performance at design point HTF T, and design point mass flow
         npts = D['nTamb']
-        etapts = [ design.ud_ind_od[j][3]/design.ud_ind_od[j][4] for j in range(i0, i0+npts)]
-        wpts = [ design.ud_ind_od[j][5] for j in range(i0, i0+npts)]
+        etapts = [ design['ud_ind_od'][j][3]/design['ud_ind_od'][j][4] for j in range(i0, i0+npts)]
+        wpts = [ design['ud_ind_od'][j][5] for j in range(i0, i0+npts)]
         
         etamult  = np.ones(n)
         wmult = np.ones(n) 
@@ -739,7 +739,7 @@ class DispatchSoln:
 
 
 class DispatchTargets:
-    def __init__(self, dispatch_soln=None, plant_design=None, plant_properties=None, dispatch_params=None, sscstep=None, horizon=None):
+    def __init__(self, dispatch_soln=None, plant=None, dispatch_params=None, sscstep=None, horizon=None):
         self.q_pc_target_su_in = []         # Target thermal power to cycle for startup (MWt)
         self.q_pc_target_on_in = []         # Target thermal power to cycle for operation (MWt)
         self.q_pc_max_in = []               # Max thermal power to cycle (MWt)
@@ -751,12 +751,12 @@ class DispatchTargets:
         #TODO: Any additional targets from new dispatch model?
 
         if dispatch_soln is not None:
-            self.set_from_dispatch_solution(dispatch_soln, plant_design, plant_properties, dispatch_params, sscstep/3600., horizon)
+            self.set_from_dispatch_solution(dispatch_soln, plant, dispatch_params, sscstep/3600., horizon)
 
         return
 
 
-    def set_from_dispatch_solution(self, disp_soln, design, properties, disp_params, sscstep, horizon):
+    def set_from_dispatch_solution(self, disp_soln, plant, disp_params, sscstep, horizon):
         """
         Translate to or generate SSC model inputs from select dispatch model outputs
 
@@ -764,8 +764,6 @@ class DispatchTargets:
         Outputs:    setting object member variables 'is_rec_su_allowed_in', etc.
 
         TODO
-        - replace 'design' parameter with Q_des_cycle
-        - replace 'properties' with cycle_max_frac
         - extract this line and the above two parameters as they don't deal with the dispatch solution
             D['q_pc_max_in'] = [q_pc_max_val for t in range(n)]
 
@@ -774,7 +772,7 @@ class DispatchTargets:
         n = len(disp_soln.cycle_on)  # Number of time periods in full dispatch solution (variable time steps)
         dt = disp_params.Delta
 
-        q_pc_max_val = design.get_cycle_thermal_rating() * properties.cycle_max_frac  # Maximum cycle thermal input from design parameters (MWt)
+        q_pc_max_val = plant.get_cycle_thermal_rating() * plant.design['cycle_max_frac']  # Maximum cycle thermal input from design parameters (MWt)
 
         is_simple_receiver = True if len(disp_soln.receiver_on) == 0 else False
         
@@ -848,6 +846,7 @@ def estimates_for_dispatch_model(plant_design, toy, horizon, weather_data, N_pts
     D_est['rec_su_delay'] = 0.001               # Simulate with no start-up time to get total available solar energy
     D_est['rec_qf_delay'] = 0.001
     retvars = ['Q_thermal', 'm_dot_rec', 'beam', 'clearsky', 'tdry', 'P_tower_pump', 'pparasi']
+
     ssc_outputs, new_state = ssc_wrapper.call_ssc(D_est, retvars, npts = N_pts_horizon)
     if ssc_outputs['clearsky'].max() < 1.e-3:         # Clear-sky data wasn't passed through ssc (ssc controlled from actual DNI, or user-defined flow inputs)
         ssc_outputs['clearsky'] = clearsky_data[start_pt : start_pt + N_pts_horizon]
@@ -856,12 +855,12 @@ def estimates_for_dispatch_model(plant_design, toy, horizon, weather_data, N_pts
 
 
 def setup_dispatch_model(R_est, freq, horizon, include_day_ahead_in_dispatch,
-    dispatch_params, plant_design, plant_state, nonlinear_model_time, use_linear_dispatch_at_night,
+    dispatch_params, plant, nonlinear_model_time, use_linear_dispatch_at_night,
     clearsky_data, night_clearky_cutoff, dispatch_steplength_array, dispatch_steplength_end_time,
     disp_time_weighting, price, sscstep, avg_price, avg_price_disp_storage_incentive,
     avg_purchase_price, day_ahead_tol_plus, day_ahead_tol_minus,
     tod, current_day_schedule, day_ahead_pen_plus, day_ahead_pen_minus,
-    dispatch_horizon, night_clearsky_cutoff, properties, ursd_last, yrsd_last):
+    dispatch_horizon, night_clearsky_cutoff, ursd_last, yrsd_last):
 
     #--- Set dispatch optimization properties for this time horizon using ssc estimates
     ##########
@@ -870,13 +869,13 @@ def setup_dispatch_model(R_est, freq, horizon, include_day_ahead_in_dispatch,
     # Initialize dispatch model inputs
     dispatch_params.set_dispatch_time_arrays(dispatch_steplength_array, dispatch_steplength_end_time,
         dispatch_horizon, nonlinear_model_time, disp_time_weighting)
-    dispatch_params.set_fixed_parameters_from_plant_design(plant_design, properties)
+    dispatch_params.set_fixed_parameters_from_plant_design(plant)
     dispatch_params.set_default_grid_limits()
     dispatch_params.disp_time_weighting = disp_time_weighting
-    dispatch_params.set_initial_state(plant_design, plant_state)  # Set initial plant state for dispatch model
+    dispatch_params.set_initial_state(plant)  # Set initial plant state for dispatch model
     
     # Update approximate receiver shutdown state from previous dispatch solution (not returned from ssc)
-    dispatch_params.set_approximate_shutdown_state_parameters(plant_state, ursd = ursd_last, yrsd = yrsd_last)  # Set initial state parameters related to shutdown from dispatch model (because this cannot be derived from ssc)
+    dispatch_params.set_approximate_shutdown_state_parameters(plant.state, ursd = ursd_last, yrsd = yrsd_last)  # Set initial state parameters related to shutdown from dispatch model (because this cannot be derived from ssc)
 
     nonlinear_time = nonlinear_model_time # Time horizon for nonlinear model (hr)
     if use_linear_dispatch_at_night:
@@ -893,7 +892,7 @@ def setup_dispatch_model(R_est, freq, horizon, include_day_ahead_in_dispatch,
     dispatch_params.day_ahead_tol_plus = day_ahead_tol_plus*1000    # kWhe
     dispatch_params.day_ahead_tol_minus = day_ahead_tol_minus*1000  # kWhe
 
-    dispatch_params.set_estimates_from_ssc_data(plant_design, R_est, sscstep/3600.) 
+    dispatch_params.set_estimates_from_ssc_data(plant.design, R_est, sscstep/3600.) 
     
     
     #--- Set day-ahead schedule in dispatch parameters
