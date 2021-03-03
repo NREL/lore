@@ -378,8 +378,8 @@ plant_design = {
     'n_facet_x':                    2,
     'n_facet_y':                    8,
     'dens_mirror':                  0.97,
-    'helio_optical_error_mrad':     2.5,            # 2.625  # Heliostat total optical error (used in ssc as a slope error)
-    'helio_reflectance':            1.53,          # Clean heliostat reflectivity
+    'helio_optical_error_mrad':     1.53,            # 2.625  # Heliostat total optical error (used in ssc as a slope error)
+    'helio_reflectance':            0.90,          # Clean heliostat reflectivity
     'p_start':                      0.025,            # Heliostat field startup energy (per heliostat) (kWe-hr)
     'p_track':                      0.055,         # Heliostat tracking power (per heliostat) (kWe)
     # Adding these here will change the results:

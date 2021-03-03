@@ -9,7 +9,6 @@ import zipfile
 import datetime
 from pvlib import solarposition
 
-import ssc_wrapper
 import loredash.mediation.plant as plant
 
 def write_dict_as_csv(mydict, csv_path='./mydict.csv'):

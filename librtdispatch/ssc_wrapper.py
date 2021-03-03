@@ -10,20 +10,6 @@ import dispatch
 from mspt_2020_defaults import vartab as V
 import loredash.mediation.plant as plant
 
-class FluxMaps:
-    def __init__(self):
-        self.A_sf_in = 0.0
-        self.eta_map = []
-        self.flux_maps = []
-        return
-    
-    def set_from_ssc(self, S):
-        # S = dictionary of ssc ouputs
-        self.A_sf_in = S['A_sf']
-        self.eta_map = S['eta_map_out']
-        self.flux_maps = [x[2:] for x in S['flux_maps_for_import']]
-        return
-
 
 #-------------------------------------------------------------------------
 # Update incompatible names in ssc

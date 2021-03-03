@@ -113,7 +113,6 @@ class CaseStudy:
         
         
         #--- Calculated values
-        self.flux_maps = ssc_wrapper.FluxMaps()                     # Structure to contain computed flux maps
         self.dispatch_params = dispatch.DispatchParams()            # Structure to contain all inputs for dispatch model 
         self.ssc_dispatch_targets = dispatch.DispatchTargets()   # Structure to contain dispatch targets used for ssc
 
@@ -426,10 +425,12 @@ class CaseStudy:
         #     D['delta_flux_hrs'] = 4
         #     D['n_flux_days'] = 2
         R, state = ssc_wrapper.call_ssc(D, ['eta_map_out', 'flux_maps_for_import', 'A_sf'])
-        flux_maps = ssc_wrapper.FluxMaps()
-        flux_maps.set_from_ssc(R)
         print('Time to simulate flux maps = %.2fs'%(timeit.default_timer() - start))
-        return flux_maps
+        # return flux_maps
+        A_sf_in = R['A_sf']
+        eta_map = R['eta_map_out']
+        flux_maps = [x[2:] for x in R['flux_maps_for_import']]
+        return {'A_sf_in': A_sf_in, 'eta_map': eta_map, 'flux_maps': flux_maps}
     
 
     
@@ -439,16 +440,16 @@ class CaseStudy:
 
         self.initialize()
             
-        if self.flux_maps.A_sf_in == 0.0 or rerun_flux_maps:
-            self.flux_maps = CaseStudy.simulate_flux_maps(
+        if self.plant.flux_maps['A_sf_in'] == 0.0 or rerun_flux_maps:
+            self.plant.flux_maps = CaseStudy.simulate_flux_maps(
                 plant_design = self.plant.design,
                 ssc_time_steps_per_hour = self.ssc_time_steps_per_hour,
                 ground_truth_weather_data = self.ground_truth_weather_data
                 )
 
-            assert math.isclose(self.flux_maps.A_sf_in, 1172997, rel_tol=1e-4)
-            assert math.isclose(np.sum(self.flux_maps.eta_map), 10385.8, rel_tol=1e-4)
-            assert math.isclose(np.sum(self.flux_maps.flux_maps), 44.0, rel_tol=1e-4)
+            assert math.isclose(self.plant.flux_maps['A_sf_in'], 1172997, rel_tol=1e-4)
+            assert math.isclose(np.sum(self.plant.flux_maps['eta_map']), 10385.8, rel_tol=1e-4)
+            assert math.isclose(np.sum(self.plant.flux_maps['flux_maps']), 44.0, rel_tol=1e-4)
             
         self.current_time = datetime.datetime(self.start_date.year, self.start_date.month, self.start_date.day)  # Start simulation at midnight (standard time) on the specifed day.  Note that annual arrays derived from CD data will not have "real" data after 11pm standard time during DST (unless data also exists for the following day)
         start_time = util.get_time_of_year(self.current_time)  # Time (sec) elapsed since beginning of year
@@ -457,9 +458,9 @@ class CaseStudy:
         retvars = self.default_ssc_return_vars()
 
         D = self.plant.design.copy()
-        D['A_sf_in'] = self.flux_maps.A_sf_in
-        D['eta_map'] = self.flux_maps.eta_map
-        D['flux_maps'] = self.flux_maps.flux_maps
+        D['A_sf_in'] = self.plant.flux_maps['A_sf_in']
+        D['eta_map'] = self.plant.flux_maps['eta_map']
+        D['flux_maps'] = self.plant.flux_maps['flux_maps']
         D['ppa_multiplier_model'] = 1
         D['dispatch_factors_ts'] = self.price_data
         D['time_steps_per_hour'] = self.ssc_time_steps_per_hour
