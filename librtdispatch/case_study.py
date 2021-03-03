@@ -158,282 +158,6 @@ class CaseStudy:
 
     #------------------------------------------------------------------------
     
-    def initialize(self):
-        
-        # Set cycle specifications (from model validation code)
-        if self.cycle_type == 'user_defined':
-            self.plant.design['P_ref'] = 120
-            self.plant.design['design_eff'] = 0.409
-            self.plant.design['T_htf_cold_des'] = 295.0 # [C]      # This sets design mass flowrate to that in CD's data
-            self.plant.design['pc_config'] = 1
-            with open(os.path.join(os.path.dirname(__file__), self.user_defined_cycle_input_file), 'r') as read_obj:
-                csv_reader = reader(read_obj)
-                self.plant.design['ud_ind_od'] = list(csv_reader)        
-            for i in range(len(self.plant.design['ud_ind_od'])):
-                self.plant.design['ud_ind_od'][i] = [float(item) for item in self.plant.design['ud_ind_od'][i]]
-                
-        elif self.cycle_type == 'sliding':  
-            ### For sliding pressure
-            ## These parameters work with heat input calculated using 290 as the lower temperature - however, there are a couple of controller issues
-            self.plant.design['P_ref'] = 125
-            self.plant.design['design_eff'] = 0.378
-            self.plant.design['tech_type'] = 3
-        
-        else:
-            ### For fixed pressure
-            self.plant.design['P_ref'] = 120.
-            self.plant.design['design_eff'] = 0.409  # 0.385
-            self.plant.design['tech_type'] = 1
-            
-        
-        # Check combinations of control conditions
-        if self.is_optimize and (self.control_field == 'CD_data' or self.control_receiver == 'CD_data'):
-            print ('Warning: Dispatch optimization is being used with field or receiver operation derived from CD data. Receiver can only operate when original CD receiver was operating')
-        if self.control_receiver == 'CD_data' and self.control_field != 'CD_data':
-            print ('Warning: Receiver flow is controlled from CD data, but field tracking fraction is controlled by ssc. Temperatures will likely be unrealistically high')
-
-        # Read in historical weather data
-        self.ground_truth_weather_data = util.read_weather_data(self.ground_truth_weather_file)
-        if self.ssc_time_steps_per_hour != 60:
-            self.ground_truth_weather_data = util.update_weather_timestep(self.ground_truth_weather_data, self.ssc_time_steps_per_hour)
-        
-
-        # Read in annual arrays for clear-sky DNI, receiver mass flow, etc.
-        self.clearsky_data = np.genfromtxt(self.clearsky_file)
-        self.CD_mflow_path1_data = np.genfromtxt(self.CD_mflow_path1_file)
-        self.CD_mflow_path2_data = np.genfromtxt(self.CD_mflow_path2_file)
-        if self.ssc_time_steps_per_hour != 60:
-            self.clearsky_data = np.array(util.translate_to_new_timestep(self.clearsky_data, 1./60, 1./self.ssc_time_steps_per_hour))
-            self.CD_mflow_path1_data = np.array(util.translate_to_new_timestep(self.CD_mflow_path1_data, 1./60, 1./self.ssc_time_steps_per_hour))
-            self.CD_mflow_path2_data = np.array(util.translate_to_new_timestep(self.CD_mflow_path2_data, 1./60, 1./self.ssc_time_steps_per_hour))            
-        
-        
-        
-        price_multipliers = np.genfromtxt(self.price_multiplier_file)
-        if self.price_steps_per_hour != self.ssc_time_steps_per_hour:
-            price_multipliers = util.translate_to_new_timestep(price_multipliers, 1./self.price_steps_per_hour, 1./self.ssc_time_steps_per_hour)
-        pmavg = sum(price_multipliers)/len(price_multipliers)  
-        self.price_data = [self.avg_price*p/pmavg  for p in price_multipliers]  # Electricity price at ssc time steps ($/MWh)
-
-        # Create annual weather data structure that will contain weather forecast data to be used during optimization (weather data filled with all zeros for now)
-        self.current_forecast_weather_data = util.create_empty_weather_data(self.ground_truth_weather_data, self.ssc_time_steps_per_hour)
-        self.weather_data_for_dispatch = util.create_empty_weather_data(self.ground_truth_weather_data, self.ssc_time_steps_per_hour)
-
-        # Initialize forecast weather data using the day prior to the first simulated day
-        forecast_time = self.start_date - datetime.timedelta(hours = 24-self.forecast_issue_time)
-        self.update_forecast_weather_data(forecast_time)
-
-        # Initalize plant state
-        if self.set_initial_state_from_CD_data:
-            initial_state = util.get_initial_state_from_CD_data(self.start_date, self.CD_raw_data_direc, self.CD_processed_data_direc, self.plant.design)
-            if initial_state is not None:
-                self.plant.state = initial_state
-
-        
-        # Initialize day-ahead generation schedules
-        n = 24*self.day_ahead_schedule_steps_per_hour
-        self.current_day_schedule = np.zeros(n)
-        self.next_day_schedule = np.zeros(n)
-
-        self.is_initialized = True
-        return
-
-
-
-    # Update forecasted weather data 
-    def update_forecast_weather_data(self, date, offset30 = True):
-        print ('Updating weather forecast:', date)
-        nextdate = date + datetime.timedelta(days = 1) # Forecasts issued at 4pm PST on a given day (PST) are labeled at midnight (UTC) on the next day 
-        wfdata = util.read_weather_forecast(nextdate, offset30)
-        t = int(util.get_time_of_year(date)/3600)   # Time of year (hr)
-        pssc = int(t*self.ssc_time_steps_per_hour) 
-        nssc_per_wf = int(self.ssc_time_steps_per_hour / self.forecast_steps_per_hour)
-        
-        #---Update forecast data in full weather file: Assuming forecast points are on half-hour time points, valid for the surrounding hour, with the first point 30min prior to the designated forecast issue time
-        if not offset30:  # Assume forecast points are on the hour, valid for the surrounding hour
-            n = len(wfdata['dn'])
-            for j in range(n): # Time points in weather forecast
-                q  = pssc + nssc_per_wf/2  if j == 0 else pssc + nssc_per_wf/2 + (j-1)*nssc_per_wf/2  # First point in annual weather data (at ssc time resolution) for forecast time point j
-                nuse = nssc_per_wf/2 if j==0 else nssc_per_wf 
-                for k in ['dn', 'wspd', 'tdry', 'rhum', 'pres']:
-                    val =  wfdata[k][j] if k in wfdata.keys() else self.ground_truth_weather_data[k][pssc]  # Use current ground-truth value for full forecast period if forecast value is not available            
-                    for i in range(nuse):  
-                        self.current_forecast_weather_data[k][q+i] = val   
-                
-        else: # Assume forecast points are on the half-hour, valid for the surrounding hour, with the first point 30min prior to the designated forecast issue time
-            n = len(wfdata['dn']) - 1
-            for j in range(n): 
-                q = pssc + j*nssc_per_wf
-                for k in ['dn', 'wspd', 'tdry', 'rhum', 'pres']:
-                    val =  wfdata[k][j+1] if k in wfdata.keys() else self.ground_truth_weather_data[k][pssc]  # Use current ground-truth value for full forecast period if forecast value is not available            
-                    for i in range(nssc_per_wf):  
-                        self.current_forecast_weather_data[k][q+i] = val
-
-        #--- Extrapolate forecasts to be complete for next-day dispatch scheduling (if necessary)
-        forecast_duration = n*self.forecast_steps_per_hour if offset30 else (n-0.5)*self.forecast_steps_per_hour
-        if self.forecast_issue_time > self.day_ahead_schedule_time:
-            hours_avail = forecast_duration - (24 - self.forecast_issue_time) - self.day_ahead_schedule_time  # Hours of forecast available at the point the day ahead schedule is due
-        else:
-            hours_avail = forecast_duration - (self.day_ahead_schedule_time - self.forecast_issue_time)
-            
-        req_hours_avail = 48 - self.day_ahead_schedule_time 
-        if req_hours_avail >  hours_avail:  # Forecast is not available for the full time required for the day-ahead schedule
-            qf = pssc + int((n-0.5)*nssc_per_wf) if offset30 else pssc + (n-1)*nssc_per_wf   # Point in annual arrays corresponding to last point forecast time point
-            cratio = 0.0 if wfdata['dn'][-1]<20 else wfdata['dn'][-1] / max(self.clearsky_data[qf], 1.e-6)  # Ratio of actual / clearsky at last forecast time point
-            
-            nmiss = int((req_hours_avail - hours_avail) * self.ssc_time_steps_per_hour)  
-            q = pssc + n*nssc_per_wf if offset30 else pssc + int((n-0.5)*nssc_per_wf ) 
-            for i in range(nmiss):
-                self.current_forecast_weather_data['dn'][q+i] = self.clearsky_data[q+i] * cratio    # Approximate DNI in non-forecasted time periods from expected clear-sky DNI and actual/clear-sky ratio at latest available forecast time point
-                for k in ['wspd', 'tdry', 'rhum', 'pres']:  
-                    self.current_forecast_weather_data[k][q+i] = self.current_forecast_weather_data[k][q-1]  # Assume latest forecast value applies for the remainder of the time period
-
-        return
-    
-    def get_dispatch_targets_from_CD_actuals(self, use_avg_flow = False, set_rec_sb = False, ctrl_adj = False):
-        # initialize targets stucture
-        targets = dispatch.DispatchTargets()
-
-        CD_plot_data = ['Gross Power [MW]', 'Net Power [MW]', 'E charge TES [MWht]', 'Hot Tank Temp [C]', 'Cold Tank Temp [C]', 'Rec avg Tout [C]']
-        for key in CD_plot_data:
-            self.CD_data_for_plotting[key] = []
-
-        pc_on = []
-        need_last_hour = False
-        date = self.start_date
-        for i in range(self.sim_days+1): 
-            # Get data
-            data = util.read_CD_data(date, self.CD_raw_data_direc, self.CD_processed_data_direc)
-            if data is None:
-                return  None
-
-            if date == self.start_date and util.is_dst(date):
-                # drop the first hour -> standard time
-                data = data.iloc[60:]
-                need_last_hour = True
-            elif i == self.sim_days and need_last_hour:
-                data = data.iloc[:60]
-
-            cd = util.get_clean_CD_cycle_data(data)
-
-            if use_avg_flow:
-                targets.q_pc_target_on_in.extend(list(cd['Avg Q into cycle [MW]']))
-            else:
-                targets.q_pc_target_on_in.extend(list(cd['Q into cycle [MW]']))
-
-            ## Cycle start up binary
-            if ctrl_adj:
-                pc_su = np.array([1 if x > 25. else 0 for x in cd['Gross Power [MW]']])  # Is cycle running?
-            else:
-                pc_su = np.array([1 if x > 5. else 0 for x in cd['Gross Power [MW]']])  # Is cycle running?
-                
-            pc_on.extend(pc_su.tolist())
-
-            for ind in np.where(pc_su[:-1] != pc_su[1:])[0]:        # cycle changes condition
-                if pc_su[ind + 1] == 1:
-                    buffer = 20 #10
-                    pc_su[int(ind - self.plant.design['startup_time']*60 + buffer): ind+1] = 1   # push start-up forward
-
-            targets.is_pc_su_allowed_in.extend(pc_su.tolist())   # Is cycle running?
-
-            if set_rec_sb:
-                # Receiver stand-by operation - attempt to control standby by tank temperature
-                Nfbs = [1,2,3,4,5]
-                tstep = 1/60
-                dev = {}
-                for Nfb in Nfbs:
-                    dev[str(Nfb)] = [0]*Nfb
-                    for j in range(Nfb, len(cd['Cold Tank Temp [C]']) - Nfb):
-                        dev[str(Nfb)].append((cd['Cold Tank Temp [C]'].iloc[j+Nfb] - cd['Cold Tank Temp [C]'].iloc[j-Nfb])/2*Nfb*tstep)
-                    dev[str(Nfb)].extend([0.]*Nfb)
-                '''
-                import matplotlib.pyplot as plt
-                plt.figure()
-                for Nfb in Nfbs:
-                    plt.plot(dev[str(Nfb)], label = 'Nfb = ' + str(Nfb))
-                plt.legend(loc = 'lower left')
-                ax = plt.gca()
-                ax2 = ax.twinx()
-                ax2.plot(list(cd['Cold Tank Temp [C]']), label = 'Cold tank temp.')
-                plt.legend(loc = 'lower right')
-                plt.show()
-                '''
-                rec_sb = [1 if dTdt > 0.004 else 0 for dTdt in dev[str(1)]]
-                targets.is_rec_sb_allowed_in.extend(rec_sb)
-
-            for key in CD_plot_data:
-                self.CD_data_for_plotting[key].extend(list(cd[key]))
-
-            date += datetime.timedelta(days=1)  # advance a day
-        
-        max_pc_qin = (self.plant.design['P_ref']/self.plant.design['design_eff'])*self.plant.design['cycle_max_frac']
-        n = len(targets.is_pc_su_allowed_in)
-        targets.q_pc_target_on_in = [targets.q_pc_target_on_in[j] if pc_on[j] == 1 else 0.0 for j in range(n)]
-        targets.q_pc_target_su_in = [max_pc_qin if (targets.is_pc_su_allowed_in[j] == 1 and pc_on[j] == 0) else 0.0 for j in range(n)]
-        targets.q_pc_max_in = [max_pc_qin for j in range(n)]     
-        targets.is_pc_sb_allowed_in = [0 for j in range(n)]  # Cycle can not go into standby (using TES to keep cycle warm)
-        targets.is_rec_su_allowed_in = [1 for j in range(n)]  # Receiver can always start up if available energy
-        
-        if not set_rec_sb:
-            targets.is_rec_sb_allowed_in = [0 for j in range(n)]  # For now only allowing standby based on ssc determination from temperature threshold.  Specifying a value of 1 in any time period will force the receiver into standby regardless of temperature
-
-        return targets
-        
-    def get_CD_NVE_day_ahead_schedule(self, date):
-        targets = util.read_NVE_schedule(date, self.CD_raw_data_direc)
-        if util.is_dst(date) and targets is not None: # First target in file is cumulative generation between 12am-1am PDT (11pm - 12am PST).  Ignore first point and read next-day file to define last point
-            targets2 = util.read_NVE_schedule(date+datetime.timedelta(days=1), self.CD_raw_data_direc)
-            targets = np.append(targets[1:], targets2[0])
-        return targets
-
-    
-    def get_field_availability_adjustment(self, steps_per_hour, year):
-        if self.control_field == 'ssc':
-            if self.use_CD_measured_reflectivity:
-                adjust = util.get_field_adjustment_from_CD_data(year, self.plant.design['N_hel'], self.plant.design['helio_reflectance']*100, True, None, False)            
-            else:
-                adjust = (self.fixed_soiling_loss * 100 * np.ones(steps_per_hour*24*365))  
-
-        elif self.control_field == 'CD_data':
-            if self.use_CD_measured_reflectivity:
-                adjust = util.get_field_adjustment_from_CD_data(year, self.plant.design['N_hel'], self.plant.design['helio_reflectance']*100, True, None, True)
-            else:
-                refl = (1-self.fixed_soiling_loss) * self.plant.design['helio_reflectance'] * 100  # Simulated heliostat reflectivity
-                adjust = util.get_field_adjustment_from_CD_data(year, self.plant.design['N_hel'], self.plant.design['helio_reflectance']*100, False, refl, True)
- 
-        adjust = adjust.tolist()
-        data_steps_per_hour = len(adjust)/8760  
-        if data_steps_per_hour != steps_per_hour:
-            adjust = util.translate_to_new_timestep(adjust, 1./data_steps_per_hour, 1./steps_per_hour)
-        return adjust
-    
-
-
-    #--- Simulate flux maps
-    @staticmethod
-    def simulate_flux_maps(plant_design, ssc_time_steps_per_hour, ground_truth_weather_data):
-        print ('Simulating flux maps')
-        start = timeit.default_timer()
-        D = plant_design.copy()
-        D['time_steps_per_hour'] = ssc_time_steps_per_hour
-        #D['solar_resource_file'] = self.ground_truth_weather_file
-        D['solar_resource_data'] = ground_truth_weather_data
-        D['time_start'] = 0.0
-        D['time_stop'] = 1.0*3600  
-        D['field_model_type'] = 2
-        # if self.is_debug:
-        #     D['delta_flux_hrs'] = 4
-        #     D['n_flux_days'] = 2
-        R, state = ssc_wrapper.call_ssc(D, ['eta_map_out', 'flux_maps_for_import', 'A_sf'])
-        print('Time to simulate flux maps = %.2fs'%(timeit.default_timer() - start))
-        # return flux_maps
-        A_sf_in = R['A_sf']
-        eta_map = R['eta_map_out']
-        flux_maps = [x[2:] for x in R['flux_maps_for_import']]
-        return {'A_sf_in': A_sf_in, 'eta_map': eta_map, 'flux_maps': flux_maps}
-    
-
-    
     #-------------------------------------------------------------------------
     #--- Run simulation
     def run(self, rerun_flux_maps = False):
@@ -515,7 +239,7 @@ class CaseStudy:
         D['time_stop'] = start_time + self.sim_days*24*3600   
 
         if self.is_optimize:
-            R = self.run_rolling_horizon(D, self.sim_days*24)
+            R = self.run_rolling_horizon(D, self.sim_days*24)       ## THIS IS WHAT'S BEING RUN
         elif self.control_cycle == 'ssc_heuristic':
             if self.force_rolling_horizon:  # Run with rolling horizon (not necessary, but useful for debugging)
                 R = self.run_rolling_horizon(D, self.sim_days*24)
@@ -791,8 +515,237 @@ class CaseStudy:
         return R
             
 
+    def initialize(self):
+        
+        # Set cycle specifications (from model validation code)
+        if self.cycle_type == 'user_defined':
+            self.plant.design['P_ref'] = 120
+            self.plant.design['design_eff'] = 0.409
+            self.plant.design['T_htf_cold_des'] = 295.0 # [C]      # This sets design mass flowrate to that in CD's data
+            self.plant.design['pc_config'] = 1
+            with open(os.path.join(os.path.dirname(__file__), self.user_defined_cycle_input_file), 'r') as read_obj:
+                csv_reader = reader(read_obj)
+                self.plant.design['ud_ind_od'] = list(csv_reader)        
+            for i in range(len(self.plant.design['ud_ind_od'])):
+                self.plant.design['ud_ind_od'][i] = [float(item) for item in self.plant.design['ud_ind_od'][i]]
+                
+        elif self.cycle_type == 'sliding':  
+            ### For sliding pressure
+            ## These parameters work with heat input calculated using 290 as the lower temperature - however, there are a couple of controller issues
+            self.plant.design['P_ref'] = 125
+            self.plant.design['design_eff'] = 0.378
+            self.plant.design['tech_type'] = 3
+        
+        else:
+            ### For fixed pressure
+            self.plant.design['P_ref'] = 120.
+            self.plant.design['design_eff'] = 0.409  # 0.385
+            self.plant.design['tech_type'] = 1
+            
+        
+        # Check combinations of control conditions
+        if self.is_optimize and (self.control_field == 'CD_data' or self.control_receiver == 'CD_data'):
+            print ('Warning: Dispatch optimization is being used with field or receiver operation derived from CD data. Receiver can only operate when original CD receiver was operating')
+        if self.control_receiver == 'CD_data' and self.control_field != 'CD_data':
+            print ('Warning: Receiver flow is controlled from CD data, but field tracking fraction is controlled by ssc. Temperatures will likely be unrealistically high')
+
+        # Read in historical weather data
+        self.ground_truth_weather_data = util.read_weather_data(self.ground_truth_weather_file)
+        if self.ssc_time_steps_per_hour != 60:
+            self.ground_truth_weather_data = util.update_weather_timestep(self.ground_truth_weather_data, self.ssc_time_steps_per_hour)
+        
+
+        # Read in annual arrays for clear-sky DNI, receiver mass flow, etc.
+        self.clearsky_data = np.genfromtxt(self.clearsky_file)
+        self.CD_mflow_path1_data = np.genfromtxt(self.CD_mflow_path1_file)
+        self.CD_mflow_path2_data = np.genfromtxt(self.CD_mflow_path2_file)
+        if self.ssc_time_steps_per_hour != 60:
+            self.clearsky_data = np.array(util.translate_to_new_timestep(self.clearsky_data, 1./60, 1./self.ssc_time_steps_per_hour))
+            self.CD_mflow_path1_data = np.array(util.translate_to_new_timestep(self.CD_mflow_path1_data, 1./60, 1./self.ssc_time_steps_per_hour))
+            self.CD_mflow_path2_data = np.array(util.translate_to_new_timestep(self.CD_mflow_path2_data, 1./60, 1./self.ssc_time_steps_per_hour))            
+        
+        
+        
+        price_multipliers = np.genfromtxt(self.price_multiplier_file)
+        if self.price_steps_per_hour != self.ssc_time_steps_per_hour:
+            price_multipliers = util.translate_to_new_timestep(price_multipliers, 1./self.price_steps_per_hour, 1./self.ssc_time_steps_per_hour)
+        pmavg = sum(price_multipliers)/len(price_multipliers)  
+        self.price_data = [self.avg_price*p/pmavg  for p in price_multipliers]  # Electricity price at ssc time steps ($/MWh)
+
+        # Create annual weather data structure that will contain weather forecast data to be used during optimization (weather data filled with all zeros for now)
+        self.current_forecast_weather_data = util.create_empty_weather_data(self.ground_truth_weather_data, self.ssc_time_steps_per_hour)
+        self.weather_data_for_dispatch = util.create_empty_weather_data(self.ground_truth_weather_data, self.ssc_time_steps_per_hour)
+
+        # Initialize forecast weather data using the day prior to the first simulated day
+        forecast_time = self.start_date - datetime.timedelta(hours = 24-self.forecast_issue_time)
+        self.update_forecast_weather_data(forecast_time)
+
+        # Initalize plant state
+        if self.set_initial_state_from_CD_data:
+            initial_state = util.get_initial_state_from_CD_data(self.start_date, self.CD_raw_data_direc, self.CD_processed_data_direc, self.plant.design)
+            if initial_state is not None:
+                self.plant.state = initial_state
+
+        
+        # Initialize day-ahead generation schedules
+        n = 24*self.day_ahead_schedule_steps_per_hour
+        self.current_day_schedule = np.zeros(n)
+        self.next_day_schedule = np.zeros(n)
+
+        self.is_initialized = True
+        return
+
+
+        # Update forecasted weather data 
+    
+    
+    def update_forecast_weather_data(self, date, offset30 = True):
+        """
+        Inputs:
+            date
+            offset30
+            ssc_time_steps_per_hour
+            forecast_steps_per_hour
+            ground_truth_weather_data
+            forecast_issue_time
+            day_ahead_schedule_time
+            clearsky_data
+
+        Outputs:
+            current_forecast_weather_data
+        """
+
+        print ('Updating weather forecast:', date)
+        nextdate = date + datetime.timedelta(days = 1) # Forecasts issued at 4pm PST on a given day (PST) are labeled at midnight (UTC) on the next day 
+        wfdata = util.read_weather_forecast(nextdate, offset30)
+        t = int(util.get_time_of_year(date)/3600)   # Time of year (hr)
+        pssc = int(t*self.ssc_time_steps_per_hour) 
+        nssc_per_wf = int(self.ssc_time_steps_per_hour / self.forecast_steps_per_hour)
+        
+        #---Update forecast data in full weather file: Assuming forecast points are on half-hour time points, valid for the surrounding hour, with the first point 30min prior to the designated forecast issue time
+        if not offset30:  # Assume forecast points are on the hour, valid for the surrounding hour
+            n = len(wfdata['dn'])
+            for j in range(n): # Time points in weather forecast
+                q  = pssc + nssc_per_wf/2  if j == 0 else pssc + nssc_per_wf/2 + (j-1)*nssc_per_wf/2  # First point in annual weather data (at ssc time resolution) for forecast time point j
+                nuse = nssc_per_wf/2 if j==0 else nssc_per_wf 
+                for k in ['dn', 'wspd', 'tdry', 'rhum', 'pres']:
+                    val =  wfdata[k][j] if k in wfdata.keys() else self.ground_truth_weather_data[k][pssc]  # Use current ground-truth value for full forecast period if forecast value is not available            
+                    for i in range(nuse):  
+                        self.current_forecast_weather_data[k][q+i] = val   
+                
+        else: # Assume forecast points are on the half-hour, valid for the surrounding hour, with the first point 30min prior to the designated forecast issue time
+            n = len(wfdata['dn']) - 1
+            for j in range(n): 
+                q = pssc + j*nssc_per_wf
+                for k in ['dn', 'wspd', 'tdry', 'rhum', 'pres']:
+                    val =  wfdata[k][j+1] if k in wfdata.keys() else self.ground_truth_weather_data[k][pssc]  # Use current ground-truth value for full forecast period if forecast value is not available            
+                    for i in range(nssc_per_wf):  
+                        self.current_forecast_weather_data[k][q+i] = val
+
+        #--- Extrapolate forecasts to be complete for next-day dispatch scheduling (if necessary)
+        forecast_duration = n*self.forecast_steps_per_hour if offset30 else (n-0.5)*self.forecast_steps_per_hour
+        if self.forecast_issue_time > self.day_ahead_schedule_time:
+            hours_avail = forecast_duration - (24 - self.forecast_issue_time) - self.day_ahead_schedule_time  # Hours of forecast available at the point the day ahead schedule is due
+        else:
+            hours_avail = forecast_duration - (self.day_ahead_schedule_time - self.forecast_issue_time)
+            
+        req_hours_avail = 48 - self.day_ahead_schedule_time 
+        if req_hours_avail >  hours_avail:  # Forecast is not available for the full time required for the day-ahead schedule
+            qf = pssc + int((n-0.5)*nssc_per_wf) if offset30 else pssc + (n-1)*nssc_per_wf   # Point in annual arrays corresponding to last point forecast time point
+            cratio = 0.0 if wfdata['dn'][-1]<20 else wfdata['dn'][-1] / max(self.clearsky_data[qf], 1.e-6)  # Ratio of actual / clearsky at last forecast time point
+            
+            nmiss = int((req_hours_avail - hours_avail) * self.ssc_time_steps_per_hour)  
+            q = pssc + n*nssc_per_wf if offset30 else pssc + int((n-0.5)*nssc_per_wf ) 
+            for i in range(nmiss):
+                self.current_forecast_weather_data['dn'][q+i] = self.clearsky_data[q+i] * cratio    # Approximate DNI in non-forecasted time periods from expected clear-sky DNI and actual/clear-sky ratio at latest available forecast time point
+                for k in ['wspd', 'tdry', 'rhum', 'pres']:  
+                    self.current_forecast_weather_data[k][q+i] = self.current_forecast_weather_data[k][q-1]  # Assume latest forecast value applies for the remainder of the time period
+
+        return
+    
+    
+    def get_field_availability_adjustment(self, steps_per_hour, year):
+        """
+        Inputs:
+            steps_per_hour
+            year
+            control_field
+            use_CD_measured_reflectivity
+            plant.design
+                N_hel
+                helio_reflectance
+            fixed_soiling_loss
+
+        Outputs:
+            adjust
+        """
+
+        if self.control_field == 'ssc':
+            if self.use_CD_measured_reflectivity:
+                adjust = util.get_field_adjustment_from_CD_data(year, self.plant.design['N_hel'], self.plant.design['helio_reflectance']*100, True, None, False)            
+            else:
+                adjust = (self.fixed_soiling_loss * 100 * np.ones(steps_per_hour*24*365))  
+
+        elif self.control_field == 'CD_data':
+            if self.use_CD_measured_reflectivity:
+                adjust = util.get_field_adjustment_from_CD_data(year, self.plant.design['N_hel'], self.plant.design['helio_reflectance']*100, True, None, True)
+            else:
+                refl = (1-self.fixed_soiling_loss) * self.plant.design['helio_reflectance'] * 100  # Simulated heliostat reflectivity
+                adjust = util.get_field_adjustment_from_CD_data(year, self.plant.design['N_hel'], self.plant.design['helio_reflectance']*100, False, refl, True)
+ 
+        adjust = adjust.tolist()
+        data_steps_per_hour = len(adjust)/8760  
+        if data_steps_per_hour != steps_per_hour:
+            adjust = util.translate_to_new_timestep(adjust, 1./data_steps_per_hour, 1./steps_per_hour)
+        return adjust
+    
+
+    #--- Simulate flux maps
+    @staticmethod
+    def simulate_flux_maps(plant_design, ssc_time_steps_per_hour, ground_truth_weather_data):
+        """
+        Outputs:
+            A_sf_in
+            eta_map
+            flux_maps
+        """
+
+        print ('Simulating flux maps')
+        start = timeit.default_timer()
+        D = plant_design.copy()
+        D['time_steps_per_hour'] = ssc_time_steps_per_hour
+        #D['solar_resource_file'] = self.ground_truth_weather_file
+        D['solar_resource_data'] = ground_truth_weather_data
+        D['time_start'] = 0.0
+        D['time_stop'] = 1.0*3600  
+        D['field_model_type'] = 2
+        # if self.is_debug:
+        #     D['delta_flux_hrs'] = 4
+        #     D['n_flux_days'] = 2
+        R, state = ssc_wrapper.call_ssc(D, ['eta_map_out', 'flux_maps_for_import', 'A_sf'])
+        print('Time to simulate flux maps = %.2fs'%(timeit.default_timer() - start))
+        # return flux_maps
+        A_sf_in = R['A_sf']
+        eta_map = R['eta_map_out']
+        flux_maps = [x[2:] for x in R['flux_maps_for_import']]
+        return {'A_sf_in': A_sf_in, 'eta_map': eta_map, 'flux_maps': flux_maps}
+    
+    
     # Calculate revenue
     def calculate_revenue(self):
+        """
+        Inputs:
+            ssc_time_steps_per_hour
+            sim_days
+            start_date
+            price_data
+            P_out_net
+            avg_price
+            avg_purchase_price
+
+        Outputs:
+            revenue
+        """
         nph = int(self.ssc_time_steps_per_hour)
         ndays = self.sim_days
         start = datetime.datetime(self.start_date.year, self.start_date.month, self.start_date.day) 
@@ -811,6 +764,33 @@ class CaseStudy:
     
     # Calculate penalty for missing day-ahead schedule (assuming day-ahead schedule step is 1-hour for now)
     def calculate_day_ahead_penalty(self):
+        """
+        Inputs:
+            sim_days
+            ssc_time_steps_per_hour
+            schedules
+            P_out_net
+            disp_net_electrical_output
+            disp_soln_tracking
+            disp_params_tracking
+            day_ahead_diff
+            day_ahead_ignore_off
+            day_ahead_tol_plus
+            day_ahead_tol_minus
+            day_ahead_pen_plus
+            day_ahead_pen_minus
+
+        Outputs:
+            day_ahead_diff
+            day_ahead_penalty
+            day_ahead_diff_over_tol_plus
+            day_ahead_diff_over_tol_minus
+            day_ahead_diff_ssc_disp_gross
+            day_ahead_penalty_tot
+            day_ahead_diff_tot
+        """
+
+
         ndays = self.sim_days
         nph = int(self.ssc_time_steps_per_hour)
 
@@ -862,39 +842,57 @@ class CaseStudy:
         self.day_ahead_diff_tot = {k:self.day_ahead_diff[k].sum() for k in self.day_ahead_diff.keys()}
         return
 
-
-
-    def find_starts(self, q_start, q_on):
-        n = len(q_start)
-        n_starts, n_starts_attempted = [0, 0]
-        is_starting = False
-        for j in range(1,n):
-            
-            if q_start[j] > 1.e-3 and q_start[j-1]<1.e-3:
-                is_starting = True
-                n_starts_attempted +=1
-            
-            if is_starting:
-                if q_on[j] > 1.e-3:  # Startup completed
-                    n_starts += 1
-                    is_starting = False
-                elif q_start[j] < 1.e-3: # Startup abandoned
-                    is_starting = False    
-                    
-        return n_starts, n_starts_attempted
-    
     
     def calculate_startup_ramping_penalty(self):
+        """
+        Inputs:
+            q_startup
+            Q_thermal
+            q_pb
+            P_cycle
+            q_dot_pc_startup
+            Crsu
+            Ccsu
+            C_delta_w
+
+        Outputs:
+            n_starts_rec
+            n_starts_rec_attempted
+            n_starts_cycle
+            n_starts_cycle_attempted
+            cycle_ramp_up
+            cycle_ramp_down
+            startup_ramping_penalty
+        """
+
+        def find_starts(q_start, q_on):
+            n = len(q_start)
+            n_starts, n_starts_attempted = [0, 0]
+            is_starting = False
+            for j in range(1,n):
+                
+                if q_start[j] > 1.e-3 and q_start[j-1]<1.e-3:
+                    is_starting = True
+                    n_starts_attempted +=1
+                
+                if is_starting:
+                    if q_on[j] > 1.e-3:  # Startup completed
+                        n_starts += 1
+                        is_starting = False
+                    elif q_start[j] < 1.e-3: # Startup abandoned
+                        is_starting = False    
+                        
+            return n_starts, n_starts_attempted
 
         #self.n_starts_rec = np.logical_and(self.results['q_startup'][1:]>1.e-3, self.results['q_startup'][0:-1] < 1.e-3).sum()  # Nonzero startup energy in step t and zero startup energy in t-1
         #self.n_starts_cycle =  np.logical_and(self.results['q_dot_pc_startup'][1:]>1.e-3, self.results['q_dot_pc_startup'][0:-1] < 1.e-3).sum()
         
-        self.n_starts_rec, self.n_starts_rec_attempted =  self.find_starts(self.results['q_startup'], self.results['Q_thermal'])
+        self.n_starts_rec, self.n_starts_rec_attempted =  find_starts(self.results['q_startup'], self.results['Q_thermal'])
 
         qpb_on = self.results['q_pb']   # Cycle thermal power includes startup
         inds_off = np.where(self.results['P_cycle']<1.e-3)[0]
         qpb_on[inds_off] = 0.0
-        self.n_starts_cycle, self.n_starts_cycle_attempted = self.find_starts(self.results['q_dot_pc_startup'], qpb_on)
+        self.n_starts_cycle, self.n_starts_cycle_attempted = find_starts(self.results['q_dot_pc_startup'], qpb_on)
 
         n = len(self.results['P_cycle'])
         self.cycle_ramp_up = 0.0
@@ -925,11 +923,115 @@ class CaseStudy:
                    'op_mode_1', 'op_mode_2', 'op_mode_3', 'q_dot_est_cr_on', 'q_dot_est_cr_su', 'q_dot_est_tes_dc', 'q_dot_est_tes_ch', 'q_dot_pc_target_on'
                    ]
     
+
     def default_disp_stored_vars(self):
         return ['cycle_on', 'cycle_standby', 'cycle_startup', 'receiver_on', 'receiver_startup', 'receiver_standby', 
                'receiver_power', 'thermal_input_to_cycle', 'electrical_output_from_cycle', 'net_electrical_output', 'tes_soc',
                'yrsd', 'ursd']
     
+
+
+
+
+    ########################################################################################################################################################
+    ### NOT USED: ####
+    #########################
+
+    def get_dispatch_targets_from_CD_actuals(self, use_avg_flow = False, set_rec_sb = False, ctrl_adj = False):
+        # initialize targets stucture
+        targets = dispatch.DispatchTargets()
+
+        CD_plot_data = ['Gross Power [MW]', 'Net Power [MW]', 'E charge TES [MWht]', 'Hot Tank Temp [C]', 'Cold Tank Temp [C]', 'Rec avg Tout [C]']
+        for key in CD_plot_data:
+            self.CD_data_for_plotting[key] = []
+
+        pc_on = []
+        need_last_hour = False
+        date = self.start_date
+        for i in range(self.sim_days+1): 
+            # Get data
+            data = util.read_CD_data(date, self.CD_raw_data_direc, self.CD_processed_data_direc)
+            if data is None:
+                return  None
+
+            if date == self.start_date and util.is_dst(date):
+                # drop the first hour -> standard time
+                data = data.iloc[60:]
+                need_last_hour = True
+            elif i == self.sim_days and need_last_hour:
+                data = data.iloc[:60]
+
+            cd = util.get_clean_CD_cycle_data(data)
+
+            if use_avg_flow:
+                targets.q_pc_target_on_in.extend(list(cd['Avg Q into cycle [MW]']))
+            else:
+                targets.q_pc_target_on_in.extend(list(cd['Q into cycle [MW]']))
+
+            ## Cycle start up binary
+            if ctrl_adj:
+                pc_su = np.array([1 if x > 25. else 0 for x in cd['Gross Power [MW]']])  # Is cycle running?
+            else:
+                pc_su = np.array([1 if x > 5. else 0 for x in cd['Gross Power [MW]']])  # Is cycle running?
+                
+            pc_on.extend(pc_su.tolist())
+
+            for ind in np.where(pc_su[:-1] != pc_su[1:])[0]:        # cycle changes condition
+                if pc_su[ind + 1] == 1:
+                    buffer = 20 #10
+                    pc_su[int(ind - self.plant.design['startup_time']*60 + buffer): ind+1] = 1   # push start-up forward
+
+            targets.is_pc_su_allowed_in.extend(pc_su.tolist())   # Is cycle running?
+
+            if set_rec_sb:
+                # Receiver stand-by operation - attempt to control standby by tank temperature
+                Nfbs = [1,2,3,4,5]
+                tstep = 1/60
+                dev = {}
+                for Nfb in Nfbs:
+                    dev[str(Nfb)] = [0]*Nfb
+                    for j in range(Nfb, len(cd['Cold Tank Temp [C]']) - Nfb):
+                        dev[str(Nfb)].append((cd['Cold Tank Temp [C]'].iloc[j+Nfb] - cd['Cold Tank Temp [C]'].iloc[j-Nfb])/2*Nfb*tstep)
+                    dev[str(Nfb)].extend([0.]*Nfb)
+                '''
+                import matplotlib.pyplot as plt
+                plt.figure()
+                for Nfb in Nfbs:
+                    plt.plot(dev[str(Nfb)], label = 'Nfb = ' + str(Nfb))
+                plt.legend(loc = 'lower left')
+                ax = plt.gca()
+                ax2 = ax.twinx()
+                ax2.plot(list(cd['Cold Tank Temp [C]']), label = 'Cold tank temp.')
+                plt.legend(loc = 'lower right')
+                plt.show()
+                '''
+                rec_sb = [1 if dTdt > 0.004 else 0 for dTdt in dev[str(1)]]
+                targets.is_rec_sb_allowed_in.extend(rec_sb)
+
+            for key in CD_plot_data:
+                self.CD_data_for_plotting[key].extend(list(cd[key]))
+
+            date += datetime.timedelta(days=1)  # advance a day
+        
+        max_pc_qin = (self.plant.design['P_ref']/self.plant.design['design_eff'])*self.plant.design['cycle_max_frac']
+        n = len(targets.is_pc_su_allowed_in)
+        targets.q_pc_target_on_in = [targets.q_pc_target_on_in[j] if pc_on[j] == 1 else 0.0 for j in range(n)]
+        targets.q_pc_target_su_in = [max_pc_qin if (targets.is_pc_su_allowed_in[j] == 1 and pc_on[j] == 0) else 0.0 for j in range(n)]
+        targets.q_pc_max_in = [max_pc_qin for j in range(n)]     
+        targets.is_pc_sb_allowed_in = [0 for j in range(n)]  # Cycle can not go into standby (using TES to keep cycle warm)
+        targets.is_rec_su_allowed_in = [1 for j in range(n)]  # Receiver can always start up if available energy
+        
+        if not set_rec_sb:
+            targets.is_rec_sb_allowed_in = [0 for j in range(n)]  # For now only allowing standby based on ssc determination from temperature threshold.  Specifying a value of 1 in any time period will force the receiver into standby regardless of temperature
+
+        return targets
+
+    def get_CD_NVE_day_ahead_schedule(self, date):
+        targets = util.read_NVE_schedule(date, self.CD_raw_data_direc)
+        if util.is_dst(date) and targets is not None: # First target in file is cumulative generation between 12am-1am PDT (11pm - 12am PST).  Ignore first point and read next-day file to define last point
+            targets2 = util.read_NVE_schedule(date+datetime.timedelta(days=1), self.CD_raw_data_direc)
+            targets = np.append(targets[1:], targets2[0])
+        return targets
     
     def save_results(self):
         # Save time series results
@@ -969,7 +1071,6 @@ class CaseStudy:
         np.savetxt(filename+ '_summary.csv', np.reshape(data, (1,len(data))), header = ','.join(keys), delimiter = ',', comments = '', fmt = '%.6f')
 
         return
-
 
 
     def load_results_from_file(self, filename):
@@ -1013,6 +1114,11 @@ class CaseStudy:
         return
 
 
+########################################################################################################################################################
+
+
+
+
 
 if __name__ == '__main__':
     os.chdir(os.path.dirname(__file__))
@@ -1022,7 +1128,7 @@ if __name__ == '__main__':
 
     start_date = datetime.datetime(2018, 10, 14)  
     sim_days = 1
-    save_outputs = True
+    save_outputs = False
     create_plot = True
     name = '2019_10_14'
 
