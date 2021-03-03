@@ -661,6 +661,8 @@ class CaseStudy:
                     assert math.isclose(sum(list(self.weather_data_for_dispatch['gh'])), 0, rel_tol=1e-4)
                     assert math.isclose(sum(list(self.weather_data_for_dispatch['tdry'])), 10522.8, rel_tol=1e-4)
 
+                util.write_dict_as_csv(D, csv_path='./mydictD.csv')
+
                 #--- Run ssc for dispatch estimates: (using weather forecast time resolution for weather data and specified ssc time step)
                 R_est = dispatch.estimates_for_dispatch_model(
                     plant_design = D,
