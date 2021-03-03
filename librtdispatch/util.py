@@ -10,7 +10,12 @@ from pvlib import solarposition
 
 import ssc_wrapper
 
-
+def write_dict_as_csv(mydict, csv_path='./mydict.csv'):
+    import csv
+    with open(csv_path, 'w') as csv_file:  
+        writer = csv.writer(csv_file)
+        for key, value in mydict.items():
+            writer.writerow([key, value])
 
 # Get day of year (0-indexed, date is datetime.datetime)
 def get_day_of_year(date):
