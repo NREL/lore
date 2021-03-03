@@ -1,7 +1,8 @@
+import sys, os
+sys.path.insert(1, os.path.join(sys.path[0], '..'))
 
 import numpy as np
 from math import ceil, cos
-import os
 import pandas as pd
 import pickle
 import zipfile
@@ -9,6 +10,7 @@ import datetime
 from pvlib import solarposition
 
 import ssc_wrapper
+import loredash.mediation.plant as plant
 
 def write_dict_as_csv(mydict, csv_path='./mydict.csv'):
     import csv
@@ -401,9 +403,8 @@ def read_NVE_schedule(date, raw_data_direc):
 
 
 # Get plant state at 12am standard time (1am local time if during DST)
-def get_initial_state_from_CD_data(date, raw_data_direc, processed_data_direc, design, properties):
-    state = ssc_wrapper.PlantState()
-    state.set_default(design, properties)  # Use to set quantities not easily derived from CD data (startup energy inventory, state persistence, etc.)
+def get_initial_state_from_CD_data(date, raw_data_direc, processed_data_direc, design):
+    state = plant.plant_initial_state
     
     data = read_CD_data(date, raw_data_direc, processed_data_direc)
     if data is None:

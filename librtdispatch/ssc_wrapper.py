@@ -1,3 +1,6 @@
+import sys, os
+sys.path.insert(1, os.path.join(sys.path[0], '..'))
+
 import PySSC as api
 import copy
 import numpy as np
@@ -5,6 +8,7 @@ import numpy as np
 import util
 import dispatch
 from mspt_2020_defaults import vartab as V
+import loredash.mediation.plant as plant
 
 
 class PlantState:
@@ -175,7 +179,7 @@ def call_ssc(D, retvars = ['gen'], plant_state_pt = -1, npts = None):
     Vt = copy.deepcopy(V)
     Vt.update(D)
     set_ssc_data_from_dict(ssc, dat, Vt)
-
+    
     if ssc.module_exec(mspt, dat) == 0:
         print ('Simulation error')
         idx = 1
@@ -200,8 +204,7 @@ def call_ssc(D, retvars = ['gen'], plant_state_pt = -1, npts = None):
             R[k] = np.array(R[k])
                 
     # Save plant state at designated time point
-    plant_state = PlantState()
-    plant_state.set_from_ssc(ssc, dat, plant_state_pt)
+    plant_state = plant.Plant.set_from_ssc(ssc, dat, plant_state_pt)
     
     ssc.module_free(mspt)
     ssc.data_free(dat)   
