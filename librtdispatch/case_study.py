@@ -23,25 +23,27 @@ class CaseStudy:
         #--- Plant design and operating properties      
         self.plant = plant.Plant(design=plant.plant_design, initial_state=plant.plant_initial_state)   # Default parameters contain best representation of CD plant and dispatch properties
 
+
+        ## DISPATCH INPUTS ###############################################################################################################################
         #--- Simulation start point and duration
         self.start_date = datetime.datetime(2018, 8, 31)   # Start date for simulations
         self.sim_days = 2                                  # Number of days to simulate
         self.set_initial_state_from_CD_data = True         # Set initial plant state based on CD data?
         
         
+        ## DISPATCH PARAMETERS ###########################################################################################################################
         #--- Control conditions
-        self.is_optimize = True        # Use dispatch optimziation
-        self.control_field = 'ssc'     #'CD_data' = use CD data to control heliostats tracking, heliostats offline, and heliostat daily reflectivity.  Receiver startup time is set to zero so that simulated receiver starts when CD tracking begins
-                                       #'ssc' = allow ssc to control heliostat field operations, assuming all heliostats are available
+        self.is_optimize = True                         # Use dispatch optimziation
+        self.control_field = 'ssc'                      #'CD_data' = use CD data to control heliostats tracking, heliostats offline, and heliostat daily reflectivity.  Receiver startup time is set to zero so that simulated receiver starts when CD tracking begins
+                                                        #'ssc' = allow ssc to control heliostat field operations, assuming all heliostats are available
                                        
-        self.control_receiver = 'ssc_clearsky'    #'CD_data' = use CD data to control receiver mass flow. Receiver startup time is set to zero so that simulated receiver starts when CD receiver finishes startup
-                                                  #'ssc_clearsky' = use expected clearsky DNI to control receiver mass flow.  If field_control = 'ssc' then the historical median startup time from CD data will be used to control receiver startup
-                                                  #'ssc_actual_dni' = use actual DNI to control receiver mass flow.  If field_control = 'ssc' then the historical median startup time from CD data will be used to control receiver startup   
+        self.control_receiver = 'ssc_clearsky'          #'CD_data' = use CD data to control receiver mass flow. Receiver startup time is set to zero so that simulated receiver starts when CD receiver finishes startup
+                                                        #'ssc_clearsky' = use expected clearsky DNI to control receiver mass flow.  If field_control = 'ssc' then the historical median startup time from CD data will be used to control receiver startup
+                                                        #'ssc_actual_dni' = use actual DNI to control receiver mass flow.  If field_control = 'ssc' then the historical median startup time from CD data will be used to control receiver startup   
 
-        self.control_cycle = 'ssc_heuristic'     # Only used if is_optimize = False
-                                                 # 'CD_data' = use CD actual cycle operation to control cycle dispatch targets
-                                                 # 'ssc_heuristic' = allow ssc heuristic (no consideration of TOD price) to control cycle dispatch
-
+        self.control_cycle = 'ssc_heuristic'            # Only used if is_optimize = False
+                                                        # 'CD_data' = use CD actual cycle operation to control cycle dispatch targets
+                                                        # 'ssc_heuristic' = allow ssc heuristic (no consideration of TOD price) to control cycle dispatch
 
         #--- Time steps, time horizons, and update intervals
         self.ssc_time_steps_per_hour = 60               # Simulation time resolution in ssc (1min)
@@ -80,28 +82,22 @@ class CaseStudy:
         self.day_ahead_tol_minus = 5                    # Tolerance for under-production relative to day-ahead schedule before incurring penalty (MWhe)
         self.day_ahead_ignore_off = True                # Don't apply schedule penalties when cycle is scheduled to be off for the full hour (MWhe)
 
-        
         #--- Field, receiver, and cycle simulation options
-        self.use_CD_measured_reflectivity = True  # Use measured heliostat reflectivity from CD data
-        self.fixed_soiling_loss = 0.035            # Fixed soiling loss (if not using CD measured reflectivity) = 1 - (reflectivity / clean_reflectivity)
-        self.use_transient_startup = False  # TODO: Disabling transient startup -> ssc not yet configured to start/stop calculations in the middle of startup with this model
-        self.use_transient_model = False    # TODO: Disabling transient receiver model -> ssc not yet configured to store/retrieve receiver temperature profiles
-        self.cycle_type = 'user_defined'   # 'user-defined', 'sliding', or 'fixed'
-
-
+        self.use_CD_measured_reflectivity = True        # Use measured heliostat reflectivity from CD data
+        self.fixed_soiling_loss = 0.035                 # Fixed soiling loss (if not using CD measured reflectivity) = 1 - (reflectivity / clean_reflectivity)
+        self.use_transient_startup = False              # TODO: Disabling transient startup -> ssc not yet configured to start/stop calculations in the middle of startup with this model
+        self.use_transient_model = False                # TODO: Disabling transient receiver model -> ssc not yet configured to store/retrieve receiver temperature profiles
+        self.cycle_type = 'user_defined'                # 'user-defined', 'sliding', or 'fixed'
 
         #--- Input data files: weather, masslow, clearsky DNI must have length of full annual array based on ssc time step size
         self.user_defined_cycle_input_file = 'udpc_noTamb_dependency.csv'  # Only required if cycle_type is user_defined
-        self.price_multiplier_file = 'prices_flat.csv'   # TODO: File containing annual price multipliers
-        self.ground_truth_weather_file = '../model-validation/input_files/weather_files/ssc_weatherfile_1min_2018.csv'  # Weather file derived from CD data: DNI, ambient temperature, wind speed, etc. are averaged over 4 CD weather stations, after filtering DNI readings for bad measurements. 
-        self.clearsky_file = '../model-validation/input_files/weather_files/clearsky_pvlib_ineichen_1min_2018.csv'      # Expected clear-sky DNI from Ineichen model (via pvlib).  
-        self.CD_mflow_path1_file = '../model-validation/input_files/mflow_path1_2018_1min.csv'                          # File containing CD data for receiver path 1 mass flow rate (note, all values are zeros on days without data)
-        self.CD_mflow_path2_file = '../model-validation/input_files/mflow_path2_2018_1min.csv'                          # File containing CD data for receiver path 2 mass flow rate (note, all values are zeros on days without data)
-        
+        self.price_multiplier_file = 'prices_flat.csv'  # TODO: File containing annual price multipliers
+        self.ground_truth_weather_file = './model-validation/input_files/weather_files/ssc_weatherfile_1min_2018.csv'  # Weather file derived from CD data: DNI, ambient temperature, wind speed, etc. are averaged over 4 CD weather stations, after filtering DNI readings for bad measurements. 
+        self.clearsky_file = './model-validation/input_files/weather_files/clearsky_pvlib_ineichen_1min_2018.csv'      # Expected clear-sky DNI from Ineichen model (via pvlib).  
+        self.CD_mflow_path1_file = './model-validation/input_files/mflow_path1_2018_1min.csv'                          # File containing CD data for receiver path 1 mass flow rate (note, all values are zeros on days without data)
+        self.CD_mflow_path2_file = './model-validation/input_files/mflow_path2_2018_1min.csv'                          # File containing CD data for receiver path 2 mass flow rate (note, all values are zeros on days without data)        
         self.CD_raw_data_direc = '../../../Crescent Dunes data/NREL - CD collaboration/Steam Generation/Daily Reports/'  # Directory containing raw data files from CD
         self.CD_processed_data_direc = '../../../Crescent Dunes data/Daily operations data/'                             # Directory containing files with 1min data already extracted
-
-        self.CD_data_for_plotting = {}  # Only used if control_cycle = 'CD_data' 
 
         #--- Miscellaneous
         self.store_full_dispatch_solns = True           # Store full dispatch input parameters and solutions for each call to the dispatch model
@@ -109,15 +105,22 @@ class CaseStudy:
         self.is_debug = isdebug                         # Reduce resolution in flux profile for faster solution
         self.save_results_to_file = False               # Save results to file
         self.results_file = 'case_study'                # Filename to save results: 
-        
-        
-        
-        #--- Calculated values
-        self.dispatch_params = dispatch.DispatchParams()            # Structure to contain all inputs for dispatch model 
-        self.ssc_dispatch_targets = dispatch.DispatchTargets()   # Structure to contain dispatch targets used for ssc
 
+
+        ## DISPATCH PERSISTING INTERMEDIARIES ############################################################################################################
+        self.dispatch_params = dispatch.DispatchParams() # Structure to contain all inputs for dispatch model 
         self.current_time = 0                           # Current time (tracked in standard time, not local time)
         self.is_initialized = False                     # Has solution already been initalized?        
+        self.ursd_last = []
+        self.yrsd_last = []
+        self.CD_data_for_plotting = {}                  # Only used if control_cycle = 'CD_data' 
+
+
+        ## DISPATCH OUTPUTS FOR INPUT INTO SSC ###########################################################################################################
+        # see: ssc_dispatch_targets, which is a dispatch.DispatchTargets object
+
+
+        ## SSC OUTPUTS ###################################################################################################################################
         self.results = None                             # Results
 
         self.current_day_schedule = []                  # Committed day-ahead generation schedule for current day (MWe)
@@ -129,29 +132,26 @@ class CaseStudy:
         self.plant_state_tracking = []                  # List to store plant state at the start of each call to the dispatch model
         self.infeasible_count = 0
         
-        self.revenue = 0.0                      # Revenue over simulated days ($)
-        self.startup_ramping_penalty = 0.0      # Startup and ramping penalty over all simulated days ($)
-        self.day_ahead_penalty_tot = {}         # Penalty for missing schedule over all simulated days ($)
-        self.day_ahead_diff_tot = {}            # Total difference between actual and scheduled generation (MWhe)
-        self.day_ahead_diff_over_tol_plus = {}  # Total (positive) difference between actual and scheduled generation over tolerance (MWhe)
-        self.day_ahead_diff_over_tol_minus = {} # Total (negative) difference between actual and scheduled generation over tolerance (MWhe)
+        self.revenue = 0.0                              # Revenue over simulated days ($)
+        self.startup_ramping_penalty = 0.0              # Startup and ramping penalty over all simulated days ($)
+        self.day_ahead_penalty_tot = {}                 # Penalty for missing schedule over all simulated days ($)
+        self.day_ahead_diff_tot = {}                    # Total difference between actual and scheduled generation (MWhe)
+        self.day_ahead_diff_over_tol_plus = {}          # Total (positive) difference between actual and scheduled generation over tolerance (MWhe)
+        self.day_ahead_diff_over_tol_minus = {}         # Total (negative) difference between actual and scheduled generation over tolerance (MWhe)
         
-        self.day_ahead_diff = []                 # Difference between net generation and scheduled net generation (MWhe)
-        self.day_ahead_penalty = []              # Penalty for difference between net generation and scheduled net generation (MWhe)
-        self.day_ahead_diff_ssc_disp_gross = []  # Difference between ssc and dispatch gross generation in schedule time steps (MWhe)
+        self.day_ahead_diff = []                        # Difference between net generation and scheduled net generation (MWhe)
+        self.day_ahead_penalty = []                     # Penalty for difference between net generation and scheduled net generation (MWhe)
+        self.day_ahead_diff_ssc_disp_gross = []         # Difference between ssc and dispatch gross generation in schedule time steps (MWhe)
         
-        self.n_starts_rec = 0               # Number of receiver starts
-        self.n_starts_rec_attempted = 0     # Number of receiver starts, including those not completed
-        self.n_starts_cycle = 0             # Number of cycle starts
-        self.n_starts_cycle_attempted = 0   # Number of cycle starts, including those not completed
-        self.cycle_ramp_up = 0              # Cycle ramp-up (MWe)
-        self.cycle_ramp_down = 0            # Cycle ramp-down (MWe)
-        self.total_receiver_thermal = 0     # Total thermal energy from receiver (GWht)
-        self.total_cycle_gross = 0          # Total gross generation by cycle (GWhe)
-        self.total_cycle_net = 0            # Total net generation by cycle (GWhe)
-
-        self.ursd_last = []
-        self.yrsd_last = []
+        self.n_starts_rec = 0                           # Number of receiver starts
+        self.n_starts_rec_attempted = 0                 # Number of receiver starts, including those not completed
+        self.n_starts_cycle = 0                         # Number of cycle starts
+        self.n_starts_cycle_attempted = 0               # Number of cycle starts, including those not completed
+        self.cycle_ramp_up = 0                          # Cycle ramp-up (MWe)
+        self.cycle_ramp_down = 0                        # Cycle ramp-down (MWe)
+        self.total_receiver_thermal = 0                 # Total thermal energy from receiver (GWht)
+        self.total_cycle_gross = 0                      # Total gross generation by cycle (GWhe)
+        self.total_cycle_net = 0                        # Total net generation by cycle (GWhe)
 
         return
 
@@ -246,9 +246,10 @@ class CaseStudy:
             else:  # Run full time horizon in a single simulation
                 R, state = ssc_wrapper.call_ssc(D, retvars, npts = ntot)  
         elif self.control_cycle == 'CD_data':
-            retvars += vars(self.ssc_dispatch_targets).keys()
-            self.ssc_dispatch_targets  = self.get_dispatch_targets_from_CD_actuals(use_avg_flow=True)
-            D.update(vars(self.ssc_dispatch_targets))
+            ssc_dispatch_targets = dispatch.DispatchTargets()   # Structure to contain dispatch targets used for ssc
+            retvars += vars(ssc_dispatch_targets).keys()
+            ssc_dispatch_targets  = self.get_dispatch_targets_from_CD_actuals(use_avg_flow=True)
+            D.update(vars(ssc_dispatch_targets))
             R, state = ssc_wrapper.call_ssc(D, retvars, npts = ntot)  
             
             
@@ -302,8 +303,8 @@ class CaseStudy:
         retvars = self.default_ssc_return_vars()
         retvars_disp = self.default_disp_stored_vars()
         if self.is_optimize:
-            retvars += vars(self.ssc_dispatch_targets).keys()
-        R = {k:np.zeros(ntot) for k in retvars}    
+            retvars += vars(dispatch.DispatchTargets()).keys()
+        R = {k:np.zeros(ntot) for k in retvars}
         for k in retvars_disp:
             R['disp_'+k] =np.zeros(ntot)
         self.disp_params_tracking = []
@@ -458,7 +459,6 @@ class CaseStudy:
 
                     #--- Set ssc dispatch targets
                     ssc_dispatch_targets = dispatch.DispatchTargets(dispatch_soln, self.plant, self.dispatch_params, sscstep, freq/3600.)
-                    D.update(vars(ssc_dispatch_targets))
 
                     if j == 0 and toy + horizon == 24796800:
                         assert hash(tuple(ssc_dispatch_targets.is_pc_sb_allowed_in)) == -4965923453060612375
@@ -476,7 +476,13 @@ class CaseStudy:
                 else:  # Infeasible solution was returned, revert back to running ssc without dispatch targets
                     pass
 
+
+            ################################
             #--- Run ssc and collect results
+            ################################
+            if self.is_optimize and dispatch_soln is not None:
+                D.update(vars(ssc_dispatch_targets))
+
             D['time_stop'] = toy+freq
             Rsub, new_plant_state = ssc_wrapper.call_ssc(D, retvars, plant_state_pt = napply-1, npts = napply)
             
