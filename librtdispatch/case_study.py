@@ -16,6 +16,7 @@ import ssc_wrapper
 import loredash.mediation.plant as plant
 
 
+## Put code here in CaseStudy that will be in mediation.
 class CaseStudy:
     def __init__(self, isdebug = False):
 
@@ -161,8 +162,10 @@ class CaseStudy:
     #--- Run simulation
     def run(self, rerun_flux_maps = False):
 
+        self.current_time = datetime.datetime(self.start_date.year, self.start_date.month, self.start_date.day)  # Start simulation at midnight (standard time) on the specifed day.  Note that annual arrays derived from CD data will not have "real" data after 11pm standard time during DST (unless data also exists for the following day)
         self.initialize()
-            
+        
+        #-- Calculate flux maps
         if self.plant.flux_maps['A_sf_in'] == 0.0 or rerun_flux_maps:
             self.plant.flux_maps = CaseStudy.simulate_flux_maps(
                 plant_design = self.plant.design,
@@ -173,17 +176,10 @@ class CaseStudy:
             assert math.isclose(self.plant.flux_maps['A_sf_in'], 1172997, rel_tol=1e-4)
             assert math.isclose(np.sum(self.plant.flux_maps['eta_map']), 10385.8, rel_tol=1e-4)
             assert math.isclose(np.sum(self.plant.flux_maps['flux_maps']), 44.0, rel_tol=1e-4)
-            
-        self.current_time = datetime.datetime(self.start_date.year, self.start_date.month, self.start_date.day)  # Start simulation at midnight (standard time) on the specifed day.  Note that annual arrays derived from CD data will not have "real" data after 11pm standard time during DST (unless data also exists for the following day)
-        start_time = util.get_time_of_year(self.current_time)  # Time (sec) elapsed since beginning of year
-        
-        ntot = self.sim_days*24*self.ssc_time_steps_per_hour  # Total number of time points in solution
-        retvars = self.default_ssc_return_vars()
 
         D = self.plant.design.copy()
-        D['A_sf_in'] = self.plant.flux_maps['A_sf_in']
-        D['eta_map'] = self.plant.flux_maps['eta_map']
-        D['flux_maps'] = self.plant.flux_maps['flux_maps']
+        D.update(self.plant.state)
+        D.update(self.plant.flux_maps)
         D['ppa_multiplier_model'] = 1
         D['dispatch_factors_ts'] = self.price_data
         D['time_steps_per_hour'] = self.ssc_time_steps_per_hour
@@ -195,17 +191,17 @@ class CaseStudy:
         D['eta_map_aod_format'] = False
         D['is_rec_to_coldtank_allowed'] = True
         D['rec_control_per_path'] = True
-
-        #--- Initialize plant state at the start of the simulation period
-        D.update(self.plant.state)
-        
-        #--- Set field control parameters
+        D['is_dispatch'] = 0    # Always disable dispatch optimization in ssc
+        D['is_dispatch_targets'] = True if (self.is_optimize or self.control_cycle == 'CD_data') else False
+        D['time_start'] = util.get_time_of_year(self.current_time)  # Time (sec) elapsed since beginning of year
+        D['time_stop'] = D['time_start'] + self.sim_days*24*3600
         D['sf_adjust:hourly'] = self.get_field_availability_adjustment(self.ssc_time_steps_per_hour, self.current_time.year)
+
+        #--- Set field control parameters
         if self.control_field == 'CD_data':
             D['is_rec_startup_trans'] = False
             D['rec_su_delay'] = 0.01   # Set receiver start time and energy to near zero to enforce CD receiver startup timing
             D['rec_qf_delay'] = 0.01
-            
 
         #--- Set receiver control parameters
         if self.control_receiver == 'CD_data':
@@ -231,20 +227,21 @@ class CaseStudy:
             D['rec_clearsky_fraction'] = 0.0
 
 
-        #--- Set cycle control parameters and run simulation
-        D['is_dispatch'] = 0    # Always disable dispatch optimization in ssc
-        D['is_dispatch_targets'] = True if (self.is_optimize or self.control_cycle == 'CD_data') else False
-        D['time_start'] = start_time
-        D['time_stop'] = start_time + self.sim_days*24*3600   
+
 
         if self.is_optimize:
-            R = self.run_rolling_horizon(D, self.sim_days*24)       ## THIS IS WHAT'S BEING RUN
+            ## THIS IS WHAT'S BEING RUN
+            R = self.run_rolling_horizon(D, self.sim_days*24)
         elif self.control_cycle == 'ssc_heuristic':
             if self.force_rolling_horizon:  # Run with rolling horizon (not necessary, but useful for debugging)
                 R = self.run_rolling_horizon(D, self.sim_days*24)
             else:  # Run full time horizon in a single simulation
+                ntot = self.sim_days*24*self.ssc_time_steps_per_hour  # Total number of time points in solution
+                retvars = self.default_ssc_return_vars()
                 R, state = ssc_wrapper.call_ssc(D, retvars, npts = ntot)  
         elif self.control_cycle == 'CD_data':
+            ntot = self.sim_days*24*self.ssc_time_steps_per_hour  # Total number of time points in solution
+            retvars = self.default_ssc_return_vars()
             ssc_dispatch_targets = dispatch.DispatchTargets()   # Structure to contain dispatch targets used for ssc
             retvars += vars(ssc_dispatch_targets).keys()
             ssc_dispatch_targets  = self.get_dispatch_targets_from_CD_actuals(use_avg_flow=True)
@@ -254,6 +251,7 @@ class CaseStudy:
             
         self.results = R
         
+
         # Read NVE schedules (if not already read during rolling horizon calculations)
         if self.is_optimize == False and self.use_day_ahead_schedule and self.day_ahead_schedule_from == 'NVE':
             date = datetime.datetime(self.start_date.year, self.start_date.month, self.start_date.day) 
@@ -261,10 +259,12 @@ class CaseStudy:
                 newdate = date + datetime.timedelta(days = j)
                 self.schedules.append(self.get_CD_NVE_day_ahead_schedule(newdate))
 
+        # Calculate post-simulation financials
         self.calculate_revenue()
         self.calculate_day_ahead_penalty()
         self.calculate_startup_ramping_penalty()
         
+        # Aggregate totals
         self.total_receiver_thermal = self.results['Q_thermal'].sum() * 1.e-3 * (1./self.ssc_time_steps_per_hour)
         self.total_cycle_gross = self.results['P_cycle'].sum() * 1.e-3 * (1./self.ssc_time_steps_per_hour)
         self.total_cycle_net = self.results['P_out_net'].sum() * 1.e-3 * (1./self.ssc_time_steps_per_hour)
