@@ -650,6 +650,16 @@ class CaseStudy:
                     dispatch_horizon = self.dispatch_weather_horizon
                     )
 
+                if j == 0 and toy + horizon == 24796800:
+                    assert math.isclose(self.weather_data_for_dispatch['tz'], -8, rel_tol=1e-4)
+                    assert math.isclose(self.weather_data_for_dispatch['elev'], 1497.2, rel_tol=1e-4)
+                    assert math.isclose(self.weather_data_for_dispatch['lat'], 38.24, rel_tol=1e-4)
+                    assert math.isclose(self.weather_data_for_dispatch['lon'], -117.36, rel_tol=1e-4)
+                    assert math.isclose(sum(list(self.weather_data_for_dispatch['dn'])), 526513.7, rel_tol=1e-4)
+                    assert math.isclose(sum(list(self.weather_data_for_dispatch['df'])), 0, rel_tol=1e-4)
+                    assert math.isclose(sum(list(self.weather_data_for_dispatch['gh'])), 0, rel_tol=1e-4)
+                    assert math.isclose(sum(list(self.weather_data_for_dispatch['tdry'])), 10522.8, rel_tol=1e-4)
+
                 #--- Run ssc for dispatch estimates: (using weather forecast time resolution for weather data and specified ssc time step)
                 R_est = dispatch.estimates_for_dispatch_model(
                     plant_design = D,
@@ -660,6 +670,12 @@ class CaseStudy:
                     clearsky_data = self.clearsky_data,
                     start_pt = startpt
                 )
+
+                if j == 0 and toy + horizon == 24796800:
+                    assert math.isclose(sum(list(R_est["Q_thermal"])), 230346, rel_tol=1e-4)
+                    assert math.isclose(sum(list(R_est["m_dot_rec"])), 599416, rel_tol=1e-4)
+                    assert math.isclose(sum(list(R_est["clearsky"])), 543582, rel_tol=1e-4)
+                    assert math.isclose(sum(list(R_est["P_tower_pump"])), 2460.8, rel_tol=1e-4)
 
                 #--- Set dispatch optimization properties for this time horizon using ssc estimates
                 disp_in = dispatch.setup_dispatch_model(
@@ -700,6 +716,15 @@ class CaseStudy:
                     
                 dispatch_soln = dispatch.run_dispatch_model(disp_in, include)
 
+                if j == 0 and toy + horizon == 24796800:
+                    assert math.isclose(sum(list(dispatch_soln.cycle_on)), 16, rel_tol=1e-4)
+                    assert math.isclose(sum(list(dispatch_soln.cycle_startup)), 2, rel_tol=1e-4)
+                    assert math.isclose(sum(list(dispatch_soln.drsu)), 2.15, rel_tol=1e-4)
+                    assert math.isclose(sum(list(dispatch_soln.electrical_output_from_cycle)), 1731858, rel_tol=1e-4)
+                    assert math.isclose(sum(list(dispatch_soln.frsu)), 1.15, rel_tol=1e-4)
+                    assert math.isclose(dispatch_soln.objective_value, 206946.6, rel_tol=1e-4)
+                    assert math.isclose(dispatch_soln.s0, 832639.4, rel_tol=1e-4)
+
                 if dispatch_soln is not None:
                     if self.use_day_ahead_schedule and self.day_ahead_schedule_from == 'calculated' and tod/3600 == self.day_ahead_schedule_time:
                         self.next_day_schedule = dispatch.get_day_ahead_schedule(
@@ -717,37 +742,21 @@ class CaseStudy:
                     ssc_dispatch_targets = dispatch.DispatchTargets(dispatch_soln, self.design, self.properties, self.dispatch_params, sscstep, freq/3600.)
                     D.update(vars(ssc_dispatch_targets))
 
+                    if j == 0 and toy + horizon == 24796800:
+                        assert hash(tuple(ssc_dispatch_targets.is_pc_sb_allowed_in)) == -4965923453060612375
+                        assert hash(tuple(ssc_dispatch_targets.is_pc_su_allowed_in)) == -4965923453060612375
+                        assert hash(tuple(ssc_dispatch_targets.is_rec_sb_allowed_in)) == -4965923453060612375
+                        assert hash(tuple(ssc_dispatch_targets.is_rec_su_allowed_in)) == -4965923453060612375
+                        assert hash(tuple(ssc_dispatch_targets.q_pc_max_in)) == -709626543671595165
+                        assert hash(tuple(ssc_dispatch_targets.q_pc_target_on_in)) == -4965923453060612375
+                        assert hash(tuple(ssc_dispatch_targets.q_pc_target_su_in)) == -4965923453060612375
+
                     #--- Save these values for next estimates
                     self.ursd_last = dispatch_soln.get_value_at_time(self.dispatch_params, freq/3600, 'ursd')      # set to False when it doesn't exists 
                     self.yrsd_last = dispatch_soln.get_value_at_time(self.dispatch_params, freq/3600, 'yrsd')      # set to False when it doesn't exists
 
                 else:  # Infeasible solution was returned, revert back to running ssc without dispatch targets
                     pass
-                    # print ('Infeasible dispatch solution')
-                    # D['is_dispatch_targets'] = False
-                    # if self.store_full_dispatch_solns:  # Store complete dispatch solutions for debugging
-                    #     self.disp_params_tracking.append(deepcopy(self.dispatch_params))
-                    #     self.disp_soln_tracking.append(None)
-                    #     self.plant_state_tracking.append(deepcopy(self.plant_state))
-                    #     self.infeasible_count+=1
-
-
-                # Some intermediate regression tests for refactoring purposes
-                if j == 0 and toy + horizon == 24796800:
-                    assert math.isclose(sum(list(R_est["Q_thermal"])), 230346, rel_tol=1e-4)
-                    assert math.isclose(sum(list(R_est["m_dot_rec"])), 599416, rel_tol=1e-4)
-                    assert math.isclose(sum(list(R_est["clearsky"])), 543582, rel_tol=1e-4)
-                    assert math.isclose(sum(list(R_est["P_tower_pump"])), 2460.8, rel_tol=1e-4)
-
-                    assert hash(tuple(ssc_dispatch_targets.is_pc_sb_allowed_in)) == -4965923453060612375
-                    assert hash(tuple(ssc_dispatch_targets.is_pc_su_allowed_in)) == -4965923453060612375
-                    assert hash(tuple(ssc_dispatch_targets.is_rec_sb_allowed_in)) == -4965923453060612375
-                    assert hash(tuple(ssc_dispatch_targets.is_rec_su_allowed_in)) == -4965923453060612375
-                    assert hash(tuple(ssc_dispatch_targets.q_pc_max_in)) == -709626543671595165
-                    assert hash(tuple(ssc_dispatch_targets.q_pc_target_on_in)) == -4965923453060612375
-                    assert hash(tuple(ssc_dispatch_targets.q_pc_target_su_in)) == -4965923453060612375
-
-
 
             #--- Run ssc and collect results
             D['time_stop'] = toy+freq
@@ -763,6 +772,16 @@ class CaseStudy:
             for key,value in persistance_vars.items():
                 setattr(new_plant_state, key, value)
             self.plant_state = new_plant_state
+
+            if j == 0 and toy + horizon == 24796800:
+                assert math.isclose(self.plant_state.pc_startup_energy_remain_initial, 29339.9, rel_tol=1e-4)
+                assert math.isclose(self.plant_state.pc_startup_time_remain_init, 0.5, rel_tol=1e-4)
+                assert math.isclose(self.plant_state.rec_startup_energy_remain_init, 141250000, rel_tol=1e-4)
+                assert math.isclose(self.plant_state.rec_startup_time_remain_init, 1.15, rel_tol=1e-4)
+                assert math.isclose(self.plant_state.disp_rec_persist0, 1001, rel_tol=1e-4)
+                assert math.isclose(self.plant_state.disp_rec_off0, 1001, rel_tol=1e-4)
+                assert math.isclose(self.plant_state.disp_pc_persist0, 1001, rel_tol=1e-4)
+                assert math.isclose(self.plant_state.disp_pc_off0, 1001, rel_tol=1e-4)
 
             #--- Prune ssc and dispatch solutions in the current update interval and add to compiled results (R)
             for k in Rsub.keys():
