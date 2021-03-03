@@ -444,6 +444,10 @@ class CaseStudy:
                 ssc_time_steps_per_hour = self.ssc_time_steps_per_hour,
                 ground_truth_weather_data = self.ground_truth_weather_data
                 )
+
+            assert math.isclose(self.flux_maps.A_sf_in, 1172997, rel_tol=1e-4)
+            assert math.isclose(np.sum(self.flux_maps.eta_map), 10385.8, rel_tol=1e-4)
+            assert math.isclose(np.sum(self.flux_maps.flux_maps), 44.0, rel_tol=1e-4)
             
         self.current_time = datetime.datetime(self.start_date.year, self.start_date.month, self.start_date.day)  # Start simulation at midnight (standard time) on the specifed day.  Note that annual arrays derived from CD data will not have "real" data after 11pm standard time during DST (unless data also exists for the following day)
         start_time = util.get_time_of_year(self.current_time)  # Time (sec) elapsed since beginning of year
