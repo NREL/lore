@@ -20,6 +20,11 @@ class PowerCycleState(Enum):
 class Plant:
     def __init__(self, design, initial_state):
         self.design = {}
+        self.flux_maps = {
+            'A_sf_in':                              0.0,                                # m2 area of solar field
+            'eta_map':                              [],                                 # efficiency map
+            'flux_maps':                            [],                                 # flux maps
+        }
         self.state = {
             # Field and receiver:
             'is_field_tracking_init':               False,                              # Is field tracking?
@@ -401,7 +406,7 @@ plant_design = {
     'helio_reflectance':            0.943,          # Clean heliostat reflectivity
     'p_start':                      0.0,            # TODO: Heliostat field startup energy (per heliostat) (kWe-hr) Currently using SAM defaults, update based on CD data?
     'p_track':                      0.0477,         # Heliostat tracking power (per heliostat) (kWe)
-    # Adding these will change the results:
+    # Adding these here will change the results:
     # 'A_sf_in':                      0.0,            # m2 area of solar field, used with flux maps
     # 'eta_map':                      [],             # efficiency map, used with flux maps
     # 'flux_maps':                    [],             # flux maps
