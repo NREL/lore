@@ -568,10 +568,6 @@ class DispatchParams:
         return newparams
 
 
-
-
-
-#=============================================================================
 class DispatchSoln:
     def __init__(self, dispatch_results=None):
         self.objective_value = 0
@@ -837,6 +833,11 @@ def update_dispatch_weather_data(weather_data, replacement_real_weather_data, re
 
 
 def estimates_for_dispatch_model(plant_design, toy, horizon, weather_data, N_pts_horizon, clearsky_data, start_pt):
+    """
+    Outputs:
+        ssc_outputs         a 7-item dictionary of arrays, selected according to retvars
+    """
+
     D_est = plant_design.copy()
     D_est['time_stop'] = toy + horizon
     D_est['is_dispatch_targets'] = False
@@ -902,7 +903,7 @@ def setup_dispatch_model(R_est, freq, horizon, include_day_ahead_in_dispatch,
         dispatch_params.set_day_ahead_schedule(use_schedule, day_ahead_pen_plus/1000, day_ahead_pen_minus/1000)
         
 
-    #--- Run dispatch optimization and set ssc dispatch targets
+    #--- Create copy of params, and convert all lists and numpy arrays into dicts, where each value has a key equal to the index + 1
     disp_in = dispatch_params.copy_and_format_indexed_inputs()     # dispatch.DispatchParams object
 
     return disp_in
