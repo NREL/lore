@@ -155,7 +155,7 @@ class CaseStudy:
 
         for key,value in params.items():
             setattr(self, key, value)
-
+        
         return
 
 
@@ -163,11 +163,14 @@ class CaseStudy:
     
     #-------------------------------------------------------------------------
     #--- Run simulation
-    def run(self, rerun_flux_maps = False):
+    def run(self, start_date, sim_days, rerun_flux_maps = False):
+
+        self.start_date = start_date
+        self.sim_days = sim_days
 
         # Initialize and adjust above parameters
         self.initialize()
-        
+
         #-- Calculate flux maps
         if self.plant.flux_maps['A_sf_in'] == 0.0 or rerun_flux_maps:
             self.plant.flux_maps = CaseStudy.simulate_flux_maps(
@@ -1134,12 +1137,13 @@ if __name__ == '__main__':
     }
         
     cs = CaseStudy(params=params)
-    cs.start_date = datetime.datetime(2018, 10, 14)
-    cs.sim_days = 1
 
     start = timeit.default_timer()
-    cs.run()
+    #
+    cs.run(start_date=datetime.datetime(2018, 10, 14), sim_days=1)
+    #
     elapsed = timeit.default_timer() - start
+
     print ('Total time elapsed = %.2fs'%(timeit.default_timer() - start))
     print ('Receiver thermal generation = %.5f GWht'%cs.total_receiver_thermal)
     print ('Cycle gross generation = %.5f GWhe'%cs.total_cycle_gross )
