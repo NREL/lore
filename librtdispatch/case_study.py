@@ -163,7 +163,7 @@ class CaseStudy:
     #--- Run simulation
     def run(self, rerun_flux_maps = False):
 
-        self.current_time = datetime.datetime(self.start_date.year, self.start_date.month, self.start_date.day)  # Start simulation at midnight (standard time) on the specifed day.  Note that annual arrays derived from CD data will not have "real" data after 11pm standard time during DST (unless data also exists for the following day)
+        # Initialize and adjust above parameters
         self.initialize()
         
         #-- Calculate flux maps
@@ -475,8 +475,8 @@ class CaseStudy:
 
                 else:  # Infeasible solution was returned, revert back to running ssc without dispatch targets
                     pass
-
-
+            
+            
             ################################
             #--- Run ssc and collect results
             ################################
@@ -523,43 +523,48 @@ class CaseStudy:
 
     def initialize(self):
         
-        # Set cycle specifications (from model validation code)
-        if self.cycle_type == 'user_defined':
-            self.plant.design['P_ref'] = 120
-            self.plant.design['design_eff'] = 0.409
-            self.plant.design['T_htf_cold_des'] = 295.0 # [C]      # This sets design mass flowrate to that in CD's data
-            self.plant.design['pc_config'] = 1
-            with open(os.path.join(os.path.dirname(__file__), self.user_defined_cycle_input_file), 'r') as read_obj:
-                csv_reader = reader(read_obj)
-                self.plant.design['ud_ind_od'] = list(csv_reader)        
-            for i in range(len(self.plant.design['ud_ind_od'])):
-                self.plant.design['ud_ind_od'][i] = [float(item) for item in self.plant.design['ud_ind_od'][i]]
-                
-        elif self.cycle_type == 'sliding':  
-            ### For sliding pressure
-            ## These parameters work with heat input calculated using 290 as the lower temperature - however, there are a couple of controller issues
-            self.plant.design['P_ref'] = 125
-            self.plant.design['design_eff'] = 0.378
-            self.plant.design['tech_type'] = 3
-        
-        else:
-            ### For fixed pressure
-            self.plant.design['P_ref'] = 120.
-            self.plant.design['design_eff'] = 0.409  # 0.385
-            self.plant.design['tech_type'] = 1
+        self.current_time = datetime.datetime(self.start_date.year, self.start_date.month, self.start_date.day)  # Start simulation at midnight (standard time) on the specifed day.
+                                                                                                                 #  Note that annual arrays derived from CD data will not have
+                                                                                                                 #  "real" data after 11pm standard time during DST
+                                                                                                                 #  (unless data also exists for the following day)
+
+        def adjust_plant_design(plant_design, cycle_type, user_defined_cycle_input_file):
+            """Set cycle specifications (from model validation code)"""
+            if cycle_type == 'user_defined':
+                plant_design['P_ref'] = 120
+                plant_design['design_eff'] = 0.409
+                plant_design['T_htf_cold_des'] = 295.0 # [C]      # This sets design mass flowrate to that in CD's data
+                plant_design['pc_config'] = 1
+                with open(os.path.join(os.path.dirname(__file__), user_defined_cycle_input_file), 'r') as read_obj:
+                    csv_reader = reader(read_obj)
+                    plant_design['ud_ind_od'] = list(csv_reader)        
+                for i in range(len(plant_design['ud_ind_od'])):
+                    plant_design['ud_ind_od'][i] = [float(item) for item in plant_design['ud_ind_od'][i]]
+                    
+            elif cycle_type == 'sliding':  
+                ### For sliding pressure
+                ## These parameters work with heat input calculated using 290 as the lower temperature - however, there are a couple of controller issues
+                plant_design['P_ref'] = 125
+                plant_design['design_eff'] = 0.378
+                plant_design['tech_type'] = 3
             
+            else:
+                ### For fixed pressure
+                plant_design['P_ref'] = 120.
+                plant_design['design_eff'] = 0.409  # 0.385
+                plant_design['tech_type'] = 1
+            
+            return
+        
+        # Set cycle specifications (from model validation code)
+        # TODO: do we actually want to do this? I would assume not.
+        adjust_plant_design(self.plant.design, self.cycle_type, self.user_defined_cycle_input_file)
         
         # Check combinations of control conditions
         if self.is_optimize and (self.control_field == 'CD_data' or self.control_receiver == 'CD_data'):
             print ('Warning: Dispatch optimization is being used with field or receiver operation derived from CD data. Receiver can only operate when original CD receiver was operating')
         if self.control_receiver == 'CD_data' and self.control_field != 'CD_data':
             print ('Warning: Receiver flow is controlled from CD data, but field tracking fraction is controlled by ssc. Temperatures will likely be unrealistically high')
-
-        # Read in historical weather data
-        self.ground_truth_weather_data = util.read_weather_data(self.ground_truth_weather_file)
-        if self.ssc_time_steps_per_hour != 60:
-            self.ground_truth_weather_data = util.update_weather_timestep(self.ground_truth_weather_data, self.ssc_time_steps_per_hour)
-        
 
         # Read in annual arrays for clear-sky DNI, receiver mass flow, etc.
         self.clearsky_data = np.genfromtxt(self.clearsky_file)
@@ -569,15 +574,12 @@ class CaseStudy:
             self.clearsky_data = np.array(util.translate_to_new_timestep(self.clearsky_data, 1./60, 1./self.ssc_time_steps_per_hour))
             self.CD_mflow_path1_data = np.array(util.translate_to_new_timestep(self.CD_mflow_path1_data, 1./60, 1./self.ssc_time_steps_per_hour))
             self.CD_mflow_path2_data = np.array(util.translate_to_new_timestep(self.CD_mflow_path2_data, 1./60, 1./self.ssc_time_steps_per_hour))            
-        
-        
-        
-        price_multipliers = np.genfromtxt(self.price_multiplier_file)
-        if self.price_steps_per_hour != self.ssc_time_steps_per_hour:
-            price_multipliers = util.translate_to_new_timestep(price_multipliers, 1./self.price_steps_per_hour, 1./self.ssc_time_steps_per_hour)
-        pmavg = sum(price_multipliers)/len(price_multipliers)  
-        self.price_data = [self.avg_price*p/pmavg  for p in price_multipliers]  # Electricity price at ssc time steps ($/MWh)
 
+        # Read in historical weather data
+        self.ground_truth_weather_data = util.read_weather_data(self.ground_truth_weather_file)
+        if self.ssc_time_steps_per_hour != 60:
+            self.ground_truth_weather_data = util.update_weather_timestep(self.ground_truth_weather_data, self.ssc_time_steps_per_hour)
+        
         # Create annual weather data structure that will contain weather forecast data to be used during optimization (weather data filled with all zeros for now)
         self.current_forecast_weather_data = util.create_empty_weather_data(self.ground_truth_weather_data, self.ssc_time_steps_per_hour)
         self.weather_data_for_dispatch = util.create_empty_weather_data(self.ground_truth_weather_data, self.ssc_time_steps_per_hour)
@@ -586,13 +588,20 @@ class CaseStudy:
         forecast_time = self.start_date - datetime.timedelta(hours = 24-self.forecast_issue_time)
         self.update_forecast_weather_data(forecast_time)
 
-        # Initalize plant state
+        # Initialize price data
+        price_multipliers = np.genfromtxt(self.price_multiplier_file)
+        if self.price_steps_per_hour != self.ssc_time_steps_per_hour:
+            price_multipliers = util.translate_to_new_timestep(price_multipliers, 1./self.price_steps_per_hour, 1./self.ssc_time_steps_per_hour)
+        pmavg = sum(price_multipliers)/len(price_multipliers)  
+        self.price_data = [self.avg_price*p/pmavg  for p in price_multipliers]  # Electricity price at ssc time steps ($/MWh)
+
+        # Over-ride plant state if needed
+        # TODO: probably don't need this
         if self.set_initial_state_from_CD_data:
             initial_state = util.get_initial_state_from_CD_data(self.start_date, self.CD_raw_data_direc, self.CD_processed_data_direc, self.plant.design)
             if initial_state is not None:
                 self.plant.state = initial_state
 
-        
         # Initialize day-ahead generation schedules
         n = 24*self.day_ahead_schedule_steps_per_hour
         self.current_day_schedule = np.zeros(n)
@@ -600,9 +609,6 @@ class CaseStudy:
 
         self.is_initialized = True
         return
-
-
-        # Update forecasted weather data 
     
     
     def update_forecast_weather_data(self, date, offset30 = True):
