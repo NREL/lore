@@ -159,7 +159,8 @@ class CaseStudy:
 
 
     #------------------------------------------------------------------------
-    
+
+
     #-------------------------------------------------------------------------
     #--- Run simulation
     def run(self, start_date, sim_days, initial_plant_state=None):
@@ -182,53 +183,19 @@ class CaseStudy:
         D = self.plant.design.copy()
         D.update(self.plant.state)
         D.update(self.plant.flux_maps)
-        D['ppa_multiplier_model'] = 1
-        D['dispatch_factors_ts'] = self.price_data
-        D['time_steps_per_hour'] = self.ssc_time_steps_per_hour
-        D['is_rec_model_trans'] = self.use_transient_model
-        D['is_rec_startup_trans'] = self.use_transient_startup
-        D['rec_control_per_path'] = True
-        D['solar_resource_data'] = self.ground_truth_weather_data
-        D['field_model_type'] = 3
-        D['eta_map_aod_format'] = False
-        D['is_rec_to_coldtank_allowed'] = True
-        D['rec_control_per_path'] = True
-        D['is_dispatch'] = 0    # Always disable dispatch optimization in ssc
-        D['is_dispatch_targets'] = True if (self.is_optimize or self.control_cycle == 'CD_data') else False
         D['time_start'] = util.get_time_of_year(self.current_time)  # Time (sec) elapsed since beginning of year
         D['time_stop'] = D['time_start'] + self.sim_days*24*3600
         D['sf_adjust:hourly'] = self.get_field_availability_adjustment(self.ssc_time_steps_per_hour, self.current_time.year)
-
-        #--- Set field control parameters
-        if self.control_field == 'CD_data':
-            D['is_rec_startup_trans'] = False
-            D['rec_su_delay'] = 0.01   # Set receiver start time and energy to near zero to enforce CD receiver startup timing
-            D['rec_qf_delay'] = 0.01
-
-        #--- Set receiver control parameters
         if self.control_receiver == 'CD_data':
-            D['is_rec_user_mflow'] = True
-
             mult = np.ones_like(self.CD_mflow_path2_data)
             if not self.use_CD_measured_reflectivity:  # Scale mass flow based on simulated reflectivity vs. CD actual reflectivity
                 rho = (1-self.fixed_soiling_loss) * self.plant.design['helio_reflectance']   # Simulated heliostat reflectivity
                 CDavail = util.get_CD_soiling_availability(self.current_time.year, self.plant.design['helio_reflectance'] * 100)  # CD soiled / clean reflectivity (daily array)
                 mult = rho*np.ones(365) / (CDavail*self.plant.design['helio_reflectance'])  # Ratio of simulated / CD reflectivity
                 mult = np.repeat(mult, 24*self.ssc_time_steps_per_hour)  # Annual array at ssc resolution
-
             D['rec_user_mflow_path_1'] = (self.CD_mflow_path2_data * mult).tolist()  # Note ssc path numbers are reversed relative to CD path numbers
             D['rec_user_mflow_path_2'] = (self.CD_mflow_path1_data * mult).tolist()
-            D['is_rec_startup_trans'] = False
-            D['rec_su_delay'] = 0.01   # Set receiver start time and energy to near zero to enforce CD receiver startup timing
-            D['rec_qf_delay'] = 0.01            
-        elif self.control_receiver == 'ssc_clearsky':
-            D['rec_clearsky_fraction'] = 1.0
-            D['rec_clearsky_model'] = 0
-            D['rec_clearsky_dni'] = self.clearsky_data.tolist()
-        elif self.control_receiver == 'ssc_actual_dni':
-            D['rec_clearsky_fraction'] = 0.0
-
-
+        self.reupdate_constant_ssc_inputs(D)
 
         #-------------------------------------------------------------------------
         # Run simulation in a rolling horizon   
@@ -236,13 +203,13 @@ class CaseStudy:
         #      All dispatch time steps and time horizons are assumed to be an integer multiple of the ssc time step
         #      Time at which the weather forecast is updated coincides with the start of an optimization interval
         #      Time at which the day-ahead generation schedule is due coincides with the start of an optimization interval
-        total_horizon = self.sim_days*24
 
         #--- Calculate time-related values
         start_time = util.get_time_of_year(self.current_time)       # Time (sec) elapsed since beginning of year
         start_hour = int(start_time / 3600)                         # Time (hours) elapsed since beginning of year
         end_hour = start_hour + self.sim_days*24
         nph = int(self.ssc_time_steps_per_hour)                     # Number of time steps per hour
+        total_horizon = self.sim_days*24
         ntot = int(nph*total_horizon)                               # Total number of time points in full horizon
         napply = int(nph*self.dispatch_frequency)                   # Number of ssc time points accepted after each solution 
         nupdate = int(total_horizon / self.dispatch_frequency)      # Number of update intervals
@@ -700,6 +667,43 @@ class CaseStudy:
         return {'A_sf_in': A_sf_in, 'eta_map': eta_map, 'flux_maps': flux_maps}
     
     
+    def reupdate_constant_ssc_inputs(self, D):
+        D['ppa_multiplier_model'] = 1
+        D['dispatch_factors_ts'] = self.price_data
+        D['time_steps_per_hour'] = self.ssc_time_steps_per_hour
+        D['is_rec_model_trans'] = self.use_transient_model
+        D['is_rec_startup_trans'] = self.use_transient_startup
+        D['rec_control_per_path'] = True
+        D['solar_resource_data'] = self.ground_truth_weather_data
+        D['field_model_type'] = 3
+        D['eta_map_aod_format'] = False
+        D['is_rec_to_coldtank_allowed'] = True
+        D['rec_control_per_path'] = True
+        D['is_dispatch'] = 0    # Always disable dispatch optimization in ssc
+        D['is_dispatch_targets'] = True if (self.is_optimize or self.control_cycle == 'CD_data') else False
+
+        #--- Set field control parameters
+        if self.control_field == 'CD_data':
+            D['is_rec_startup_trans'] = False
+            D['rec_su_delay'] = 0.01            # Set receiver start time and energy to near zero to enforce CD receiver startup timing
+            D['rec_qf_delay'] = 0.01
+
+        #--- Set receiver control parameters
+        if self.control_receiver == 'CD_data':
+            D['is_rec_user_mflow'] = True
+            D['is_rec_startup_trans'] = False
+            D['rec_su_delay'] = 0.01   # Set receiver start time and energy to near zero to enforce CD receiver startup timing
+            D['rec_qf_delay'] = 0.01            
+        elif self.control_receiver == 'ssc_clearsky':
+            D['rec_clearsky_fraction'] = 1.0
+            D['rec_clearsky_model'] = 0
+            D['rec_clearsky_dni'] = self.clearsky_data.tolist()
+        elif self.control_receiver == 'ssc_actual_dni':
+            D['rec_clearsky_fraction'] = 0.0
+
+        return
+
+
     # Calculate revenue
     def calculate_revenue(self):
         """
