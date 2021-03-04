@@ -180,6 +180,7 @@ class CaseStudy:
         forecast_time = self.start_date - datetime.timedelta(hours = 24-self.forecast_issue_time)
         self.update_forecast_weather_data(forecast_time)
 
+        # Start compiling ssc inputs (D)
         D = self.plant.design.copy()
         D.update(self.plant.state)
         D.update(self.plant.flux_maps)
@@ -444,6 +445,8 @@ class CaseStudy:
         self.results = R
         
 
+
+        #TODO: Is this just for the case study? Can it be removed?
         # Read NVE schedules (if not already read during rolling horizon calculations)
         if self.is_optimize == False and self.use_day_ahead_schedule and self.day_ahead_schedule_from == 'NVE':
             date = datetime.datetime(self.start_date.year, self.start_date.month, self.start_date.day) 
@@ -452,19 +455,23 @@ class CaseStudy:
                 self.schedules.append(self.get_CD_NVE_day_ahead_schedule(newdate))
 
         # Calculate post-simulation financials
-        self.calculate_revenue()
-        self.calculate_day_ahead_penalty()
-        self.calculate_startup_ramping_penalty()
-        
-        # Aggregate totals
-        self.total_receiver_thermal = self.results['Q_thermal'].sum() * 1.e-3 * (1./self.ssc_time_steps_per_hour)
-        self.total_cycle_gross = self.results['P_cycle'].sum() * 1.e-3 * (1./self.ssc_time_steps_per_hour)
-        self.total_cycle_net = self.results['P_out_net'].sum() * 1.e-3 * (1./self.ssc_time_steps_per_hour)
+        self.revenue = self.calculate_revenue()
+        day_ahead_penalties = self.calculate_day_ahead_penalty()
+        startup_ramping_penalties = self.calculate_startup_ramping_penalty()        
         
         if self.save_results_to_file:
             self.save_results()            # Filename to save results: 
         
-        return
+        outputs = {
+            'revenue': self.revenue,
+            'Q_thermal': self.results['Q_thermal'],
+            'P_cycle': self.results['P_cycle'],
+            'P_out_net': self.results['P_out_net']
+        }
+        outputs.update(day_ahead_penalties)
+        outputs.update(startup_ramping_penalties)
+
+        return outputs
             
 
     def initialize(self):
@@ -731,8 +738,8 @@ class CaseStudy:
         inds_buy = np.where(net_gen < 0.0)[0]
         rev = (net_gen[inds_sell] * mult[inds_sell] * self.avg_price).sum() * (1./self.ssc_time_steps_per_hour)   # Revenue from sales ($)
         rev += (net_gen[inds_buy] * mult[inds_buy] * self.avg_purchase_price).sum() * (1./self.ssc_time_steps_per_hour) # Electricity purchases ($)
-        self.revenue = rev        
-        return 
+        self.revenue = rev
+        return rev
 
     
     # Calculate penalty for missing day-ahead schedule (assuming day-ahead schedule step is 1-hour for now)
@@ -809,11 +816,16 @@ class CaseStudy:
                                 self.day_ahead_penalty[k][d,j] = (-self.day_ahead_diff[k][d,j]) * self.day_ahead_pen_minus
                                 self.day_ahead_diff_over_tol_minus[k] += self.day_ahead_diff[k][d,j]
                                 
-                                
-
         self.day_ahead_penalty_tot = {k:self.day_ahead_penalty[k].sum() for k in self.day_ahead_diff.keys()}  # Total penalty ($)
         self.day_ahead_diff_tot = {k:self.day_ahead_diff[k].sum() for k in self.day_ahead_diff.keys()}
-        return
+
+        outputs = {
+            'day_ahead_penalty_tot': self.day_ahead_penalty_tot,
+            'day_ahead_diff_tot': self.day_ahead_diff_tot,
+            'day_ahead_diff_over_tol_plus': self.day_ahead_diff_over_tol_plus,
+            'day_ahead_diff_over_tol_minus': self.day_ahead_diff_over_tol_minus
+        }
+        return outputs
 
     
     def calculate_startup_ramping_penalty(self):
@@ -880,7 +892,17 @@ class CaseStudy:
         
         self.startup_ramping_penalty = self.n_starts_rec*self.plant.design['Crsu'] + self.n_starts_cycle*self.plant.design['Ccsu'] 
         self.startup_ramping_penalty += self.cycle_ramp_up*self.plant.design['C_delta_w']*1000 + self.cycle_ramp_down*self.plant.design['C_delta_w']*1000
-        return
+
+        outputs = {
+            'n_starts_rec': self.n_starts_rec,
+            'n_starts_rec_attempted': self.n_starts_rec_attempted,
+            'n_starts_cycle': self.n_starts_cycle,
+            'n_starts_cycle_attempted': self.n_starts_cycle_attempted,
+            'cycle_ramp_up': self.cycle_ramp_up,
+            'cycle_ramp_down': self.cycle_ramp_down,
+            'startup_ramping_penalty': self.startup_ramping_penalty
+        }
+        return outputs
         
       
     def default_ssc_return_vars(self):
@@ -1147,31 +1169,38 @@ if __name__ == '__main__':
     start_date = datetime.datetime(2018, 10, 14)
     sim_days = 1
     initial_plant_state = util.get_initial_state_from_CD_data(start_date, params['CD_raw_data_direc'], params['CD_processed_data_direc'], plant.design)
-    cs.run(start_date=start_date, sim_days=sim_days, initial_plant_state=initial_plant_state)
+    outputs = cs.run(start_date=start_date, sim_days=sim_days, initial_plant_state=initial_plant_state)
     #
     elapsed = timeit.default_timer() - start
 
+
+    # Aggregate totals
+    total_receiver_thermal = outputs['Q_thermal'].sum() * 1.e-3 * (1./ssc_time_steps_per_hour)
+    total_cycle_gross = outputs['P_cycle'].sum() * 1.e-3 * (1./ssc_time_steps_per_hour)
+    total_cycle_net = outputs['P_out_net'].sum() * 1.e-3 * (1./ssc_time_steps_per_hour)
+
+    # All of these outputs are just sums of the individual calls
     print ('Total time elapsed = %.2fs'%(timeit.default_timer() - start))
-    print ('Receiver thermal generation = %.5f GWht'%cs.total_receiver_thermal)
-    print ('Cycle gross generation = %.5f GWhe'%cs.total_cycle_gross )
-    print ('Cycle net generation = %.5f GWhe'%cs.total_cycle_net )
-    print ('Receiver starts = %d completed, %d attempted'%(cs.n_starts_rec, cs.n_starts_rec_attempted))
-    print ('Cycle starts = %d completed, %d attempted'%(cs.n_starts_cycle, cs.n_starts_cycle_attempted))
-    print ('Cycle ramp-up = %.3f'%cs.cycle_ramp_up)
-    print ('Cycle ramp-down = %.3f'%cs.cycle_ramp_down)
+    print ('Receiver thermal generation = %.5f GWht'%total_receiver_thermal)
+    print ('Cycle gross generation = %.5f GWhe'%total_cycle_gross )
+    print ('Cycle net generation = %.5f GWhe'%total_cycle_net )
+    print ('Receiver starts = %d completed, %d attempted'%(outputs['n_starts_rec'], outputs['n_starts_rec_attempted']))
+    print ('Cycle starts = %d completed, %d attempted'%(outputs['n_starts_cycle'], outputs['n_starts_cycle_attempted']))
+    print ('Cycle ramp-up = %.3f'%outputs['cycle_ramp_up'])
+    print ('Cycle ramp-down = %.3f'%outputs['cycle_ramp_down'])
     print ('Total under-generation from schedule (beyond tolerance) = %.3f MWhe (ssc), %.3f MWhe (dispatch)'
-        %(cs.day_ahead_diff_over_tol_minus['ssc'], cs.day_ahead_diff_over_tol_minus['disp']))
+        %(outputs['day_ahead_diff_over_tol_minus']['ssc'], outputs['day_ahead_diff_over_tol_minus']['disp']))
     print ('Total over-generation from schedule  (beyond tolerance)  = %.3f MWhe (ssc), %.3f MWhe (dispatch)'
-        %(cs.day_ahead_diff_over_tol_plus['ssc'], cs.day_ahead_diff_over_tol_plus['disp']))
-    print ('Revenue = $%.2f'%cs.revenue)
-    print ('Day-ahead schedule penalty = $%.2f (ssc), $%.2f (dispatch)'%(cs.day_ahead_penalty_tot['ssc'], cs.day_ahead_penalty_tot['disp']))
-    print ('Startup/ramping penalty = $%.2f'%cs.startup_ramping_penalty)
+        %(outputs['day_ahead_diff_over_tol_plus']['ssc'], outputs['day_ahead_diff_over_tol_plus']['disp']))
+    print ('Revenue = $%.2f'%outputs['revenue'])
+    print ('Day-ahead schedule penalty = $%.2f (ssc), $%.2f (dispatch)'%(outputs['day_ahead_penalty_tot']['ssc'], outputs['day_ahead_penalty_tot']['disp']))
+    print ('Startup/ramping penalty = $%.2f'%outputs['startup_ramping_penalty'])
 
     # Basic regression tests for refactoring
-    assert math.isclose(cs.total_receiver_thermal, 3.85, rel_tol=1e-3)
-    assert math.isclose(cs.total_cycle_gross, 1.89, rel_tol=1e-2)
-    assert math.isclose(cs.total_cycle_net, 1.74, rel_tol=1e-2)
-    assert math.isclose(cs.cycle_ramp_up, 121, rel_tol=1e-3)
-    assert math.isclose(cs.cycle_ramp_down, 121, rel_tol=1e-3)
-    assert math.isclose(cs.revenue, 243422, rel_tol=1e-2)
-    assert math.isclose(cs.startup_ramping_penalty, 7200, rel_tol=1e-3)
+    assert math.isclose(total_receiver_thermal, 3.85, rel_tol=1e-3)
+    assert math.isclose(total_cycle_gross, 1.89, rel_tol=1e-2)
+    assert math.isclose(total_cycle_net, 1.74, rel_tol=1e-2)
+    assert math.isclose(outputs['cycle_ramp_up'], 121, rel_tol=1e-3)
+    assert math.isclose(outputs['cycle_ramp_down'], 121, rel_tol=1e-3)
+    assert math.isclose(outputs['revenue'], 243422, rel_tol=1e-2)
+    assert math.isclose(outputs['startup_ramping_penalty'], 7200, rel_tol=1e-3)
