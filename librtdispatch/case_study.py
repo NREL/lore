@@ -13,25 +13,21 @@ import datetime
 import util
 import dispatch
 import ssc_wrapper
-import loredash.mediation.plant as plant
+import loredash.mediation.plant as plant_
 
 
 ## Put code here in CaseStudy that will be in mediation.
 class CaseStudy:
     def __init__(self, params):
 
-        #--- Plant design and operating properties      
-        self.plant = plant.Plant(design=plant.plant_design, initial_state=plant.plant_initial_state)   # Default parameters contain best representation of CD plant and dispatch properties
-
-
         ## DISPATCH INPUTS ###############################################################################################################################
         #--- Simulation start point and duration
         self.start_date = None
-        self.sim_days = None
-        self.set_initial_state_from_CD_data = True         # Set initial plant state based on CD data?
-        
+        self.sim_days = None       
         
         ## DISPATCH PARAMETERS ###########################################################################################################################
+        self.plant = None                               # Plant design and operating properties
+
         #--- Control conditions
         self.is_optimize = True                         # Use dispatch optimziation
         self.control_field = 'ssc'                      #'CD_data' = use CD data to control heliostats tracking, heliostats offline, and heliostat daily reflectivity.  Receiver startup time is set to zero so that simulated receiver starts when CD tracking begins
@@ -92,7 +88,6 @@ class CaseStudy:
         #--- Input data files: weather, masslow, clearsky DNI must have length of full annual array based on ssc time step size
         self.user_defined_cycle_input_file = 'udpc_noTamb_dependency.csv'  # Only required if cycle_type is user_defined
         self.price_multiplier_file = 'prices_flat.csv'  # TODO: File containing annual price multipliers
-        self.ground_truth_weather_file = './model-validation/input_files/weather_files/ssc_weatherfile_1min_2018.csv'  # Weather file derived from CD data: DNI, ambient temperature, wind speed, etc. are averaged over 4 CD weather stations, after filtering DNI readings for bad measurements. 
         self.clearsky_file = './model-validation/input_files/weather_files/clearsky_pvlib_ineichen_1min_2018.csv'      # Expected clear-sky DNI from Ineichen model (via pvlib).  
         self.CD_mflow_path1_file = './model-validation/input_files/mflow_path1_2018_1min.csv'                          # File containing CD data for receiver path 1 mass flow rate (note, all values are zeros on days without data)
         self.CD_mflow_path2_file = './model-validation/input_files/mflow_path2_2018_1min.csv'                          # File containing CD data for receiver path 2 mass flow rate (note, all values are zeros on days without data)        
@@ -166,7 +161,7 @@ class CaseStudy:
     
     #-------------------------------------------------------------------------
     #--- Run simulation
-    def run(self, start_date, sim_days, rerun_flux_maps = False):
+    def run(self, start_date, sim_days, initial_plant_state=None):
 
         self.start_date = start_date
         self.sim_days = sim_days
@@ -176,29 +171,12 @@ class CaseStudy:
                                                                                                             #  "real" data after 11pm standard time during DST
                                                                                                             #  (unless data also exists for the following day)
 
+        if initial_plant_state is not None:
+            self.plant.state = initial_plant_state
+
         # Initialize forecast weather data using the day prior to the first simulated day
         forecast_time = self.start_date - datetime.timedelta(hours = 24-self.forecast_issue_time)
         self.update_forecast_weather_data(forecast_time)
-
-        # Over-ride plant state if needed
-        # TODO: probably don't need this
-        if self.set_initial_state_from_CD_data:
-            initial_state = util.get_initial_state_from_CD_data(self.start_date, self.CD_raw_data_direc, self.CD_processed_data_direc, self.plant.design)
-            if initial_state is not None:
-                self.plant.state = initial_state
-
-
-        #-- Calculate flux maps
-        if self.plant.flux_maps['A_sf_in'] == 0.0 or rerun_flux_maps:
-            self.plant.flux_maps = CaseStudy.simulate_flux_maps(
-                plant_design = self.plant.design,
-                ssc_time_steps_per_hour = self.ssc_time_steps_per_hour,
-                ground_truth_weather_data = self.ground_truth_weather_data
-                )
-
-            assert math.isclose(self.plant.flux_maps['A_sf_in'], 1172997, rel_tol=1e-4)
-            assert math.isclose(np.sum(self.plant.flux_maps['eta_map']), 10385.8, rel_tol=1e-4)
-            assert math.isclose(np.sum(self.plant.flux_maps['flux_maps']), 44.0, rel_tol=1e-4)
 
         D = self.plant.design.copy()
         D.update(self.plant.state)
@@ -464,7 +442,7 @@ class CaseStudy:
             Rsub, new_plant_state = ssc_wrapper.call_ssc(D, retvars, plant_state_pt = napply-1, npts = napply)
             
             #--- Update saved plant state
-            persistance_vars = plant.Plant.update_persistence(
+            persistance_vars = plant_.Plant.update_persistence(
                 self.plant.state,
                 Rsub,
                 new_plant_state['rec_op_mode_initial'],
@@ -569,11 +547,6 @@ class CaseStudy:
             self.clearsky_data = np.array(util.translate_to_new_timestep(self.clearsky_data, 1./60, 1./self.ssc_time_steps_per_hour))
             self.CD_mflow_path1_data = np.array(util.translate_to_new_timestep(self.CD_mflow_path1_data, 1./60, 1./self.ssc_time_steps_per_hour))
             self.CD_mflow_path2_data = np.array(util.translate_to_new_timestep(self.CD_mflow_path2_data, 1./60, 1./self.ssc_time_steps_per_hour))            
-
-        # Read in historical weather data
-        self.ground_truth_weather_data = util.read_weather_data(self.ground_truth_weather_file)
-        if self.ssc_time_steps_per_hour != 60:
-            self.ground_truth_weather_data = util.update_weather_timestep(self.ground_truth_weather_data, self.ssc_time_steps_per_hour)
         
         # Create annual weather data structure that will contain weather forecast data to be used during optimization (weather data filled with all zeros for now)
         self.current_forecast_weather_data = util.create_empty_weather_data(self.ground_truth_weather_data, self.ssc_time_steps_per_hour)
@@ -710,7 +683,6 @@ class CaseStudy:
         start = timeit.default_timer()
         D = plant_design.copy()
         D['time_steps_per_hour'] = ssc_time_steps_per_hour
-        #D['solar_resource_file'] = self.ground_truth_weather_file
         D['solar_resource_data'] = ground_truth_weather_data
         D['time_start'] = 0.0
         D['time_stop'] = 1.0*3600  
@@ -1118,8 +1090,34 @@ class CaseStudy:
 
 if __name__ == '__main__':
     os.chdir(os.path.dirname(__file__))
+    
+    ssc_time_steps_per_hour = 60
+    ground_truth_weather_file = './model-validation/input_files/weather_files/ssc_weatherfile_1min_2018.csv'  # Weather file derived from CD data: DNI, ambient temperature,
+                                                                                                                   #  wind speed, etc. are averaged over 4 CD weather stations,
+                                                                                                                   #  after filtering DNI readings for bad measurements. 
+
+    #-- Read in historical weather data
+    ground_truth_weather_data = util.read_weather_data(ground_truth_weather_file)
+    if ssc_time_steps_per_hour != 60:
+        ground_truth_weather_data = util.update_weather_timestep(ground_truth_weather_data, ssc_time_steps_per_hour)
+
+    #-- Setup plant including calculating flux maps
+    plant = plant_.Plant(design=plant_.plant_design, initial_state=plant_.plant_initial_state)   # Default parameters contain best representation of CD plant and dispatch properties
+    if plant.flux_maps['A_sf_in'] == 0.0:
+        plant.flux_maps = CaseStudy.simulate_flux_maps(
+            plant_design = plant.design,
+            ssc_time_steps_per_hour = ssc_time_steps_per_hour,
+            ground_truth_weather_data = ground_truth_weather_data
+            )
+        assert math.isclose(plant.flux_maps['A_sf_in'], 1172997, rel_tol=1e-4)
+        assert math.isclose(np.sum(plant.flux_maps['eta_map']), 10385.8, rel_tol=1e-4)
+        assert math.isclose(np.sum(plant.flux_maps['flux_maps']), 44.0, rel_tol=1e-4)
+
 
     params = {
+        'plant':                            plant,
+        'ssc_time_steps_per_hour':          ssc_time_steps_per_hour,
+        'ground_truth_weather_data':        ground_truth_weather_data,
         'isdebug':                          False,
         'control_field':                    'ssc',
         'control_receiver':                 'ssc_clearsky',
@@ -1141,7 +1139,10 @@ if __name__ == '__main__':
 
     start = timeit.default_timer()
     #
-    cs.run(start_date=datetime.datetime(2018, 10, 14), sim_days=1)
+    start_date = datetime.datetime(2018, 10, 14)
+    sim_days = 1
+    initial_plant_state = util.get_initial_state_from_CD_data(start_date, params['CD_raw_data_direc'], params['CD_processed_data_direc'], plant.design)
+    cs.run(start_date=start_date, sim_days=sim_days, initial_plant_state=initial_plant_state)
     #
     elapsed = timeit.default_timer() - start
 
