@@ -262,6 +262,7 @@ class CaseStudy:
         self.disp_soln_tracking = []
 
         #--- For the total horizon, at the dispatch frequency:
+        #--- Note: nupdate = f(sim_days, dispatch_frequency)
         for j in range(nupdate):
             #--- Update input dictionary from current plant state
             D.update(self.plant.state)
@@ -281,7 +282,7 @@ class CaseStudy:
             if (toy+horizon)/3600 > end_hour:
                 horizon = end_hour*3600 - toy            
             
-            npts_horizon = int(horizon/3600 * nph)           
+            npts_horizon = int(horizon/3600 * nph)
 
             #--- Update "forecasted" weather data (if relevant)
             if self.is_optimize and (tod == self.forecast_issue_time*3600):
@@ -396,6 +397,8 @@ class CaseStudy:
                     assert math.isclose(dispatch_soln.s0, 832639.4, rel_tol=1e-4)
 
                 if dispatch_soln is not None:
+                    # TODO: make the time triggering more robust; shouldn't be an '==' as the program may be offline at the time or running at intervals
+                    #  that won't exactly hit it
                     if self.use_day_ahead_schedule and self.day_ahead_schedule_from == 'calculated' and tod/3600 == self.day_ahead_schedule_time:
                         self.next_day_schedule = dispatch.get_day_ahead_schedule(
                             day_ahead_schedule_steps_per_hour = self.day_ahead_schedule_steps_per_hour,
