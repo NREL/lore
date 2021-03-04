@@ -26,8 +26,8 @@ class CaseStudy:
 
         ## DISPATCH INPUTS ###############################################################################################################################
         #--- Simulation start point and duration
-        self.start_date = datetime.datetime(2018, 8, 31)   # Start date for simulations
-        self.sim_days = 2                                  # Number of days to simulate
+        self.start_date = None
+        self.sim_days = None
         self.set_initial_state_from_CD_data = True         # Set initial plant state based on CD data?
         
         
@@ -156,6 +156,9 @@ class CaseStudy:
         for key,value in params.items():
             setattr(self, key, value)
         
+        # Initialize and adjust above parameters
+        self.initialize()
+
         return
 
 
@@ -168,8 +171,22 @@ class CaseStudy:
         self.start_date = start_date
         self.sim_days = sim_days
 
-        # Initialize and adjust above parameters
-        self.initialize()
+        self.current_time = datetime.datetime(self.start_date.year, self.start_date.month, self.start_date.day)  # Start simulation at midnight (standard time) on the specifed day.
+                                                                                                            #  Note that annual arrays derived from CD data will not have
+                                                                                                            #  "real" data after 11pm standard time during DST
+                                                                                                            #  (unless data also exists for the following day)
+
+        # Initialize forecast weather data using the day prior to the first simulated day
+        forecast_time = self.start_date - datetime.timedelta(hours = 24-self.forecast_issue_time)
+        self.update_forecast_weather_data(forecast_time)
+
+        # Over-ride plant state if needed
+        # TODO: probably don't need this
+        if self.set_initial_state_from_CD_data:
+            initial_state = util.get_initial_state_from_CD_data(self.start_date, self.CD_raw_data_direc, self.CD_processed_data_direc, self.plant.design)
+            if initial_state is not None:
+                self.plant.state = initial_state
+
 
         #-- Calculate flux maps
         if self.plant.flux_maps['A_sf_in'] == 0.0 or rerun_flux_maps:
@@ -505,11 +522,6 @@ class CaseStudy:
             
 
     def initialize(self):
-        
-        self.current_time = datetime.datetime(self.start_date.year, self.start_date.month, self.start_date.day)  # Start simulation at midnight (standard time) on the specifed day.
-                                                                                                                 #  Note that annual arrays derived from CD data will not have
-                                                                                                                 #  "real" data after 11pm standard time during DST
-                                                                                                                 #  (unless data also exists for the following day)
 
         def adjust_plant_design(plant_design, cycle_type, user_defined_cycle_input_file):
             """Set cycle specifications (from model validation code)"""
@@ -567,23 +579,12 @@ class CaseStudy:
         self.current_forecast_weather_data = util.create_empty_weather_data(self.ground_truth_weather_data, self.ssc_time_steps_per_hour)
         self.weather_data_for_dispatch = util.create_empty_weather_data(self.ground_truth_weather_data, self.ssc_time_steps_per_hour)
 
-        # Initialize forecast weather data using the day prior to the first simulated day
-        forecast_time = self.start_date - datetime.timedelta(hours = 24-self.forecast_issue_time)
-        self.update_forecast_weather_data(forecast_time)
-
         # Initialize price data
         price_multipliers = np.genfromtxt(self.price_multiplier_file)
         if self.price_steps_per_hour != self.ssc_time_steps_per_hour:
             price_multipliers = util.translate_to_new_timestep(price_multipliers, 1./self.price_steps_per_hour, 1./self.ssc_time_steps_per_hour)
         pmavg = sum(price_multipliers)/len(price_multipliers)  
         self.price_data = [self.avg_price*p/pmavg  for p in price_multipliers]  # Electricity price at ssc time steps ($/MWh)
-
-        # Over-ride plant state if needed
-        # TODO: probably don't need this
-        if self.set_initial_state_from_CD_data:
-            initial_state = util.get_initial_state_from_CD_data(self.start_date, self.CD_raw_data_direc, self.CD_processed_data_direc, self.plant.design)
-            if initial_state is not None:
-                self.plant.state = initial_state
 
         # Initialize day-ahead generation schedules
         n = 24*self.day_ahead_schedule_steps_per_hour
