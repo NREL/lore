@@ -19,7 +19,7 @@ import loredash.mediation.plant as plant
 
 ## Put code here in CaseStudy that will be in mediation.
 class CaseStudy:
-    def __init__(self, isdebug = False):
+    def __init__(self, params):
 
         #--- Plant design and operating properties      
         self.plant = plant.Plant(design=plant.plant_design, initial_state=plant.plant_initial_state)   # Default parameters contain best representation of CD plant and dispatch properties
@@ -103,7 +103,7 @@ class CaseStudy:
         #--- Miscellaneous
         self.store_full_dispatch_solns = True           # Store full dispatch input parameters and solutions for each call to the dispatch model
         self.force_rolling_horizon = False              # Force simulation using ssc heuristic dispatch to follow a rolling horizon for debugging?
-        self.is_debug = isdebug                         # Reduce resolution in flux profile for faster solution
+        self.is_debug = False                           # Reduce resolution in flux profile for faster solution
         self.save_results_to_file = False               # Save results to file
         self.results_file = 'case_study'                # Filename to save results: 
 
@@ -153,6 +153,9 @@ class CaseStudy:
         self.total_receiver_thermal = 0                 # Total thermal energy from receiver (GWht)
         self.total_cycle_gross = 0                      # Total gross generation by cycle (GWhe)
         self.total_cycle_net = 0                        # Total net generation by cycle (GWhe)
+
+        for key,value in params.items():
+            setattr(self, key, value)
 
         return
 
@@ -1113,33 +1116,28 @@ class CaseStudy:
 if __name__ == '__main__':
     os.chdir(os.path.dirname(__file__))
 
-    CD_raw_data_direc = './input_files/CD_raw'                      # Directory containing raw data files from CD
-    CD_processed_data_direc = './input_files/CD_processed'          # Directory containing files with 1min data already extracted
-
-    start_date = datetime.datetime(2018, 10, 14)  
-    sim_days = 1
-    save_outputs = False
-    create_plot = True
-    name = '2019_10_14'
-
-    cs = CaseStudy(isdebug = False)
-    cs.control_field = 'ssc'
-    cs.control_receiver = 'ssc_clearsky'
-    cs.is_optimize = True   
-    cs.dispatch_weather_horizon = 2  # TODO: what horizon do we want to use?
-    cs.use_CD_measured_reflectivity = False  
-    cs.fixed_soiling_loss = 0.02   # 1 - (reflectivity / clean reflectivity)
-    cs.use_day_ahead_schedule = True
-    cs.day_ahead_schedule_from = 'calculated'
-    cs.CD_raw_data_direc = CD_raw_data_direc
-    cs.CD_processed_data_direc = CD_processed_data_direc
-    cs.start_date = start_date
-    cs.sim_days = sim_days
-    cs.set_initial_state_from_CD_data = True
-    cs.save_results_to_file = save_outputs           # File name to save results
-    cs.results_file = name + '_' + '7b'
-    cs.store_full_dispatch_solns = False  # This keeps a copy of every set inputs/outputs from the dispatch model calls in memory... useful for debugging, but might want to turn off when running large simulations
+    params = {
+        'isdebug':                          False,
+        'control_field':                    'ssc',
+        'control_receiver':                 'ssc_clearsky',
+        'is_optimize':                      True,
+        'dispatch_weather_horizon':         2,                                  # TODO: what horizon do we want to use?
+        'use_CD_measured_reflectivity':     False,  
+        'fixed_soiling_loss':               0.02,                               # 1 - (reflectivity / clean reflectivity)
+        'use_day_ahead_schedule':           True,
+        'day_ahead_schedule_from':          'calculated',
+        'CD_raw_data_direc':                './input_files/CD_raw',             # Directory containing raw data files from CD
+        'CD_processed_data_direc':          './input_files/CD_processed',       # Directory containing files with 1min data already extracted
+        'set_initial_state_from_CD_data':   True,
+        'save_results_to_file':             False,
+        'store_full_dispatch_solns':        False                               # This keeps a copy of every set inputs/outputs from the dispatch model calls in memory.
+                                                                                #  Useful for debugging, but might want to turn off when running large simulations
+    }
         
+    cs = CaseStudy(params=params)
+    cs.start_date = datetime.datetime(2018, 10, 14)
+    cs.sim_days = 1
+
     start = timeit.default_timer()
     cs.run()
     elapsed = timeit.default_timer() - start
