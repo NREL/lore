@@ -228,62 +228,14 @@ class CaseStudy:
 
 
 
+        #-------------------------------------------------------------------------
+        # Run simulation in a rolling horizon   
+        #      The ssc simulation time resolution is assumed to be <= the shortest dispatch time step
+        #      All dispatch time steps and time horizons are assumed to be an integer multiple of the ssc time step
+        #      Time at which the weather forecast is updated coincides with the start of an optimization interval
+        #      Time at which the day-ahead generation schedule is due coincides with the start of an optimization interval
+        total_horizon = self.sim_days*24
 
-        if self.is_optimize:
-            ## THIS IS WHAT'S BEING RUN
-            R = self.run_rolling_horizon(D, self.sim_days*24)
-        elif self.control_cycle == 'ssc_heuristic':
-            if self.force_rolling_horizon:  # Run with rolling horizon (not necessary, but useful for debugging)
-                R = self.run_rolling_horizon(D, self.sim_days*24)
-            else:  # Run full time horizon in a single simulation
-                ntot = self.sim_days*24*self.ssc_time_steps_per_hour  # Total number of time points in solution
-                retvars = self.default_ssc_return_vars()
-                R, state = ssc_wrapper.call_ssc(D, retvars, npts = ntot)  
-        elif self.control_cycle == 'CD_data':
-            ntot = self.sim_days*24*self.ssc_time_steps_per_hour  # Total number of time points in solution
-            retvars = self.default_ssc_return_vars()
-            ssc_dispatch_targets = dispatch.DispatchTargets()   # Structure to contain dispatch targets used for ssc
-            retvars += vars(ssc_dispatch_targets).keys()
-            ssc_dispatch_targets  = self.get_dispatch_targets_from_CD_actuals(use_avg_flow=True)
-            D.update(vars(ssc_dispatch_targets))
-            R, state = ssc_wrapper.call_ssc(D, retvars, npts = ntot)  
-            
-            
-        self.results = R
-        
-
-        # Read NVE schedules (if not already read during rolling horizon calculations)
-        if self.is_optimize == False and self.use_day_ahead_schedule and self.day_ahead_schedule_from == 'NVE':
-            date = datetime.datetime(self.start_date.year, self.start_date.month, self.start_date.day) 
-            for j in range(self.sim_days):
-                newdate = date + datetime.timedelta(days = j)
-                self.schedules.append(self.get_CD_NVE_day_ahead_schedule(newdate))
-
-        # Calculate post-simulation financials
-        self.calculate_revenue()
-        self.calculate_day_ahead_penalty()
-        self.calculate_startup_ramping_penalty()
-        
-        # Aggregate totals
-        self.total_receiver_thermal = self.results['Q_thermal'].sum() * 1.e-3 * (1./self.ssc_time_steps_per_hour)
-        self.total_cycle_gross = self.results['P_cycle'].sum() * 1.e-3 * (1./self.ssc_time_steps_per_hour)
-        self.total_cycle_net = self.results['P_out_net'].sum() * 1.e-3 * (1./self.ssc_time_steps_per_hour)
-        
-        if self.save_results_to_file:
-            self.save_results()            # Filename to save results: 
-        
-
-        return
-            
-    
-    
-    #-------------------------------------------------------------------------
-    # Run simulation in a rolling horizon   
-    #      The ssc simulation time resolution is assumed to be <= the shortest dispatch time step
-    #      All dispatch time steps and time horizons are assumed to be an integer multiple of the ssc time step
-    #      Time at which the weather forecast is updated coincides with the start of an optimization interval
-    #      Time at which the day-ahead generation schedule is due coincides with the start of an optimization interval
-    def run_rolling_horizon(self, D, total_horizon):
         #--- Calculate time-related values
         start_time = util.get_time_of_year(self.current_time)       # Time (sec) elapsed since beginning of year
         start_hour = int(start_time / 3600)                         # Time (hours) elapsed since beginning of year
@@ -430,7 +382,7 @@ class CaseStudy:
                 )
 
                 include = {"pv": False, "battery": False, "persistence": False, "force_cycle": False, "op_assumptions": False,
-                           "signal":include_day_ahead_in_dispatch, "simple_receiver": False}
+                            "signal":include_day_ahead_in_dispatch, "simple_receiver": False}
                     
                 dispatch_soln = dispatch.run_dispatch_model(disp_in, include)
 
@@ -516,8 +468,31 @@ class CaseStudy:
                     
             #--- Update current time
             self.current_time = self.current_time + datetime.timedelta(seconds = freq)
-            
-        return R
+        
+        self.results = R
+        
+
+        # Read NVE schedules (if not already read during rolling horizon calculations)
+        if self.is_optimize == False and self.use_day_ahead_schedule and self.day_ahead_schedule_from == 'NVE':
+            date = datetime.datetime(self.start_date.year, self.start_date.month, self.start_date.day) 
+            for j in range(self.sim_days):
+                newdate = date + datetime.timedelta(days = j)
+                self.schedules.append(self.get_CD_NVE_day_ahead_schedule(newdate))
+
+        # Calculate post-simulation financials
+        self.calculate_revenue()
+        self.calculate_day_ahead_penalty()
+        self.calculate_startup_ramping_penalty()
+        
+        # Aggregate totals
+        self.total_receiver_thermal = self.results['Q_thermal'].sum() * 1.e-3 * (1./self.ssc_time_steps_per_hour)
+        self.total_cycle_gross = self.results['P_cycle'].sum() * 1.e-3 * (1./self.ssc_time_steps_per_hour)
+        self.total_cycle_net = self.results['P_out_net'].sum() * 1.e-3 * (1./self.ssc_time_steps_per_hour)
+        
+        if self.save_results_to_file:
+            self.save_results()            # Filename to save results: 
+        
+        return
             
 
     def initialize(self):
