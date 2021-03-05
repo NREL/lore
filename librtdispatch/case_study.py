@@ -1162,6 +1162,7 @@ if __name__ == '__main__':
     }
         
     cs = CaseStudy(params=params)
+    outputs_total = {}
 
     start = timeit.default_timer()
     #
@@ -1174,32 +1175,42 @@ if __name__ == '__main__':
 
 
     # Aggregate totals
-    total_receiver_thermal = outputs['Q_thermal'].sum() * 1.e-3 * (1./ssc_time_steps_per_hour)
-    total_cycle_gross = outputs['P_cycle'].sum() * 1.e-3 * (1./ssc_time_steps_per_hour)
-    total_cycle_net = outputs['P_out_net'].sum() * 1.e-3 * (1./ssc_time_steps_per_hour)
+    outputs['total_receiver_thermal'] = outputs.pop('Q_thermal').sum() * 1.e-3 * (1./ssc_time_steps_per_hour)
+    outputs['total_cycle_gross'] = outputs.pop('P_cycle').sum() * 1.e-3 * (1./ssc_time_steps_per_hour)
+    outputs['total_cycle_net'] = outputs.pop('P_out_net').sum() * 1.e-3 * (1./ssc_time_steps_per_hour)
+    if not outputs_total:   # if empty
+        outputs_total = outputs.copy()
+    else:
+        for key in outputs:
+            if isinstance(key, dict):
+                for key_inner in key:
+                    outputs_total[key][key_inner] += outputs[key][key_inner]
+            else:
+                outputs_total[key] += outputs[key]
+    
 
     # All of these outputs are just sums of the individual calls
     print ('Total time elapsed = %.2fs'%(timeit.default_timer() - start))
-    print ('Receiver thermal generation = %.5f GWht'%total_receiver_thermal)
-    print ('Cycle gross generation = %.5f GWhe'%total_cycle_gross )
-    print ('Cycle net generation = %.5f GWhe'%total_cycle_net )
-    print ('Receiver starts = %d completed, %d attempted'%(outputs['n_starts_rec'], outputs['n_starts_rec_attempted']))
-    print ('Cycle starts = %d completed, %d attempted'%(outputs['n_starts_cycle'], outputs['n_starts_cycle_attempted']))
-    print ('Cycle ramp-up = %.3f'%outputs['cycle_ramp_up'])
-    print ('Cycle ramp-down = %.3f'%outputs['cycle_ramp_down'])
+    print ('Receiver thermal generation = %.5f GWht'%outputs_total['total_receiver_thermal'])
+    print ('Cycle gross generation = %.5f GWhe'%outputs_total['total_cycle_gross'])
+    print ('Cycle net generation = %.5f GWhe'%outputs_total['total_cycle_net'])
+    print ('Receiver starts = %d completed, %d attempted'%(outputs_total['n_starts_rec'], outputs_total['n_starts_rec_attempted']))
+    print ('Cycle starts = %d completed, %d attempted'%(outputs_total['n_starts_cycle'], outputs_total['n_starts_cycle_attempted']))
+    print ('Cycle ramp-up = %.3f'%outputs_total['cycle_ramp_up'])
+    print ('Cycle ramp-down = %.3f'%outputs_total['cycle_ramp_down'])
     print ('Total under-generation from schedule (beyond tolerance) = %.3f MWhe (ssc), %.3f MWhe (dispatch)'
-        %(outputs['day_ahead_diff_over_tol_minus']['ssc'], outputs['day_ahead_diff_over_tol_minus']['disp']))
+        %(outputs_total['day_ahead_diff_over_tol_minus']['ssc'], outputs_total['day_ahead_diff_over_tol_minus']['disp']))
     print ('Total over-generation from schedule  (beyond tolerance)  = %.3f MWhe (ssc), %.3f MWhe (dispatch)'
-        %(outputs['day_ahead_diff_over_tol_plus']['ssc'], outputs['day_ahead_diff_over_tol_plus']['disp']))
-    print ('Revenue = $%.2f'%outputs['revenue'])
-    print ('Day-ahead schedule penalty = $%.2f (ssc), $%.2f (dispatch)'%(outputs['day_ahead_penalty_tot']['ssc'], outputs['day_ahead_penalty_tot']['disp']))
-    print ('Startup/ramping penalty = $%.2f'%outputs['startup_ramping_penalty'])
+        %(outputs_total['day_ahead_diff_over_tol_plus']['ssc'], outputs_total['day_ahead_diff_over_tol_plus']['disp']))
+    print ('Revenue = $%.2f'%outputs_total['revenue'])
+    print ('Day-ahead schedule penalty = $%.2f (ssc), $%.2f (dispatch)'%(outputs_total['day_ahead_penalty_tot']['ssc'], outputs_total['day_ahead_penalty_tot']['disp']))
+    print ('Startup/ramping penalty = $%.2f'%outputs_total['startup_ramping_penalty'])
 
     # Basic regression tests for refactoring
-    assert math.isclose(total_receiver_thermal, 3.85, rel_tol=1e-3)
-    assert math.isclose(total_cycle_gross, 1.89, rel_tol=1e-2)
-    assert math.isclose(total_cycle_net, 1.74, rel_tol=1e-2)
-    assert math.isclose(outputs['cycle_ramp_up'], 121, rel_tol=1e-3)
-    assert math.isclose(outputs['cycle_ramp_down'], 121, rel_tol=1e-3)
-    assert math.isclose(outputs['revenue'], 243422, rel_tol=1e-2)
-    assert math.isclose(outputs['startup_ramping_penalty'], 7200, rel_tol=1e-3)
+    assert math.isclose(outputs_total['total_receiver_thermal'], 3.85, rel_tol=1e-3)
+    assert math.isclose(outputs_total['total_cycle_gross'], 1.89, rel_tol=1e-2)
+    assert math.isclose(outputs_total['total_cycle_net'], 1.74, rel_tol=1e-2)
+    assert math.isclose(outputs_total['cycle_ramp_up'], 121, rel_tol=1e-3)
+    assert math.isclose(outputs_total['cycle_ramp_down'], 121, rel_tol=1e-3)
+    assert math.isclose(outputs_total['revenue'], 243422, rel_tol=1e-2)
+    assert math.isclose(outputs_total['startup_ramping_penalty'], 7200, rel_tol=1e-3)
