@@ -91,7 +91,7 @@ class CaseStudy:
         self.price_multiplier_file = 'prices_flat.csv'  # TODO: File containing annual price multipliers
         self.clearsky_file = './model-validation/input_files/weather_files/clearsky_pvlib_ineichen_1min_2018.csv'      # Expected clear-sky DNI from Ineichen model (via pvlib).  
         self.CD_mflow_path1_file = './model-validation/input_files/mflow_path1_2018_1min.csv'                          # File containing CD data for receiver path 1 mass flow rate (note, all values are zeros on days without data)
-        self.CD_mflow_path2_file = './model-validation/input_files/mflow_path2_2018_1min.csv'                          # File containing CD data for receiver path 2 mass flow rate (note, all values are zeros on days without data)        
+        self.CD_mflow_path2_file = './model-validation/input_files/mflow_path2_2018_1min.csv'                          # File containing CD data for receiver path 2 mass flow rate (note, all values are zeros on days without data)
         self.CD_raw_data_direc = '../../../Crescent Dunes data/NREL - CD collaboration/Steam Generation/Daily Reports/'  # Directory containing raw data files from CD
         self.CD_processed_data_direc = '../../../Crescent Dunes data/Daily operations data/'                             # Directory containing files with 1min data already extracted
 
@@ -107,8 +107,6 @@ class CaseStudy:
         self.dispatch_params = dispatch.DispatchParams() # Structure to contain all inputs for dispatch model 
         self.current_time = 0                           # Current time (tracked in standard time, not local time)
         self.is_initialized = False                     # Has solution already been initalized?        
-        self.ursd_last = []
-        self.yrsd_last = []
         self.CD_data_for_plotting = {}                  # Only used if control_cycle = 'CD_data' 
 
 
@@ -163,12 +161,19 @@ class CaseStudy:
 
     #-------------------------------------------------------------------------
     #--- Run simulation
-    def run(self, start_date, sim_days, initial_plant_state=None):
+    def run(self, j, start_date, sim_days, horizon, ursd_last, yrsd_last, current_forecast_weather_data, weather_data_for_dispatch,
+            schedules, current_day_schedule, next_day_schedule, initial_plant_state=None):
 
         self.start_date = start_date
         self.sim_days = sim_days
+        self.current_forecast_weather_data = current_forecast_weather_data
+        self.weather_data_for_dispatch = weather_data_for_dispatch
+        self.schedules = schedules
+        self.current_day_schedule = current_day_schedule
+        self.next_day_schedule = next_day_schedule
 
-        self.current_time = datetime.datetime(self.start_date.year, self.start_date.month, self.start_date.day)  # Start simulation at midnight (standard time) on the specifed day.
+        self.current_time = self.start_date
+        self.current_time_midnight = datetime.datetime(self.start_date.year, self.start_date.month, self.start_date.day)  # Start simulation at midnight (standard time) on the specifed day.
                                                                                                             #  Note that annual arrays derived from CD data will not have
                                                                                                             #  "real" data after 11pm standard time during DST
                                                                                                             #  (unless data also exists for the following day)
@@ -176,22 +181,18 @@ class CaseStudy:
         if initial_plant_state is not None:
             self.plant.state = initial_plant_state
 
-        # Initialize forecast weather data using the day prior to the first simulated day
-        forecast_time = self.start_date - datetime.timedelta(hours = 24-self.forecast_issue_time)
-        self.update_forecast_weather_data(forecast_time)
-
         # Start compiling ssc inputs (D)
         D = self.plant.design.copy()
         D.update(self.plant.state)
         D.update(self.plant.flux_maps)
-        D['time_start'] = util.get_time_of_year(self.current_time)  # Time (sec) elapsed since beginning of year
+        D['time_start'] = util.get_time_of_year(self.current_time_midnight)  # Time (sec) elapsed since beginning of year
         D['time_stop'] = D['time_start'] + self.sim_days*24*3600
-        D['sf_adjust:hourly'] = self.get_field_availability_adjustment(self.ssc_time_steps_per_hour, self.current_time.year)
+        D['sf_adjust:hourly'] = self.get_field_availability_adjustment(self.ssc_time_steps_per_hour, self.current_time_midnight.year)
         if self.control_receiver == 'CD_data':
             mult = np.ones_like(self.CD_mflow_path2_data)
             if not self.use_CD_measured_reflectivity:  # Scale mass flow based on simulated reflectivity vs. CD actual reflectivity
                 rho = (1-self.fixed_soiling_loss) * self.plant.design['helio_reflectance']   # Simulated heliostat reflectivity
-                CDavail = util.get_CD_soiling_availability(self.current_time.year, self.plant.design['helio_reflectance'] * 100)  # CD soiled / clean reflectivity (daily array)
+                CDavail = util.get_CD_soiling_availability(self.current_time_midnight.year, self.plant.design['helio_reflectance'] * 100)  # CD soiled / clean reflectivity (daily array)
                 mult = rho*np.ones(365) / (CDavail*self.plant.design['helio_reflectance'])  # Ratio of simulated / CD reflectivity
                 mult = np.repeat(mult, 24*self.ssc_time_steps_per_hour)  # Annual array at ssc resolution
             D['rec_user_mflow_path_1'] = (self.CD_mflow_path2_data * mult).tolist()  # Note ssc path numbers are reversed relative to CD path numbers
@@ -233,258 +234,300 @@ class CaseStudy:
 
         #--- For the total horizon, at the dispatch frequency:
         #--- Note: nupdate = f(sim_days, dispatch_frequency)
-        for j in range(nupdate):
-            #--- Update input dictionary from current plant state
-            D.update(self.plant.state)
-            
-            #--- Calculate times
-            time = self.current_time
-            tod = int(util.get_time_of_day(time))  # Current time of day (s)
-            toy = int(util.get_time_of_year(time))  # Current time of year (s)
-            D['time_start'] = toy
-            startpt = int(toy/3600)*nph  # First point in annual arrays corresponding to this time
+        # for j in range(nupdate):
 
-            #--- Set time horizon
-            horizon = nominal_horizon 
-            if self.dispatch_horizon_update != self.dispatch_frequency:
-                horizon = nominal_horizon  - int((j*freq) % horizon_update)   # Reduce dispatch horizon if re-optimization interval and horizon update interval are different
-            # Restrict horizon to the end of the final simulation day (otherwise the dispatch often defers generation to the next day outside of the simulation window)
-            if (toy+horizon)/3600 > end_hour:
-                horizon = end_hour*3600 - toy            
-            
-            npts_horizon = int(horizon/3600 * nph)
+        #--- Update input dictionary from current plant state
+        D.update(self.plant.state)
+        
+        #--- Calculate times
+        time = self.current_time
+        tod = int(util.get_time_of_day(time))  # Current time of day (s)
+        toy = int(util.get_time_of_year(time))  # Current time of year (s)
+        D['time_start'] = toy
+        startpt = int(toy/3600)*nph  # First point in annual arrays corresponding to this time
 
-            #--- Update "forecasted" weather data (if relevant)
-            if self.is_optimize and (tod == self.forecast_issue_time*3600):
-                self.update_forecast_weather_data(time)
+        # #--- Set time horizon
+        # horizon = nominal_horizon 
+        # if self.dispatch_horizon_update != self.dispatch_frequency:
+        #     horizon = nominal_horizon  - int((j*freq) % horizon_update)   # Reduce dispatch horizon if re-optimization interval and horizon update interval are different
+        # # Restrict horizon to the end of the final simulation day (otherwise the dispatch often defers generation to the next day outside of the simulation window)
+        # if (toy+horizon)/3600 > end_hour:
+        #     horizon = end_hour*3600 - toy            
+        
+        npts_horizon = int(horizon/3600 * nph)
 
-            #--- Update stored day-ahead generation schedule for current day (if relevant)
-            if tod == 0 and self.use_day_ahead_schedule:
-                if self.day_ahead_schedule_from == 'calculated':
-                    if j == 0:
-                        self.schedules.append(None)  
-                    else:
-                        self.current_day_schedule = [s for s in self.next_day_schedule]
-                        self.schedules.append(self.current_day_schedule)
-                elif self.day_ahead_schedule_from == 'NVE':
-                    self.current_day_schedule = self.get_CD_NVE_day_ahead_schedule(time)
+        #--- Update "forecasted" weather data (if relevant)
+        if self.is_optimize and (tod == self.forecast_issue_time*3600):
+            self.current_forecast_weather_data = CaseStudy.update_forecast_weather_data(
+                date=time,
+                current_forecast_weather_data=self.current_forecast_weather_data,
+                ssc_time_steps_per_hour=self.ssc_time_steps_per_hour,
+                forecast_steps_per_hour=self.forecast_steps_per_hour,
+                ground_truth_weather_data=self.ground_truth_weather_data,
+                forecast_issue_time=self.forecast_issue_time,
+                day_ahead_schedule_time=self.day_ahead_schedule_time,
+                clearsky_data=self.clearsky_data
+                )
+
+        #--- Update stored day-ahead generation schedule for current day (if relevant)
+        if tod == 0 and self.use_day_ahead_schedule:
+            if self.day_ahead_schedule_from == 'calculated':
+                if j == 0:
+                    self.schedules.append(None)  
+                else:
+                    self.current_day_schedule = [s for s in self.next_day_schedule]
                     self.schedules.append(self.current_day_schedule)
+            elif self.day_ahead_schedule_from == 'NVE':
+                self.current_day_schedule = self.get_CD_NVE_day_ahead_schedule(time)
+                self.schedules.append(self.current_day_schedule)
 
-                self.next_day_schedule = [0 for s in self.next_day_schedule]
-                
-            # Don't include day-ahead schedule if one hasn't been calculated yet, or if there is no NVE schedule available on this day
-            if ((toy - start_time)/3600 < 24 and self.day_ahead_schedule_from == 'calculated') or (self.day_ahead_schedule_from == 'NVE' and self.current_day_schedule == None):  
-                include_day_ahead_in_dispatch = False
-            else:
-                include_day_ahead_in_dispatch = self.use_day_ahead_schedule
+            self.next_day_schedule = [0 for s in self.next_day_schedule]
+            
+        # Don't include day-ahead schedule if one hasn't been calculated yet, or if there is no NVE schedule available on this day
+        if ((toy - start_time)/3600 < 24 and self.day_ahead_schedule_from == 'calculated') or (self.day_ahead_schedule_from == 'NVE' and self.current_day_schedule == None):  
+            include_day_ahead_in_dispatch = False
+        else:
+            include_day_ahead_in_dispatch = self.use_day_ahead_schedule
 
 
 
-            #--- Run dispatch optimization (if relevant)
-            if self.is_optimize:
-                
-                #--- Update weather to use in dispatch optimization for this optimization horizon
-                self.weather_data_for_dispatch = dispatch.update_dispatch_weather_data(
-                    weather_data = self.weather_data_for_dispatch,
-                    replacement_real_weather_data = self.ground_truth_weather_data,
-                    replacement_forecast_weather_data = self.current_forecast_weather_data,
-                    datetime = time,
-                    total_horizon = horizon/3600.,
-                    dispatch_horizon = self.dispatch_weather_horizon
-                    )
+        #--- Run dispatch optimization (if relevant)
+        if self.is_optimize:
+            
+            if j == 1:
+                assert math.isclose(self.weather_data_for_dispatch['tz'], -8, rel_tol=1e-4)
+                assert math.isclose(self.weather_data_for_dispatch['elev'], 1497.2, rel_tol=1e-4)
+                assert math.isclose(self.weather_data_for_dispatch['lat'], 38.24, rel_tol=1e-4)
+                assert math.isclose(self.weather_data_for_dispatch['lon'], -117.36, rel_tol=1e-4)
+                assert math.isclose(sum(list(self.weather_data_for_dispatch['dn'])), 526513.8, rel_tol=1e-4)
+                assert math.isclose(sum(list(self.weather_data_for_dispatch['df'])), 0, rel_tol=1e-4)
+                assert math.isclose(sum(list(self.weather_data_for_dispatch['gh'])), 0, rel_tol=1e-4)
+                assert math.isclose(sum(list(self.weather_data_for_dispatch['tdry'])), 10522.8, rel_tol=1e-4)
 
-                if j == 0 and toy + horizon == 24796800:
-                    assert math.isclose(self.weather_data_for_dispatch['tz'], -8, rel_tol=1e-4)
-                    assert math.isclose(self.weather_data_for_dispatch['elev'], 1497.2, rel_tol=1e-4)
-                    assert math.isclose(self.weather_data_for_dispatch['lat'], 38.24, rel_tol=1e-4)
-                    assert math.isclose(self.weather_data_for_dispatch['lon'], -117.36, rel_tol=1e-4)
-                    assert math.isclose(sum(list(self.weather_data_for_dispatch['dn'])), 526513.7, rel_tol=1e-4)
-                    assert math.isclose(sum(list(self.weather_data_for_dispatch['df'])), 0, rel_tol=1e-4)
-                    assert math.isclose(sum(list(self.weather_data_for_dispatch['gh'])), 0, rel_tol=1e-4)
-                    assert math.isclose(sum(list(self.weather_data_for_dispatch['tdry'])), 10522.8, rel_tol=1e-4)
-                
-                if j == 1:
-                    assert math.isclose(self.weather_data_for_dispatch['tz'], -8, rel_tol=1e-4)
-                    assert math.isclose(self.weather_data_for_dispatch['elev'], 1497.2, rel_tol=1e-4)
-                    assert math.isclose(self.weather_data_for_dispatch['lat'], 38.24, rel_tol=1e-4)
-                    assert math.isclose(self.weather_data_for_dispatch['lon'], -117.36, rel_tol=1e-4)
-                    assert math.isclose(sum(list(self.weather_data_for_dispatch['dn'])), 526513.8, rel_tol=1e-4)
-                    assert math.isclose(sum(list(self.weather_data_for_dispatch['df'])), 0, rel_tol=1e-4)
-                    assert math.isclose(sum(list(self.weather_data_for_dispatch['gh'])), 0, rel_tol=1e-4)
-                    assert math.isclose(sum(list(self.weather_data_for_dispatch['tdry'])), 10737.5, rel_tol=1e-4)
+                assert math.isclose(self.ground_truth_weather_data['tz'], -8, rel_tol=1e-4)
+                assert math.isclose(self.ground_truth_weather_data['elev'], 1497.2, rel_tol=1e-4)
+                assert math.isclose(self.ground_truth_weather_data['lat'], 38.24, rel_tol=1e-4)
+                assert math.isclose(self.ground_truth_weather_data['lon'], -117.36, rel_tol=1e-4)
+                assert math.isclose(sum(list(self.ground_truth_weather_data['dn'])), 150372982.8, rel_tol=1e-4)
+                assert math.isclose(sum(list(self.ground_truth_weather_data['df'])), 0, rel_tol=1e-4)
+                assert math.isclose(sum(list(self.ground_truth_weather_data['gh'])), 0, rel_tol=1e-4)
+                assert math.isclose(sum(list(self.ground_truth_weather_data['tdry'])), 6825483.6, rel_tol=1e-4)
 
-                #--- Run ssc for dispatch estimates: (using weather forecast time resolution for weather data and specified ssc time step)
-                R_est = dispatch.estimates_for_dispatch_model(
-                    plant_design = D,
-                    toy = toy,
-                    horizon = horizon,
-                    weather_data = self.weather_data_for_dispatch,
-                    N_pts_horizon = npts_horizon,
-                    clearsky_data = self.clearsky_data,
-                    start_pt = startpt
+                assert math.isclose(self.current_forecast_weather_data['tz'], -8, rel_tol=1e-4)
+                assert math.isclose(self.current_forecast_weather_data['elev'], 1497.2, rel_tol=1e-4)
+                assert math.isclose(self.current_forecast_weather_data['lat'], 38.24, rel_tol=1e-4)
+                assert math.isclose(self.current_forecast_weather_data['lon'], -117.36, rel_tol=1e-4)
+                assert math.isclose(sum(list(self.current_forecast_weather_data['dn'])), 1077438.6, rel_tol=1e-4)
+                assert math.isclose(sum(list(self.current_forecast_weather_data['df'])), 0, rel_tol=1e-4)
+                assert math.isclose(sum(list(self.current_forecast_weather_data['gh'])), 0, rel_tol=1e-4)
+                assert math.isclose(sum(list(self.current_forecast_weather_data['tdry'])), 28686.6, rel_tol=1e-4)
+
+                assert time == datetime.datetime(2018, 10, 14, 1, 0 ,0)
+                assert horizon == 82800
+                assert self.dispatch_weather_horizon == 2
+
+            #--- Update weather to use in dispatch optimization for this optimization horizon
+            self.weather_data_for_dispatch = dispatch.update_dispatch_weather_data(
+                weather_data = self.weather_data_for_dispatch,
+                replacement_real_weather_data = self.ground_truth_weather_data,
+                replacement_forecast_weather_data = self.current_forecast_weather_data,
+                datetime = time,
+                total_horizon = horizon/3600.,
+                dispatch_horizon = self.dispatch_weather_horizon
                 )
-
-                if j == 0 and toy + horizon == 24796800:
-                    assert math.isclose(sum(list(R_est["Q_thermal"])), 230346, rel_tol=1e-4)
-                    assert math.isclose(sum(list(R_est["m_dot_rec"])), 599416, rel_tol=1e-4)
-                    assert math.isclose(sum(list(R_est["clearsky"])), 543582, rel_tol=1e-4)
-                    assert math.isclose(sum(list(R_est["P_tower_pump"])), 2460.8, rel_tol=1e-4)
-
-                if j == 1:
-                    assert math.isclose(sum(list(R_est["Q_thermal"])), 230347, rel_tol=1e-4)
-                    assert math.isclose(sum(list(R_est["m_dot_rec"])), 599355, rel_tol=1e-4)
-                    assert math.isclose(sum(list(R_est["clearsky"])), 543582, rel_tol=1e-4)
-                    assert math.isclose(sum(list(R_est["P_tower_pump"])), 2460.6, rel_tol=1e-4)
-
-                #--- Set dispatch optimization properties for this time horizon using ssc estimates
-                disp_in = dispatch.setup_dispatch_model(
-                    R_est = R_est,
-                    freq = freq,
-                    horizon = horizon,
-                    include_day_ahead_in_dispatch = include_day_ahead_in_dispatch,
-                    dispatch_params = self.dispatch_params,
-                    dispatch_steplength_array = self.dispatch_steplength_array,
-                    dispatch_steplength_end_time = self.dispatch_steplength_end_time,
-                    dispatch_horizon = self.dispatch_horizon,
-                    plant = self.plant,
-                    nonlinear_model_time = self.nonlinear_model_time,
-                    use_linear_dispatch_at_night = self.use_linear_dispatch_at_night,
-                    clearsky_data = self.clearsky_data,
-                    night_clearky_cutoff = self.night_clearsky_cutoff,
-                    disp_time_weighting = self.disp_time_weighting,
-                    price = self.price_data[startpt:startpt+npts_horizon],          # [$/MWh] Update prices for this horizon
-                    sscstep = sscstep,
-                    avg_price = self.avg_price,
-                    avg_price_disp_storage_incentive = self.avg_price_disp_storage_incentive,
-                    avg_purchase_price = self.avg_purchase_price,
-                    day_ahead_tol_plus = self.day_ahead_tol_plus,
-                    day_ahead_tol_minus = self.day_ahead_tol_minus,
-                    tod = tod,
-                    current_day_schedule = self.current_day_schedule,
-                    day_ahead_pen_plus = self.day_ahead_pen_plus,
-                    day_ahead_pen_minus = self.day_ahead_pen_minus,
-                    night_clearsky_cutoff = self.night_clearsky_cutoff,
-                    ursd_last = self.ursd_last,
-                    yrsd_last = self.yrsd_last
-                )
-
-                include = {"pv": False, "battery": False, "persistence": False, "force_cycle": False, "op_assumptions": False,
-                            "signal":include_day_ahead_in_dispatch, "simple_receiver": False}
-                    
-                dispatch_soln = dispatch.run_dispatch_model(disp_in, include)
-
-                if j == 0 and toy + horizon == 24796800:
-                    assert math.isclose(sum(list(dispatch_soln.cycle_on)), 16, rel_tol=1e-4)
-                    assert math.isclose(sum(list(dispatch_soln.cycle_startup)), 2, rel_tol=1e-4)
-                    assert math.isclose(sum(list(dispatch_soln.drsu)), 2.15, rel_tol=1e-4)
-                    assert math.isclose(sum(list(dispatch_soln.electrical_output_from_cycle)), 1731858, rel_tol=1e-4)
-                    assert math.isclose(sum(list(dispatch_soln.frsu)), 1.15, rel_tol=1e-4)
-                    assert math.isclose(dispatch_soln.objective_value, 206946.6, rel_tol=1e-4)
-                    assert math.isclose(dispatch_soln.s0, 832639.4, rel_tol=1e-4)
-
-                if j == 1:
-                    assert math.isclose(sum(list(dispatch_soln.cycle_on)), 15, rel_tol=1e-4)
-                    assert math.isclose(sum(list(dispatch_soln.cycle_startup)), 2, rel_tol=1e-4)
-                    assert math.isclose(sum(list(dispatch_soln.drsu)), 2.15, rel_tol=1e-4)
-                    assert math.isclose(sum(list(dispatch_soln.electrical_output_from_cycle)), 1743183, rel_tol=1e-4)
-                    assert math.isclose(sum(list(dispatch_soln.frsu)), 1.15, rel_tol=1e-4)
-                    assert math.isclose(dispatch_soln.objective_value, 208838, rel_tol=1e-4)
-                    assert math.isclose(dispatch_soln.s0, 832181, rel_tol=1e-4)
-
-                if dispatch_soln is not None:
-                    # TODO: make the time triggering more robust; shouldn't be an '==' as the program may be offline at the time or running at intervals
-                    #  that won't exactly hit it
-                    if self.use_day_ahead_schedule and self.day_ahead_schedule_from == 'calculated' and tod/3600 == self.day_ahead_schedule_time:
-                        self.next_day_schedule = dispatch.get_day_ahead_schedule(
-                            day_ahead_schedule_steps_per_hour = self.day_ahead_schedule_steps_per_hour,
-                            Delta = self.dispatch_params.Delta,
-                            Delta_e = self.dispatch_params.Delta_e,
-                            net_electrical_output = dispatch_soln.net_electrical_output,
-                            day_ahead_schedule_time = self.day_ahead_schedule_time
-                            )
-
-                        weather_at_day_ahead_schedule = dispatch.get_weather_at_day_ahead_schedule(self.weather_data_for_dispatch, startpt, npts_horizon)
-                        self.weather_at_schedule.append(weather_at_day_ahead_schedule)  # Store weather used at the point in time the day ahead schedule was generated
-
-                    #--- Set ssc dispatch targets
-                    ssc_dispatch_targets = dispatch.DispatchTargets(dispatch_soln, self.plant, self.dispatch_params, sscstep, freq/3600.)
-
-                    if j == 0 and toy + horizon == 24796800:
-                        assert hash(tuple(ssc_dispatch_targets.is_pc_sb_allowed_in)) == -4965923453060612375
-                        assert hash(tuple(ssc_dispatch_targets.is_pc_su_allowed_in)) == -4965923453060612375
-                        assert hash(tuple(ssc_dispatch_targets.is_rec_sb_allowed_in)) == -4965923453060612375
-                        assert hash(tuple(ssc_dispatch_targets.is_rec_su_allowed_in)) == -4965923453060612375
-                        assert hash(tuple(ssc_dispatch_targets.q_pc_max_in)) == -709626543671595165
-                        assert hash(tuple(ssc_dispatch_targets.q_pc_target_on_in)) == -4965923453060612375
-                        assert hash(tuple(ssc_dispatch_targets.q_pc_target_su_in)) == -4965923453060612375
-
-                    if j == 1:
-                        assert hash(tuple(ssc_dispatch_targets.is_pc_sb_allowed_in)) == -4965923453060612375
-                        assert hash(tuple(ssc_dispatch_targets.is_pc_su_allowed_in)) == -4965923453060612375
-                        assert hash(tuple(ssc_dispatch_targets.is_rec_sb_allowed_in)) == -4965923453060612375
-                        assert hash(tuple(ssc_dispatch_targets.is_rec_su_allowed_in)) == -4965923453060612375
-                        assert hash(tuple(ssc_dispatch_targets.q_pc_max_in)) == -709626543671595165
-                        assert hash(tuple(ssc_dispatch_targets.q_pc_target_on_in)) == -4965923453060612375
-                        assert hash(tuple(ssc_dispatch_targets.q_pc_target_su_in)) == -4965923453060612375
-
-                    #--- Save these values for next estimates
-                    self.ursd_last = dispatch_soln.get_value_at_time(self.dispatch_params, freq/3600, 'ursd')      # set to False when it doesn't exists 
-                    self.yrsd_last = dispatch_soln.get_value_at_time(self.dispatch_params, freq/3600, 'yrsd')      # set to False when it doesn't exists
-
-                else:  # Infeasible solution was returned, revert back to running ssc without dispatch targets
-                    pass
-            
-            
-            ################################
-            #--- Run ssc and collect results
-            ################################
-            if self.is_optimize and dispatch_soln is not None:
-                D.update(vars(ssc_dispatch_targets))
-
-            D['time_stop'] = toy+freq
-            Rsub, new_plant_state = ssc_wrapper.call_ssc(D, retvars, plant_state_pt = napply-1, npts = napply)
-            
-            #--- Update saved plant state
-            persistance_vars = plant_.Plant.update_persistence(
-                self.plant.state,
-                Rsub,
-                new_plant_state['rec_op_mode_initial'],
-                new_plant_state['pc_op_mode_initial'],
-                sscstep/3600.)
-            new_plant_state.update(persistance_vars)
-            self.plant.state.update(new_plant_state)
 
             if j == 0 and toy + horizon == 24796800:
-                assert math.isclose(self.plant.state['pc_startup_energy_remain_initial'], 29339.9, rel_tol=1e-4)
-                assert math.isclose(self.plant.state['pc_startup_time_remain_init'], 0.5, rel_tol=1e-4)
-                assert math.isclose(self.plant.state['rec_startup_energy_remain_init'], 141250000, rel_tol=1e-4)
-                assert math.isclose(self.plant.state['rec_startup_time_remain_init'], 1.15, rel_tol=1e-4)
-                assert math.isclose(self.plant.state['disp_rec_persist0'], 1001, rel_tol=1e-4)
-                assert math.isclose(self.plant.state['disp_rec_off0'], 1001, rel_tol=1e-4)
-                assert math.isclose(self.plant.state['disp_pc_persist0'], 1001, rel_tol=1e-4)
-                assert math.isclose(self.plant.state['disp_pc_off0'], 1001, rel_tol=1e-4)
+                assert math.isclose(self.weather_data_for_dispatch['tz'], -8, rel_tol=1e-4)
+                assert math.isclose(self.weather_data_for_dispatch['elev'], 1497.2, rel_tol=1e-4)
+                assert math.isclose(self.weather_data_for_dispatch['lat'], 38.24, rel_tol=1e-4)
+                assert math.isclose(self.weather_data_for_dispatch['lon'], -117.36, rel_tol=1e-4)
+                assert math.isclose(sum(list(self.weather_data_for_dispatch['dn'])), 526513.7, rel_tol=1e-4)
+                assert math.isclose(sum(list(self.weather_data_for_dispatch['df'])), 0, rel_tol=1e-4)
+                assert math.isclose(sum(list(self.weather_data_for_dispatch['gh'])), 0, rel_tol=1e-4)
+                assert math.isclose(sum(list(self.weather_data_for_dispatch['tdry'])), 10522.8, rel_tol=1e-4)
 
             if j == 1:
-                assert math.isclose(self.plant.state['pc_startup_energy_remain_initial'], 29339.9, rel_tol=1e-4)
-                assert math.isclose(self.plant.state['pc_startup_time_remain_init'], 0.5, rel_tol=1e-4)
-                assert math.isclose(self.plant.state['rec_startup_energy_remain_init'], 141250000, rel_tol=1e-4)
-                assert math.isclose(self.plant.state['rec_startup_time_remain_init'], 1.15, rel_tol=1e-4)
-                assert math.isclose(self.plant.state['disp_rec_persist0'], 1002, rel_tol=1e-4)
-                assert math.isclose(self.plant.state['disp_rec_off0'], 1002, rel_tol=1e-4)
-                assert math.isclose(self.plant.state['disp_pc_persist0'], 1002, rel_tol=1e-4)
-                assert math.isclose(self.plant.state['disp_pc_off0'], 1002, rel_tol=1e-4)
+                assert math.isclose(self.weather_data_for_dispatch['tz'], -8, rel_tol=1e-4)
+                assert math.isclose(self.weather_data_for_dispatch['elev'], 1497.2, rel_tol=1e-4)
+                assert math.isclose(self.weather_data_for_dispatch['lat'], 38.24, rel_tol=1e-4)
+                assert math.isclose(self.weather_data_for_dispatch['lon'], -117.36, rel_tol=1e-4)
+                assert math.isclose(sum(list(self.weather_data_for_dispatch['dn'])), 526513.8, rel_tol=1e-4)
+                assert math.isclose(sum(list(self.weather_data_for_dispatch['df'])), 0, rel_tol=1e-4)
+                assert math.isclose(sum(list(self.weather_data_for_dispatch['gh'])), 0, rel_tol=1e-4)
+                assert math.isclose(sum(list(self.weather_data_for_dispatch['tdry'])), 10737.5, rel_tol=1e-4)
 
-            #--- Prune ssc and dispatch solutions in the current update interval and add to compiled results (R)
-            for k in Rsub.keys():
-                R[k][j*napply:(j+1)*napply] = Rsub[k][0:napply]
-            if self.is_optimize and dispatch_soln is not None:
-                Rdisp = dispatch_soln.get_solution_at_ssc_steps(self.dispatch_params, sscstep/3600., freq/3600.)
-                for k in retvars_disp:
-                    if k in Rdisp.keys():
-                        R['disp_'+k][j*napply:(j+1)*napply] = Rdisp[k]
-                    
-            #--- Update current time
-            self.current_time = self.current_time + datetime.timedelta(seconds = freq)
+            #--- Run ssc for dispatch estimates: (using weather forecast time resolution for weather data and specified ssc time step)
+            R_est = dispatch.estimates_for_dispatch_model(
+                plant_design = D,
+                toy = toy,
+                horizon = horizon,
+                weather_data = self.weather_data_for_dispatch,
+                N_pts_horizon = npts_horizon,
+                clearsky_data = self.clearsky_data,
+                start_pt = startpt
+            )
+
+            if j == 0 and toy + horizon == 24796800:
+                assert math.isclose(sum(list(R_est["Q_thermal"])), 230346, rel_tol=1e-4)
+                assert math.isclose(sum(list(R_est["m_dot_rec"])), 599416, rel_tol=1e-4)
+                assert math.isclose(sum(list(R_est["clearsky"])), 543582, rel_tol=1e-4)
+                assert math.isclose(sum(list(R_est["P_tower_pump"])), 2460.8, rel_tol=1e-4)
+
+            if j == 1:
+                assert math.isclose(sum(list(R_est["Q_thermal"])), 230347, rel_tol=1e-4)
+                assert math.isclose(sum(list(R_est["m_dot_rec"])), 599355, rel_tol=1e-4)
+                assert math.isclose(sum(list(R_est["clearsky"])), 543582, rel_tol=1e-4)
+                assert math.isclose(sum(list(R_est["P_tower_pump"])), 2460.6, rel_tol=1e-4)
+
+            #--- Set dispatch optimization properties for this time horizon using ssc estimates
+            disp_in = dispatch.setup_dispatch_model(
+                R_est = R_est,
+                freq = freq,
+                horizon = horizon,
+                include_day_ahead_in_dispatch = include_day_ahead_in_dispatch,
+                dispatch_params = self.dispatch_params,
+                dispatch_steplength_array = self.dispatch_steplength_array,
+                dispatch_steplength_end_time = self.dispatch_steplength_end_time,
+                dispatch_horizon = self.dispatch_horizon,
+                plant = self.plant,
+                nonlinear_model_time = self.nonlinear_model_time,
+                use_linear_dispatch_at_night = self.use_linear_dispatch_at_night,
+                clearsky_data = self.clearsky_data,
+                night_clearky_cutoff = self.night_clearsky_cutoff,
+                disp_time_weighting = self.disp_time_weighting,
+                price = self.price_data[startpt:startpt+npts_horizon],          # [$/MWh] Update prices for this horizon
+                sscstep = sscstep,
+                avg_price = self.avg_price,
+                avg_price_disp_storage_incentive = self.avg_price_disp_storage_incentive,
+                avg_purchase_price = self.avg_purchase_price,
+                day_ahead_tol_plus = self.day_ahead_tol_plus,
+                day_ahead_tol_minus = self.day_ahead_tol_minus,
+                tod = tod,
+                current_day_schedule = self.current_day_schedule,
+                day_ahead_pen_plus = self.day_ahead_pen_plus,
+                day_ahead_pen_minus = self.day_ahead_pen_minus,
+                night_clearsky_cutoff = self.night_clearsky_cutoff,
+                ursd_last = ursd_last,
+                yrsd_last = yrsd_last
+            )
+
+            include = {"pv": False, "battery": False, "persistence": False, "force_cycle": False, "op_assumptions": False,
+                        "signal":include_day_ahead_in_dispatch, "simple_receiver": False}
+                
+            dispatch_soln = dispatch.run_dispatch_model(disp_in, include)
+
+            if j == 0 and toy + horizon == 24796800:
+                assert math.isclose(sum(list(dispatch_soln.cycle_on)), 16, rel_tol=1e-4)
+                assert math.isclose(sum(list(dispatch_soln.cycle_startup)), 2, rel_tol=1e-4)
+                assert math.isclose(sum(list(dispatch_soln.drsu)), 2.15, rel_tol=1e-4)
+                assert math.isclose(sum(list(dispatch_soln.electrical_output_from_cycle)), 1731858, rel_tol=1e-4)
+                assert math.isclose(sum(list(dispatch_soln.frsu)), 1.15, rel_tol=1e-4)
+                assert math.isclose(dispatch_soln.objective_value, 206946.6, rel_tol=1e-4)
+                assert math.isclose(dispatch_soln.s0, 832639.4, rel_tol=1e-4)
+
+            if j == 1:
+                assert math.isclose(sum(list(dispatch_soln.cycle_on)), 15, rel_tol=1e-4)
+                assert math.isclose(sum(list(dispatch_soln.cycle_startup)), 2, rel_tol=1e-4)
+                assert math.isclose(sum(list(dispatch_soln.drsu)), 2.15, rel_tol=1e-4)
+                assert math.isclose(sum(list(dispatch_soln.electrical_output_from_cycle)), 1743183, rel_tol=1e-4)
+                assert math.isclose(sum(list(dispatch_soln.frsu)), 1.15, rel_tol=1e-4)
+                assert math.isclose(dispatch_soln.objective_value, 208838, rel_tol=1e-4)
+                assert math.isclose(dispatch_soln.s0, 832181, rel_tol=1e-4)
+
+            if dispatch_soln is not None:
+                # TODO: make the time triggering more robust; shouldn't be an '==' as the program may be offline at the time or running at intervals
+                #  that won't exactly hit it
+                if self.use_day_ahead_schedule and self.day_ahead_schedule_from == 'calculated' and tod/3600 == self.day_ahead_schedule_time:
+                    self.next_day_schedule = dispatch.get_day_ahead_schedule(
+                        day_ahead_schedule_steps_per_hour = self.day_ahead_schedule_steps_per_hour,
+                        Delta = self.dispatch_params.Delta,
+                        Delta_e = self.dispatch_params.Delta_e,
+                        net_electrical_output = dispatch_soln.net_electrical_output,
+                        day_ahead_schedule_time = self.day_ahead_schedule_time
+                        )
+
+                    weather_at_day_ahead_schedule = dispatch.get_weather_at_day_ahead_schedule(self.weather_data_for_dispatch, startpt, npts_horizon)
+                    self.weather_at_schedule.append(weather_at_day_ahead_schedule)  # Store weather used at the point in time the day ahead schedule was generated
+
+                #--- Set ssc dispatch targets
+                ssc_dispatch_targets = dispatch.DispatchTargets(dispatch_soln, self.plant, self.dispatch_params, sscstep, freq/3600.)
+
+                if j == 0 and toy + horizon == 24796800:
+                    assert hash(tuple(ssc_dispatch_targets.is_pc_sb_allowed_in)) == -4965923453060612375
+                    assert hash(tuple(ssc_dispatch_targets.is_pc_su_allowed_in)) == -4965923453060612375
+                    assert hash(tuple(ssc_dispatch_targets.is_rec_sb_allowed_in)) == -4965923453060612375
+                    assert hash(tuple(ssc_dispatch_targets.is_rec_su_allowed_in)) == -4965923453060612375
+                    assert hash(tuple(ssc_dispatch_targets.q_pc_max_in)) == -709626543671595165
+                    assert hash(tuple(ssc_dispatch_targets.q_pc_target_on_in)) == -4965923453060612375
+                    assert hash(tuple(ssc_dispatch_targets.q_pc_target_su_in)) == -4965923453060612375
+
+                if j == 1:
+                    assert hash(tuple(ssc_dispatch_targets.is_pc_sb_allowed_in)) == -4965923453060612375
+                    assert hash(tuple(ssc_dispatch_targets.is_pc_su_allowed_in)) == -4965923453060612375
+                    assert hash(tuple(ssc_dispatch_targets.is_rec_sb_allowed_in)) == -4965923453060612375
+                    assert hash(tuple(ssc_dispatch_targets.is_rec_su_allowed_in)) == -4965923453060612375
+                    assert hash(tuple(ssc_dispatch_targets.q_pc_max_in)) == -709626543671595165
+                    assert hash(tuple(ssc_dispatch_targets.q_pc_target_on_in)) == -4965923453060612375
+                    assert hash(tuple(ssc_dispatch_targets.q_pc_target_su_in)) == -4965923453060612375
+
+                #--- Save these values for next estimates
+                ursd_last = dispatch_soln.get_value_at_time(self.dispatch_params, freq/3600, 'ursd')      # set to False when it doesn't exists 
+                yrsd_last = dispatch_soln.get_value_at_time(self.dispatch_params, freq/3600, 'yrsd')      # set to False when it doesn't exists
+
+            else:  # Infeasible solution was returned, revert back to running ssc without dispatch targets
+                pass
+        
+        
+        ################################
+        #--- Run ssc and collect results
+        ################################
+        if self.is_optimize and dispatch_soln is not None:
+            D.update(vars(ssc_dispatch_targets))
+
+        D['time_stop'] = toy+freq
+        Rsub, new_plant_state = ssc_wrapper.call_ssc(D, retvars, plant_state_pt = napply-1, npts = napply)
+        
+        #--- Update saved plant state
+        persistance_vars = plant_.Plant.update_persistence(
+            self.plant.state,
+            Rsub,
+            new_plant_state['rec_op_mode_initial'],
+            new_plant_state['pc_op_mode_initial'],
+            sscstep/3600.)
+        new_plant_state.update(persistance_vars)
+        self.plant.state.update(new_plant_state)
+
+        if j == 0 and toy + horizon == 24796800:
+            assert math.isclose(self.plant.state['pc_startup_energy_remain_initial'], 29339.9, rel_tol=1e-4)
+            assert math.isclose(self.plant.state['pc_startup_time_remain_init'], 0.5, rel_tol=1e-4)
+            assert math.isclose(self.plant.state['rec_startup_energy_remain_init'], 141250000, rel_tol=1e-4)
+            assert math.isclose(self.plant.state['rec_startup_time_remain_init'], 1.15, rel_tol=1e-4)
+            assert math.isclose(self.plant.state['disp_rec_persist0'], 1001, rel_tol=1e-4)
+            assert math.isclose(self.plant.state['disp_rec_off0'], 1001, rel_tol=1e-4)
+            assert math.isclose(self.plant.state['disp_pc_persist0'], 1001, rel_tol=1e-4)
+            assert math.isclose(self.plant.state['disp_pc_off0'], 1001, rel_tol=1e-4)
+
+        if j == 1:
+            assert math.isclose(self.plant.state['pc_startup_energy_remain_initial'], 29339.9, rel_tol=1e-4)
+            assert math.isclose(self.plant.state['pc_startup_time_remain_init'], 0.5, rel_tol=1e-4)
+            assert math.isclose(self.plant.state['rec_startup_energy_remain_init'], 141250000, rel_tol=1e-4)
+            assert math.isclose(self.plant.state['rec_startup_time_remain_init'], 1.15, rel_tol=1e-4)
+            assert math.isclose(self.plant.state['disp_rec_persist0'], 1002, rel_tol=1e-4)
+            assert math.isclose(self.plant.state['disp_rec_off0'], 1002, rel_tol=1e-4)
+            assert math.isclose(self.plant.state['disp_pc_persist0'], 1002, rel_tol=1e-4)
+            assert math.isclose(self.plant.state['disp_pc_off0'], 1002, rel_tol=1e-4)
+
+        #--- Prune ssc and dispatch solutions in the current update interval and add to compiled results (R)
+        for k in Rsub.keys():
+            R[k][j*napply:(j+1)*napply] = Rsub[k][0:napply]
+        if self.is_optimize and dispatch_soln is not None:
+            Rdisp = dispatch_soln.get_solution_at_ssc_steps(self.dispatch_params, sscstep/3600., freq/3600.)
+            for k in retvars_disp:
+                if k in Rdisp.keys():
+                    R['disp_'+k][j*napply:(j+1)*napply] = Rdisp[k]
+                
+        # #--- Update current time
+        # self.current_time = self.current_time + datetime.timedelta(seconds = freq)
         
         self.results = R
         
@@ -515,7 +558,20 @@ class CaseStudy:
         outputs.update(day_ahead_penalties)
         outputs.update(startup_ramping_penalties)
 
-        return outputs
+
+        results = {
+            'outputs': outputs,
+            'plant_state': self.plant.state,
+            'ursd_last': ursd_last,
+            'yrsd_last': yrsd_last,
+            'current_forecast_weather_data': self.current_forecast_weather_data,
+	        'weather_data_for_dispatch': self.weather_data_for_dispatch,
+            'schedules': self.schedules,
+	        'current_day_schedule': self.current_day_schedule,
+	        'next_day_schedule': self.next_day_schedule
+        }
+
+        return results
             
 
     def initialize(self):
@@ -558,19 +614,6 @@ class CaseStudy:
         if self.control_receiver == 'CD_data' and self.control_field != 'CD_data':
             print ('Warning: Receiver flow is controlled from CD data, but field tracking fraction is controlled by ssc. Temperatures will likely be unrealistically high')
 
-        # Read in annual arrays for clear-sky DNI, receiver mass flow, etc.
-        self.clearsky_data = np.genfromtxt(self.clearsky_file)
-        self.CD_mflow_path1_data = np.genfromtxt(self.CD_mflow_path1_file)
-        self.CD_mflow_path2_data = np.genfromtxt(self.CD_mflow_path2_file)
-        if self.ssc_time_steps_per_hour != 60:
-            self.clearsky_data = np.array(util.translate_to_new_timestep(self.clearsky_data, 1./60, 1./self.ssc_time_steps_per_hour))
-            self.CD_mflow_path1_data = np.array(util.translate_to_new_timestep(self.CD_mflow_path1_data, 1./60, 1./self.ssc_time_steps_per_hour))
-            self.CD_mflow_path2_data = np.array(util.translate_to_new_timestep(self.CD_mflow_path2_data, 1./60, 1./self.ssc_time_steps_per_hour))            
-        
-        # Create annual weather data structure that will contain weather forecast data to be used during optimization (weather data filled with all zeros for now)
-        self.current_forecast_weather_data = util.create_empty_weather_data(self.ground_truth_weather_data, self.ssc_time_steps_per_hour)
-        self.weather_data_for_dispatch = util.create_empty_weather_data(self.ground_truth_weather_data, self.ssc_time_steps_per_hour)
-
         # Initialize price data
         price_multipliers = np.genfromtxt(self.price_multiplier_file)
         if self.price_steps_per_hour != self.ssc_time_steps_per_hour:
@@ -578,20 +621,16 @@ class CaseStudy:
         pmavg = sum(price_multipliers)/len(price_multipliers)  
         self.price_data = [self.avg_price*p/pmavg  for p in price_multipliers]  # Electricity price at ssc time steps ($/MWh)
 
-        # Initialize day-ahead generation schedules
-        n = 24*self.day_ahead_schedule_steps_per_hour
-        self.current_day_schedule = np.zeros(n)
-        self.next_day_schedule = np.zeros(n)
-
         self.is_initialized = True
         return
     
-    
-    def update_forecast_weather_data(self, date, offset30 = True):
+    @staticmethod
+    def update_forecast_weather_data(date, current_forecast_weather_data, ssc_time_steps_per_hour, forecast_steps_per_hour, ground_truth_weather_data,
+                                     forecast_issue_time, day_ahead_schedule_time, clearsky_data):
         """
         Inputs:
             date
-            offset30
+            current_forecast_weather_data
             ssc_time_steps_per_hour
             forecast_steps_per_hour
             ground_truth_weather_data
@@ -603,12 +642,13 @@ class CaseStudy:
             current_forecast_weather_data
         """
 
+        offset30 = True
         print ('Updating weather forecast:', date)
         nextdate = date + datetime.timedelta(days = 1) # Forecasts issued at 4pm PST on a given day (PST) are labeled at midnight (UTC) on the next day 
         wfdata = util.read_weather_forecast(nextdate, offset30)
         t = int(util.get_time_of_year(date)/3600)   # Time of year (hr)
-        pssc = int(t*self.ssc_time_steps_per_hour) 
-        nssc_per_wf = int(self.ssc_time_steps_per_hour / self.forecast_steps_per_hour)
+        pssc = int(t*ssc_time_steps_per_hour) 
+        nssc_per_wf = int(ssc_time_steps_per_hour / forecast_steps_per_hour)
         
         #---Update forecast data in full weather file: Assuming forecast points are on half-hour time points, valid for the surrounding hour, with the first point 30min prior to the designated forecast issue time
         if not offset30:  # Assume forecast points are on the hour, valid for the surrounding hour
@@ -617,39 +657,39 @@ class CaseStudy:
                 q  = pssc + nssc_per_wf/2  if j == 0 else pssc + nssc_per_wf/2 + (j-1)*nssc_per_wf/2  # First point in annual weather data (at ssc time resolution) for forecast time point j
                 nuse = nssc_per_wf/2 if j==0 else nssc_per_wf 
                 for k in ['dn', 'wspd', 'tdry', 'rhum', 'pres']:
-                    val =  wfdata[k][j] if k in wfdata.keys() else self.ground_truth_weather_data[k][pssc]  # Use current ground-truth value for full forecast period if forecast value is not available            
+                    val =  wfdata[k][j] if k in wfdata.keys() else ground_truth_weather_data[k][pssc]  # Use current ground-truth value for full forecast period if forecast value is not available            
                     for i in range(nuse):  
-                        self.current_forecast_weather_data[k][q+i] = val   
+                        current_forecast_weather_data[k][q+i] = val   
                 
         else: # Assume forecast points are on the half-hour, valid for the surrounding hour, with the first point 30min prior to the designated forecast issue time
             n = len(wfdata['dn']) - 1
             for j in range(n): 
                 q = pssc + j*nssc_per_wf
                 for k in ['dn', 'wspd', 'tdry', 'rhum', 'pres']:
-                    val =  wfdata[k][j+1] if k in wfdata.keys() else self.ground_truth_weather_data[k][pssc]  # Use current ground-truth value for full forecast period if forecast value is not available            
+                    val =  wfdata[k][j+1] if k in wfdata.keys() else ground_truth_weather_data[k][pssc]  # Use current ground-truth value for full forecast period if forecast value is not available            
                     for i in range(nssc_per_wf):  
-                        self.current_forecast_weather_data[k][q+i] = val
+                        current_forecast_weather_data[k][q+i] = val
 
         #--- Extrapolate forecasts to be complete for next-day dispatch scheduling (if necessary)
-        forecast_duration = n*self.forecast_steps_per_hour if offset30 else (n-0.5)*self.forecast_steps_per_hour
-        if self.forecast_issue_time > self.day_ahead_schedule_time:
-            hours_avail = forecast_duration - (24 - self.forecast_issue_time) - self.day_ahead_schedule_time  # Hours of forecast available at the point the day ahead schedule is due
+        forecast_duration = n*forecast_steps_per_hour if offset30 else (n-0.5)*forecast_steps_per_hour
+        if forecast_issue_time > day_ahead_schedule_time:
+            hours_avail = forecast_duration - (24 - forecast_issue_time) - day_ahead_schedule_time  # Hours of forecast available at the point the day ahead schedule is due
         else:
-            hours_avail = forecast_duration - (self.day_ahead_schedule_time - self.forecast_issue_time)
+            hours_avail = forecast_duration - (day_ahead_schedule_time - forecast_issue_time)
             
-        req_hours_avail = 48 - self.day_ahead_schedule_time 
+        req_hours_avail = 48 - day_ahead_schedule_time 
         if req_hours_avail >  hours_avail:  # Forecast is not available for the full time required for the day-ahead schedule
             qf = pssc + int((n-0.5)*nssc_per_wf) if offset30 else pssc + (n-1)*nssc_per_wf   # Point in annual arrays corresponding to last point forecast time point
-            cratio = 0.0 if wfdata['dn'][-1]<20 else wfdata['dn'][-1] / max(self.clearsky_data[qf], 1.e-6)  # Ratio of actual / clearsky at last forecast time point
+            cratio = 0.0 if wfdata['dn'][-1]<20 else wfdata['dn'][-1] / max(clearsky_data[qf], 1.e-6)  # Ratio of actual / clearsky at last forecast time point
             
-            nmiss = int((req_hours_avail - hours_avail) * self.ssc_time_steps_per_hour)  
+            nmiss = int((req_hours_avail - hours_avail) * ssc_time_steps_per_hour)  
             q = pssc + n*nssc_per_wf if offset30 else pssc + int((n-0.5)*nssc_per_wf ) 
             for i in range(nmiss):
-                self.current_forecast_weather_data['dn'][q+i] = self.clearsky_data[q+i] * cratio    # Approximate DNI in non-forecasted time periods from expected clear-sky DNI and actual/clear-sky ratio at latest available forecast time point
+                current_forecast_weather_data['dn'][q+i] = clearsky_data[q+i] * cratio    # Approximate DNI in non-forecasted time periods from expected clear-sky DNI and actual/clear-sky ratio at latest available forecast time point
                 for k in ['wspd', 'tdry', 'rhum', 'pres']:  
-                    self.current_forecast_weather_data[k][q+i] = self.current_forecast_weather_data[k][q-1]  # Assume latest forecast value applies for the remainder of the time period
+                    current_forecast_weather_data[k][q+i] = current_forecast_weather_data[k][q-1]  # Assume latest forecast value applies for the remainder of the time period
 
-        return
+        return current_forecast_weather_data
     
     
     def get_field_availability_adjustment(self, steps_per_hour, year):
@@ -772,7 +812,8 @@ class CaseStudy:
         """
         nph = int(self.ssc_time_steps_per_hour)
         ndays = self.sim_days
-        start = datetime.datetime(self.start_date.year, self.start_date.month, self.start_date.day) 
+        # start = datetime.datetime(self.start_date.year, self.start_date.month, self.start_date.day)
+        start = start_date
         startpt = int(util.get_time_of_year(start)/3600) * nph   # First point in annual arrays         
         price = np.array(self.price_data[startpt:startpt+ndays*24*nph])
         mult = price / price.mean()   # Pricing multipliers
@@ -1163,6 +1204,9 @@ if __name__ == '__main__':
     os.chdir(os.path.dirname(__file__))
     
     ssc_time_steps_per_hour = 60
+    forecast_steps_per_hour = 1
+    forecast_issue_time = 16
+    day_ahead_schedule_time = 10
     ground_truth_weather_file = './model-validation/input_files/weather_files/ssc_weatherfile_1min_2018.csv'  # Weather file derived from CD data: DNI, ambient temperature,
                                                                                                                    #  wind speed, etc. are averaged over 4 CD weather stations,
                                                                                                                    #  after filtering DNI readings for bad measurements. 
@@ -1171,6 +1215,18 @@ if __name__ == '__main__':
     ground_truth_weather_data = util.read_weather_data(ground_truth_weather_file)
     if ssc_time_steps_per_hour != 60:
         ground_truth_weather_data = util.update_weather_timestep(ground_truth_weather_data, ssc_time_steps_per_hour)
+
+    # Read in annual arrays for clear-sky DNI, receiver mass flow, etc.
+    clearsky_file = './model-validation/input_files/weather_files/clearsky_pvlib_ineichen_1min_2018.csv'      # Expected clear-sky DNI from Ineichen model (via pvlib).  
+    CD_mflow_path1_file = './model-validation/input_files/mflow_path1_2018_1min.csv'                          # File containing CD data for receiver path 1 mass flow rate (note, all values are zeros on days without data)
+    CD_mflow_path2_file = './model-validation/input_files/mflow_path2_2018_1min.csv'                          # File containing CD data for receiver path 2 mass flow rate (note, all values are zeros on days without data)
+    clearsky_data = np.genfromtxt(clearsky_file)
+    CD_mflow_path1_data = np.genfromtxt(CD_mflow_path1_file)
+    CD_mflow_path2_data = np.genfromtxt(CD_mflow_path2_file)
+    if ssc_time_steps_per_hour != 60:
+        clearsky_data = np.array(util.translate_to_new_timestep(clearsky_data, 1./60, 1./ssc_time_steps_per_hour))
+        CD_mflow_path1_data = np.array(util.translate_to_new_timestep(CD_mflow_path1_data, 1./60, 1./ssc_time_steps_per_hour))
+        CD_mflow_path2_data = np.array(util.translate_to_new_timestep(CD_mflow_path2_data, 1./60, 1./ssc_time_steps_per_hour))    
 
     #-- Setup plant including calculating flux maps
     plant = plant_.Plant(design=plant_.plant_design, initial_state=plant_.plant_initial_state)   # Default parameters contain best representation of CD plant and dispatch properties
@@ -1189,6 +1245,9 @@ if __name__ == '__main__':
         'plant':                            plant,
         'ssc_time_steps_per_hour':          ssc_time_steps_per_hour,
         'ground_truth_weather_data':        ground_truth_weather_data,
+        'clearsky_data':                    clearsky_data,
+        'CD_mflow_path1_data':              CD_mflow_path1_data,
+        'CD_mflow_path2_data':              CD_mflow_path2_data,
         'isdebug':                          False,
         'control_field':                    'ssc',
         'control_receiver':                 'ssc_clearsky',
@@ -1206,33 +1265,89 @@ if __name__ == '__main__':
                                                                                 #  Useful for debugging, but might want to turn off when running large simulations
     }
         
-    cs = CaseStudy(params=params)
+    start = timeit.default_timer()
     outputs_total = {}
 
-    start = timeit.default_timer()
-    #
-    start_date = datetime.datetime(2018, 10, 14)
     sim_days = 1
+    total_horizon = sim_days*24     # [hr]
+    dispatch_frequency = 1          # [hr] TODO  make this not hardcoded
+    nupdate = int(total_horizon / dispatch_frequency)
+
+    start_date = datetime.datetime(2018, 10, 14)
+    horizon = 86400                 # TODO  make this not hardcoded
+    forecast_issue_time = 16        # TODO  make this not hardcoded
+    ursd_last = 0
+    yrsd_last = 0
+
+    # Initialize forecast weather data using the day prior to the first simulated day
+    forecast_time = start_date - datetime.timedelta(hours = 24-forecast_issue_time)
+    current_forecast_weather_data = util.create_empty_weather_data(ground_truth_weather_data, ssc_time_steps_per_hour)
+    current_forecast_weather_data = CaseStudy.update_forecast_weather_data(
+                date=forecast_time,
+                current_forecast_weather_data=current_forecast_weather_data,
+                ssc_time_steps_per_hour=ssc_time_steps_per_hour,
+                forecast_steps_per_hour=forecast_steps_per_hour,
+                ground_truth_weather_data=ground_truth_weather_data,
+                forecast_issue_time=forecast_issue_time,
+                day_ahead_schedule_time=day_ahead_schedule_time,
+                clearsky_data=clearsky_data
+                )
+
+    weather_data_for_dispatch = util.create_empty_weather_data(ground_truth_weather_data, ssc_time_steps_per_hour)
+    day_ahead_schedule_steps_per_hour = 1           # TODO make this not hardcoded
+    n = 24*day_ahead_schedule_steps_per_hour
+    schedules = []
+    current_day_schedule = np.zeros(n)
+    next_day_schedule = np.zeros(n)
     initial_plant_state = util.get_initial_state_from_CD_data(start_date, params['CD_raw_data_direc'], params['CD_processed_data_direc'], plant.design)
-    outputs = cs.run(start_date=start_date, sim_days=sim_days, initial_plant_state=initial_plant_state)
-    #
-    elapsed = timeit.default_timer() - start
 
 
-    # Aggregate totals
-    outputs['total_receiver_thermal'] = outputs.pop('Q_thermal').sum() * 1.e-3 * (1./ssc_time_steps_per_hour)
-    outputs['total_cycle_gross'] = outputs.pop('P_cycle').sum() * 1.e-3 * (1./ssc_time_steps_per_hour)
-    outputs['total_cycle_net'] = outputs.pop('P_out_net').sum() * 1.e-3 * (1./ssc_time_steps_per_hour)
-    if not outputs_total:   # if empty
-        outputs_total = outputs.copy()
-    else:
-        for key in outputs:
-            if isinstance(key, dict):
-                for key_inner in key:
-                    outputs_total[key][key_inner] += outputs[key][key_inner]
-            else:
-                outputs_total[key] += outputs[key]
+    for j in range(nupdate):
+        cs = CaseStudy(params=params)
+        results = cs.run(
+            j=j,
+            start_date=start_date,
+            sim_days=dispatch_frequency,
+            horizon=horizon,
+            ursd_last=ursd_last,
+            yrsd_last=yrsd_last,
+            current_forecast_weather_data=current_forecast_weather_data,
+            weather_data_for_dispatch=weather_data_for_dispatch,
+            schedules=schedules,
+            current_day_schedule=current_day_schedule,
+            next_day_schedule=next_day_schedule,
+            initial_plant_state=initial_plant_state
+            )
+
+        # Update inputs for next call
+        start_date += datetime.timedelta(hours=dispatch_frequency)
+        horizon -= 3600         # TODO make this not hardcoded
+        ursd_last = results['ursd_last']
+        yrsd_last = results['yrsd_last']
+        current_forecast_weather_data = results['current_forecast_weather_data']
+        weather_data_for_dispatch = results['weather_data_for_dispatch']
+        schedules = results['schedules']
+        current_day_schedule = results['current_day_schedule']
+        next_day_schedule = results['next_day_schedule']
+        initial_plant_state = results['plant_state']
+
+        # Aggregate totals
+        outputs = results['outputs']
+        outputs['total_receiver_thermal'] = outputs.pop('Q_thermal').sum() * 1.e-3 * (1./ssc_time_steps_per_hour)
+        outputs['total_cycle_gross'] = outputs.pop('P_cycle').sum() * 1.e-3 * (1./ssc_time_steps_per_hour)
+        outputs['total_cycle_net'] = outputs.pop('P_out_net').sum() * 1.e-3 * (1./ssc_time_steps_per_hour)
+        if not outputs_total:   # if empty
+            outputs_total = outputs.copy()
+        else:
+            for key in outputs:
+                if isinstance(outputs[key], dict):
+                    for key_inner in outputs[key]:
+                        outputs_total[key][key_inner] += outputs[key][key_inner]
+                else:
+                    outputs_total[key] += outputs[key]
     
+
+    elapsed = timeit.default_timer() - start
 
     # All of these outputs are just sums of the individual calls
     print ('Total time elapsed = %.2fs'%(timeit.default_timer() - start))
