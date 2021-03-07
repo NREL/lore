@@ -1307,7 +1307,7 @@ if __name__ == '__main__':
         results = cs.run(
             j=j,
             start_date=start_date,
-            sim_days=dispatch_frequency,
+            sim_days=dispatch_frequency/24.,
             horizon=horizon,
             ursd_last=ursd_last,
             yrsd_last=yrsd_last,
