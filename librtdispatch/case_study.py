@@ -231,10 +231,6 @@ class CaseStudy:
         self.disp_params_tracking = []
         self.disp_soln_tracking = []
 
-        #--- For the total horizon, at the dispatch frequency:
-        #--- Note: nupdate = f(sim_days, dispatch_frequency)
-        # for j in range(nupdate):
-
         #--- Update input dictionary from current plant state
         D.update(self.plant.state)
         
@@ -243,15 +239,7 @@ class CaseStudy:
         tod = int(util.get_time_of_day(time))  # Current time of day (s)
         toy = int(util.get_time_of_year(time))  # Current time of year (s)
         D['time_start'] = toy
-        startpt = int(toy/3600)*nph  # First point in annual arrays corresponding to this time
-
-        # #--- Set time horizon
-        # horizon = nominal_horizon 
-        # if self.dispatch_horizon_update != self.dispatch_frequency:
-        #     horizon = nominal_horizon  - int((j*freq) % horizon_update)   # Reduce dispatch horizon if re-optimization interval and horizon update interval are different
-        # # Restrict horizon to the end of the final simulation day (otherwise the dispatch often defers generation to the next day outside of the simulation window)
-        # if (toy+horizon)/3600 > end_hour:
-        #     horizon = end_hour*3600 - toy            
+        startpt = int(toy/3600)*nph  # First point in annual arrays corresponding to this time         
         
         npts_horizon = int(horizon/3600 * nph)
 
@@ -518,17 +506,12 @@ class CaseStudy:
 
         #--- Prune ssc and dispatch solutions in the current update interval and add to compiled results (R)
         for k in Rsub.keys():
-            # R[k][j*napply:(j+1)*napply] = Rsub[k][0:napply]
             R[k][0:napply] = Rsub[k][0:napply]
         if self.is_optimize and dispatch_soln is not None:
             Rdisp = dispatch_soln.get_solution_at_ssc_steps(self.dispatch_params, sscstep/3600., freq/3600.)
             for k in retvars_disp:
                 if k in Rdisp.keys():
-                    # R['disp_'+k][j*napply:(j+1)*napply] = Rdisp[k]
                     R['disp_'+k][0:napply] = Rdisp[k]
-                
-        # #--- Update current time
-        # self.current_time = self.current_time + datetime.timedelta(seconds = freq)
         
         self.results = R
         
@@ -857,7 +840,6 @@ class CaseStudy:
         """
 
 
-        # ndays = self.sim_days
         ndays = max(1, self.sim_days)
         nph = int(self.ssc_time_steps_per_hour)
 
@@ -937,26 +919,6 @@ class CaseStudy:
             startup_ramping_penalty
         """
 
-        def find_starts_old(q_start, q_on):
-            n = len(q_start)
-            n_starts, n_starts_attempted = [0, 0]
-            is_starting = False
-            for j in range(1,n):
-                if q_start[j] > 1.e-3 and q_start[j-1]<1.e-3:
-                    is_starting = True
-                    n_starts_attempted +=1
-                
-                if is_starting:
-                    if q_on[j] > 1.e-3:  # Startup completed
-                        n_starts += 1
-                        is_starting = False
-                    elif q_start[j] < 1.e-3: # Startup abandoned
-                        is_starting = False    
-                        
-            return n_starts, n_starts_attempted
-
-        #self.n_starts_rec = np.logical_and(self.results['q_startup'][1:]>1.e-3, self.results['q_startup'][0:-1] < 1.e-3).sum()  # Nonzero startup energy in step t and zero startup energy in t-1
-        #self.n_starts_cycle =  np.logical_and(self.results['q_dot_pc_startup'][1:]>1.e-3, self.results['q_dot_pc_startup'][0:-1] < 1.e-3).sum()
         
         def find_starts(q_start, q_on):
             n = len(q_start)
