@@ -934,29 +934,22 @@ class CaseStudy:
             startup_ramping_penalty
         """
 
+        
         def find_starts(q_start, q_on):
             n = len(q_start)
-            n_starts, n_starts_attempted = [0, 0]
-            is_starting = False
+            n_starts, n_start_attempts_completed = [0, 0]
             for j in range(1,n):
+                start_attempt_completed = False
+                if q_start[j] < 1. and q_start[j-1] >= 1.:
+                    start_attempt_completed = True
+                    n_start_attempts_completed +=1
                 
-                if q_start[j] > 1.e-3 and q_start[j-1]<1.e-3:
-                    is_starting = True
-                    n_starts_attempted +=1
-                
-                if is_starting:
-                    if q_on[j] > 1.e-3:  # Startup completed
+                if start_attempt_completed and (q_on[j] > 1. and q_on[j-1] < 1.e-3):
                         n_starts += 1
-                        is_starting = False
-                    elif q_start[j] < 1.e-3: # Startup abandoned
-                        is_starting = False    
-                        
-            return n_starts, n_starts_attempted
 
-        #self.n_starts_rec = np.logical_and(self.results['q_startup'][1:]>1.e-3, self.results['q_startup'][0:-1] < 1.e-3).sum()  # Nonzero startup energy in step t and zero startup energy in t-1
-        #self.n_starts_cycle =  np.logical_and(self.results['q_dot_pc_startup'][1:]>1.e-3, self.results['q_dot_pc_startup'][0:-1] < 1.e-3).sum()
+            return n_starts, n_start_attempts_completed
         
-        self.n_starts_rec, self.n_starts_rec_attempted =  find_starts(self.results['q_startup'], self.results['Q_thermal'])
+        self.n_starts_rec, self.n_starts_rec_attempted = find_starts(self.results['q_startup'], self.results['Q_thermal'])
 
         qpb_on = self.results['q_pb']   # Cycle thermal power includes startup
         inds_off = np.where(self.results['P_cycle']<1.e-3)[0]
