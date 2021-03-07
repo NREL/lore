@@ -519,12 +519,12 @@ class CaseStudy:
 
         #--- Prune ssc and dispatch solutions in the current update interval and add to compiled results (R)
         for k in Rsub.keys():
-            R[k][j*napply:(j+1)*napply] = Rsub[k][0:napply]
+            R[k][0:napply] = Rsub[k][0:napply]
         if self.is_optimize and dispatch_soln is not None:
             Rdisp = dispatch_soln.get_solution_at_ssc_steps(self.dispatch_params, sscstep/3600., freq/3600.)
             for k in retvars_disp:
                 if k in Rdisp.keys():
-                    R['disp_'+k][j*napply:(j+1)*napply] = Rdisp[k]
+                    R['disp_'+k][0:napply] = Rdisp[k]
                 
         # #--- Update current time
         # self.current_time = self.current_time + datetime.timedelta(seconds = freq)
@@ -815,7 +815,7 @@ class CaseStudy:
         # start = datetime.datetime(self.start_date.year, self.start_date.month, self.start_date.day)
         start = start_date
         startpt = int(util.get_time_of_year(start)/3600) * nph   # First point in annual arrays         
-        price = np.array(self.price_data[startpt:startpt+ndays*24*nph])
+        price = np.array(self.price_data[startpt:int(startpt+ndays*24*nph)])
         mult = price / price.mean()   # Pricing multipliers
         
         net_gen = self.results['P_out_net']
@@ -856,7 +856,7 @@ class CaseStudy:
         """
 
 
-        ndays = self.sim_days
+        ndays = max(1, self.sim_days)
         nph = int(self.ssc_time_steps_per_hour)
 
         self.day_ahead_diff = {k:np.zeros((ndays, 24)) for k in ['ssc', 'disp', 'disp_raw']}
