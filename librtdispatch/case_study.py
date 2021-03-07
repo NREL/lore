@@ -160,7 +160,7 @@ class CaseStudy:
 
     #-------------------------------------------------------------------------
     #--- Run simulation
-    def run(self, j, start_date, sim_days, horizon, ursd_last, yrsd_last, current_forecast_weather_data, weather_data_for_dispatch,
+    def run(self, start_date, sim_days, horizon, ursd_last, yrsd_last, current_forecast_weather_data, weather_data_for_dispatch,
             schedules, current_day_schedule, next_day_schedule, initial_plant_state=None):
 
         self.start_date = start_date
@@ -258,17 +258,11 @@ class CaseStudy:
 
         #--- Update stored day-ahead generation schedule for current day (if relevant)
         if tod == 0 and self.use_day_ahead_schedule:
-            if self.day_ahead_schedule_from == 'calculated':
-                if j == 0:
-                    self.schedules.append(None)  
-                else:
-                    self.current_day_schedule = [s for s in self.next_day_schedule]
-                    self.schedules.append(self.current_day_schedule)
-            elif self.day_ahead_schedule_from == 'NVE':
+            self.next_day_schedule = [0 for s in self.next_day_schedule]
+
+            if self.day_ahead_schedule_from == 'NVE':
                 self.current_day_schedule = self.get_CD_NVE_day_ahead_schedule(time)
                 self.schedules.append(self.current_day_schedule)
-
-            self.next_day_schedule = [0 for s in self.next_day_schedule]
             
         # Don't include day-ahead schedule if one hasn't been calculated yet, or if there is no NVE schedule available on this day
         if ((toy - start_time)/3600 < 24 and self.day_ahead_schedule_from == 'calculated') or (self.day_ahead_schedule_from == 'NVE' and self.current_day_schedule == None):  
@@ -281,7 +275,7 @@ class CaseStudy:
         #--- Run dispatch optimization (if relevant)
         if self.is_optimize:
             
-            if j == 1:
+            if start_date == datetime.datetime(2018, 10, 14, 1, 0):
                 assert math.isclose(self.weather_data_for_dispatch['tz'], -8, rel_tol=1e-4)
                 assert math.isclose(self.weather_data_for_dispatch['elev'], 1497.2, rel_tol=1e-4)
                 assert math.isclose(self.weather_data_for_dispatch['lat'], 38.24, rel_tol=1e-4)
@@ -323,7 +317,7 @@ class CaseStudy:
                 dispatch_horizon = self.dispatch_weather_horizon
                 )
 
-            if j == 0 and toy + horizon == 24796800:
+            if start_date == datetime.datetime(2018, 10, 14, 0, 0):
                 assert math.isclose(self.weather_data_for_dispatch['tz'], -8, rel_tol=1e-4)
                 assert math.isclose(self.weather_data_for_dispatch['elev'], 1497.2, rel_tol=1e-4)
                 assert math.isclose(self.weather_data_for_dispatch['lat'], 38.24, rel_tol=1e-4)
@@ -333,7 +327,7 @@ class CaseStudy:
                 assert math.isclose(sum(list(self.weather_data_for_dispatch['gh'])), 0, rel_tol=1e-4)
                 assert math.isclose(sum(list(self.weather_data_for_dispatch['tdry'])), 10522.8, rel_tol=1e-4)
 
-            if j == 1:
+            if start_date == datetime.datetime(2018, 10, 14, 1, 0):
                 assert math.isclose(self.weather_data_for_dispatch['tz'], -8, rel_tol=1e-4)
                 assert math.isclose(self.weather_data_for_dispatch['elev'], 1497.2, rel_tol=1e-4)
                 assert math.isclose(self.weather_data_for_dispatch['lat'], 38.24, rel_tol=1e-4)
@@ -354,13 +348,13 @@ class CaseStudy:
                 start_pt = startpt
             )
 
-            if j == 0 and toy + horizon == 24796800:
+            if start_date == datetime.datetime(2018, 10, 14, 0, 0):
                 assert math.isclose(sum(list(R_est["Q_thermal"])), 230346, rel_tol=1e-4)
                 assert math.isclose(sum(list(R_est["m_dot_rec"])), 599416, rel_tol=1e-4)
                 assert math.isclose(sum(list(R_est["clearsky"])), 543582, rel_tol=1e-4)
                 assert math.isclose(sum(list(R_est["P_tower_pump"])), 2460.8, rel_tol=1e-4)
 
-            if j == 1:
+            if start_date == datetime.datetime(2018, 10, 14, 1, 0):
                 assert math.isclose(sum(list(R_est["Q_thermal"])), 230347, rel_tol=1e-4)
                 assert math.isclose(sum(list(R_est["m_dot_rec"])), 599355, rel_tol=1e-4)
                 assert math.isclose(sum(list(R_est["clearsky"])), 543582, rel_tol=1e-4)
@@ -403,7 +397,7 @@ class CaseStudy:
                 
             dispatch_soln = dispatch.run_dispatch_model(disp_in, include)
 
-            if j == 0 and toy + horizon == 24796800:
+            if start_date == datetime.datetime(2018, 10, 14, 0, 0):
                 assert math.isclose(sum(list(dispatch_soln.cycle_on)), 16, rel_tol=1e-4)
                 assert math.isclose(sum(list(dispatch_soln.cycle_startup)), 2, rel_tol=1e-4)
                 assert math.isclose(sum(list(dispatch_soln.drsu)), 2.15, rel_tol=1e-4)
@@ -412,7 +406,7 @@ class CaseStudy:
                 assert math.isclose(dispatch_soln.objective_value, 206946.6, rel_tol=1e-4)
                 assert math.isclose(dispatch_soln.s0, 832639.4, rel_tol=1e-4)
 
-            if j == 1:
+            if start_date == datetime.datetime(2018, 10, 14, 1, 0):
                 assert math.isclose(sum(list(dispatch_soln.cycle_on)), 15, rel_tol=1e-4)
                 assert math.isclose(sum(list(dispatch_soln.cycle_startup)), 2, rel_tol=1e-4)
                 assert math.isclose(sum(list(dispatch_soln.drsu)), 2.15, rel_tol=1e-4)
@@ -439,7 +433,7 @@ class CaseStudy:
                 #--- Set ssc dispatch targets
                 ssc_dispatch_targets = dispatch.DispatchTargets(dispatch_soln, self.plant, self.dispatch_params, sscstep, freq/3600.)
 
-                if j == 0 and toy + horizon == 24796800:
+                if start_date == datetime.datetime(2018, 10, 14, 0, 0):
                     assert hash(tuple(ssc_dispatch_targets.is_pc_sb_allowed_in)) == -4965923453060612375
                     assert hash(tuple(ssc_dispatch_targets.is_pc_su_allowed_in)) == -4965923453060612375
                     assert hash(tuple(ssc_dispatch_targets.is_rec_sb_allowed_in)) == -4965923453060612375
@@ -448,7 +442,7 @@ class CaseStudy:
                     assert hash(tuple(ssc_dispatch_targets.q_pc_target_on_in)) == -4965923453060612375
                     assert hash(tuple(ssc_dispatch_targets.q_pc_target_su_in)) == -4965923453060612375
 
-                if j == 1:
+                if start_date == datetime.datetime(2018, 10, 14, 1, 0):
                     assert hash(tuple(ssc_dispatch_targets.is_pc_sb_allowed_in)) == -4965923453060612375
                     assert hash(tuple(ssc_dispatch_targets.is_pc_su_allowed_in)) == -4965923453060612375
                     assert hash(tuple(ssc_dispatch_targets.is_rec_sb_allowed_in)) == -4965923453060612375
@@ -484,7 +478,7 @@ class CaseStudy:
         new_plant_state.update(persistance_vars)
         self.plant.state.update(new_plant_state)
 
-        if j == 0 and toy + horizon == 24796800:
+        if start_date == datetime.datetime(2018, 10, 14, 0, 0):
             assert math.isclose(self.plant.state['pc_startup_energy_remain_initial'], 29339.9, rel_tol=1e-4)
             assert math.isclose(self.plant.state['pc_startup_time_remain_init'], 0.5, rel_tol=1e-4)
             assert math.isclose(self.plant.state['rec_startup_energy_remain_init'], 141250000, rel_tol=1e-4)
@@ -494,7 +488,7 @@ class CaseStudy:
             assert math.isclose(self.plant.state['disp_pc_persist0'], 1001, rel_tol=1e-4)
             assert math.isclose(self.plant.state['disp_pc_off0'], 1001, rel_tol=1e-4)
 
-        if j == 1:
+        if start_date == datetime.datetime(2018, 10, 14, 1, 0):
             assert math.isclose(self.plant.state['pc_startup_energy_remain_initial'], 29339.9, rel_tol=1e-4)
             assert math.isclose(self.plant.state['pc_startup_time_remain_init'], 0.5, rel_tol=1e-4)
             assert math.isclose(self.plant.state['rec_startup_energy_remain_init'], 141250000, rel_tol=1e-4)
@@ -1184,6 +1178,8 @@ if __name__ == '__main__':
     forecast_steps_per_hour = 1
     forecast_issue_time = 16
     day_ahead_schedule_time = 10
+    use_day_ahead_schedule = True
+    day_ahead_schedule_from = 'calculated'
     ground_truth_weather_file = './model-validation/input_files/weather_files/ssc_weatherfile_1min_2018.csv'  # Weather file derived from CD data: DNI, ambient temperature,
                                                                                                                    #  wind speed, etc. are averaged over 4 CD weather stations,
                                                                                                                    #  after filtering DNI readings for bad measurements. 
@@ -1232,8 +1228,8 @@ if __name__ == '__main__':
         'dispatch_weather_horizon':         2,                                  # TODO: what horizon do we want to use?
         'use_CD_measured_reflectivity':     False,  
         'fixed_soiling_loss':               0.02,                               # 1 - (reflectivity / clean reflectivity)
-        'use_day_ahead_schedule':           True,
-        'day_ahead_schedule_from':          'calculated',
+        'use_day_ahead_schedule':           use_day_ahead_schedule,
+        'day_ahead_schedule_from':          day_ahead_schedule_from,
         'CD_raw_data_direc':                './input_files/CD_raw',             # Directory containing raw data files from CD
         'CD_processed_data_direc':          './input_files/CD_processed',       # Directory containing files with 1min data already extracted
         'set_initial_state_from_CD_data':   True,
@@ -1278,11 +1274,14 @@ if __name__ == '__main__':
     next_day_schedule = np.zeros(n)
     initial_plant_state = util.get_initial_state_from_CD_data(start_date, params['CD_raw_data_direc'], params['CD_processed_data_direc'], plant.design)
 
+    tod = int(util.get_time_of_day(start_date))
+    if tod == 0 and use_day_ahead_schedule and day_ahead_schedule_from == 'calculated':
+        schedules.append(None)
 
     for j in range(nupdate):
+        tod = int(util.get_time_of_day(start_date))
         cs = CaseStudy(params=params)
         results = cs.run(
-            j=j,
             start_date=start_date,
             sim_days=dispatch_frequency/24.,
             horizon=horizon,
@@ -1297,15 +1296,19 @@ if __name__ == '__main__':
             )
 
         # Update inputs for next call
+        schedules = results['schedules']
+        current_day_schedule = results['current_day_schedule']
+        next_day_schedule = results['next_day_schedule']
+        if tod == 0 and use_day_ahead_schedule and day_ahead_schedule_from == 'calculated':
+            current_day_schedule = [s for s in next_day_schedule]
+            schedules.append(current_day_schedule)
+
         start_date += datetime.timedelta(hours=dispatch_frequency)
         horizon -= 3600         # TODO make this not hardcoded
         ursd_last = results['ursd_last']
         yrsd_last = results['yrsd_last']
         current_forecast_weather_data = results['current_forecast_weather_data']
         weather_data_for_dispatch = results['weather_data_for_dispatch']
-        schedules = results['schedules']
-        current_day_schedule = results['current_day_schedule']
-        next_day_schedule = results['next_day_schedule']
         initial_plant_state = results['plant_state']
 
         # Aggregate totals
