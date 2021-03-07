@@ -519,11 +519,13 @@ class CaseStudy:
 
         #--- Prune ssc and dispatch solutions in the current update interval and add to compiled results (R)
         for k in Rsub.keys():
+            # R[k][j*napply:(j+1)*napply] = Rsub[k][0:napply]
             R[k][0:napply] = Rsub[k][0:napply]
         if self.is_optimize and dispatch_soln is not None:
             Rdisp = dispatch_soln.get_solution_at_ssc_steps(self.dispatch_params, sscstep/3600., freq/3600.)
             for k in retvars_disp:
                 if k in Rdisp.keys():
+                    # R['disp_'+k][j*napply:(j+1)*napply] = Rdisp[k]
                     R['disp_'+k][0:napply] = Rdisp[k]
                 
         # #--- Update current time
@@ -856,6 +858,7 @@ class CaseStudy:
         """
 
 
+        # ndays = self.sim_days
         ndays = max(1, self.sim_days)
         nph = int(self.ssc_time_steps_per_hour)
 
@@ -935,6 +938,26 @@ class CaseStudy:
             startup_ramping_penalty
         """
 
+        def find_starts_old(q_start, q_on):
+            n = len(q_start)
+            n_starts, n_starts_attempted = [0, 0]
+            is_starting = False
+            for j in range(1,n):
+                if q_start[j] > 1.e-3 and q_start[j-1]<1.e-3:
+                    is_starting = True
+                    n_starts_attempted +=1
+                
+                if is_starting:
+                    if q_on[j] > 1.e-3:  # Startup completed
+                        n_starts += 1
+                        is_starting = False
+                    elif q_start[j] < 1.e-3: # Startup abandoned
+                        is_starting = False    
+                        
+            return n_starts, n_starts_attempted
+
+        #self.n_starts_rec = np.logical_and(self.results['q_startup'][1:]>1.e-3, self.results['q_startup'][0:-1] < 1.e-3).sum()  # Nonzero startup energy in step t and zero startup energy in t-1
+        #self.n_starts_cycle =  np.logical_and(self.results['q_dot_pc_startup'][1:]>1.e-3, self.results['q_dot_pc_startup'][0:-1] < 1.e-3).sum()
         
         def find_starts(q_start, q_on):
             n = len(q_start)
@@ -946,10 +969,10 @@ class CaseStudy:
                     n_start_attempts_completed +=1
                 
                 if start_attempt_completed and (q_on[j] > 1. and q_on[j-1] < 1.e-3):
-                        n_starts += 1
-
+                    n_starts += 1
+                        
             return n_starts, n_start_attempts_completed
-        
+
         self.n_starts_rec, self.n_starts_rec_attempted = find_starts(self.results['q_startup'], self.results['Q_thermal'])
 
         qpb_on = self.results['q_pb']   # Cycle thermal power includes startup
@@ -1363,7 +1386,7 @@ if __name__ == '__main__':
     assert math.isclose(outputs_total['total_receiver_thermal'], 3.85, rel_tol=1e-3)
     assert math.isclose(outputs_total['total_cycle_gross'], 1.89, rel_tol=1e-2)
     assert math.isclose(outputs_total['total_cycle_net'], 1.74, rel_tol=1e-2)
-    assert math.isclose(outputs_total['cycle_ramp_up'], 121, rel_tol=1e-3)
-    assert math.isclose(outputs_total['cycle_ramp_down'], 121, rel_tol=1e-3)
-    assert math.isclose(outputs_total['revenue'], 243422, rel_tol=1e-2)
+    assert math.isclose(outputs_total['cycle_ramp_up'], 120.2, rel_tol=1e-3)
+    assert math.isclose(outputs_total['cycle_ramp_down'], 121.0, rel_tol=1e-3)
+    assert math.isclose(outputs_total['revenue'], 243565, rel_tol=1e-2)
     assert math.isclose(outputs_total['startup_ramping_penalty'], 7200, rel_tol=1e-3)
