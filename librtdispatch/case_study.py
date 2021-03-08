@@ -467,12 +467,12 @@ class CaseStudy:
             D.update(vars(ssc_dispatch_targets))
 
         D['time_stop'] = toy+freq
-        Rsub, new_plant_state = ssc_wrapper.call_ssc(D, retvars, plant_state_pt = napply-1, npts = napply)
+        R, new_plant_state = ssc_wrapper.call_ssc(D, retvars, plant_state_pt = napply-1, npts = napply)
         
         #--- Update saved plant state
         persistance_vars = plant_.Plant.update_persistence(
             self.plant.state,
-            Rsub,
+            R,
             new_plant_state['rec_op_mode_initial'],
             new_plant_state['pc_op_mode_initial'],
             sscstep/3600.)
@@ -499,14 +499,12 @@ class CaseStudy:
             assert math.isclose(self.plant.state['disp_pc_persist0'], 1002, rel_tol=1e-4)
             assert math.isclose(self.plant.state['disp_pc_off0'], 1002, rel_tol=1e-4)
 
-        #--- Prune ssc and dispatch solutions in the current update interval and add to compiled results (R)
-        for k in Rsub.keys():
-            R[k][0:napply] = Rsub[k][0:napply]
+        #--- Add dispatch solution to compiled results (R)
         if self.is_optimize and dispatch_soln is not None:
             Rdisp = dispatch_soln.get_solution_at_ssc_steps(self.dispatch_params, sscstep/3600., freq/3600.)
             for k in retvars_disp:
                 if k in Rdisp.keys():
-                    R['disp_'+k][0:napply] = Rdisp[k]
+                    R['disp_'+k] = Rdisp[k]
         
         self.results = R
         
