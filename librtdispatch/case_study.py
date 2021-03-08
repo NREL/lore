@@ -173,28 +173,23 @@ class CaseStudy:
         if initial_plant_state is not None:
             self.plant.state = initial_plant_state
 
-        self.current_time_midnight = datetime.datetime(self.start_date.year, self.start_date.month, self.start_date.day)  # Start simulation at midnight (standard time) on the specifed day.
-                                                                                                            #  Note that annual arrays derived from CD data will not have
-                                                                                                            #  "real" data after 11pm standard time during DST
-                                                                                                            #  (unless data also exists for the following day)
-
-        # Start compiling ssc inputs (D)
+        # Start compiling ssc input dict (D)
         D = self.plant.design.copy()
         D.update(self.plant.state)
         D.update(self.plant.flux_maps)
         D['time_start'] = int(util.get_time_of_year(self.start_date))
-        D['time_stop'] = util.get_time_of_year(self.current_time_midnight) + self.sim_days*24*3600
-        D['sf_adjust:hourly'] = self.get_field_availability_adjustment(self.ssc_time_steps_per_hour, self.current_time_midnight.year)
-        if self.control_receiver == 'CD_data':
-            mult = np.ones_like(self.CD_mflow_path2_data)
-            if not self.use_CD_measured_reflectivity:  # Scale mass flow based on simulated reflectivity vs. CD actual reflectivity
-                rho = (1-self.fixed_soiling_loss) * self.plant.design['helio_reflectance']   # Simulated heliostat reflectivity
-                CDavail = util.get_CD_soiling_availability(self.current_time_midnight.year, self.plant.design['helio_reflectance'] * 100)  # CD soiled / clean reflectivity (daily array)
-                mult = rho*np.ones(365) / (CDavail*self.plant.design['helio_reflectance'])  # Ratio of simulated / CD reflectivity
-                mult = np.repeat(mult, 24*self.ssc_time_steps_per_hour)  # Annual array at ssc resolution
-            D['rec_user_mflow_path_1'] = (self.CD_mflow_path2_data * mult).tolist()  # Note ssc path numbers are reversed relative to CD path numbers
-            D['rec_user_mflow_path_2'] = (self.CD_mflow_path1_data * mult).tolist()
+        D['time_stop'] = util.get_time_of_year(self.start_date.replace(hour=0, minute=0, second=0)) + self.sim_days*24*3600
+        D['sf_adjust:hourly'] = self.get_field_availability_adjustment(self.ssc_time_steps_per_hour, self.start_date.year)
         self.reupdate_constant_ssc_inputs(D)
+        if self.control_receiver == 'CD_data':
+            CaseStudy.load_user_flow_paths(
+                D=D,
+                flow_path_1_data=self.CD_mflow_path2_data,          # Note ssc path numbers are reversed relative to CD path numbers
+                flow_path_2_data=self.CD_mflow_path1_data,
+                use_measured_reflectivity=self.use_CD_measured_reflectivity,
+                soiling_avail=util.get_CD_soiling_availability(self.start_date.year, D['helio_reflectance'] * 100), # CD soiled / clean reflectivity (daily array),
+                fixed_soiling_loss=self.fixed_soiling_loss
+                )
 
         #-------------------------------------------------------------------------
         # Run simulation in a rolling horizon   
@@ -971,9 +966,25 @@ class CaseStudy:
 
 
 
+
+
+
+    @staticmethod
+    def load_user_flow_paths(D, flow_path_1_data, flow_path_2_data, use_measured_reflectivity, soiling_avail=None, fixed_soiling_loss=None):
+        """Load user flow paths into the ssc input dict (D)"""
+        mult = np.ones_like(flow_path_1_data)
+        if not use_measured_reflectivity:                                                   # Scale mass flow based on simulated reflectivity vs. CD actual reflectivity
+            rho = (1-fixed_soiling_loss) * D['helio_reflectance']                           # Simulated heliostat reflectivity
+            mult = rho*np.ones(365) / (soiling_avail*D['helio_reflectance'])                # Ratio of simulated / CD reflectivity
+            mult = np.repeat(mult, 24*D['time_steps_per_hour'])                             # Annual array at ssc resolution
+        D['rec_user_mflow_path_1'] = (flow_path_1_data * mult).tolist()                     # Note ssc path numbers are reversed relative to CD path numbers
+        D['rec_user_mflow_path_2'] = (flow_path_2_data * mult).tolist()
+
+
     ########################################################################################################################################################
     ### NOT USED: ####
     #########################
+
 
     def get_dispatch_targets_from_CD_actuals(self, use_avg_flow = False, set_rec_sb = False, ctrl_adj = False):
         # initialize targets stucture
