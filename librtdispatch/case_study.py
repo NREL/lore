@@ -99,8 +99,6 @@ class CaseStudy:
         self.store_full_dispatch_solns = True           # Store full dispatch input parameters and solutions for each call to the dispatch model
         self.force_rolling_horizon = False              # Force simulation using ssc heuristic dispatch to follow a rolling horizon for debugging?
         self.is_debug = False                           # Reduce resolution in flux profile for faster solution
-        self.save_results_to_file = False               # Save results to file
-        self.results_file = 'case_study'                # Filename to save results: 
 
 
         ## DISPATCH PERSISTING INTERMEDIARIES ############################################################################################################
@@ -164,7 +162,7 @@ class CaseStudy:
     def run(self, start_date, sim_days, horizon, ursd_last, yrsd_last, current_forecast_weather_data, weather_data_for_dispatch,
             schedules, current_day_schedule, next_day_schedule, initial_plant_state=None):
 
-        self.start_date = start_date
+        time = self.current_time = self.start_date = start_date
         self.sim_days = sim_days
         self.current_forecast_weather_data = current_forecast_weather_data
         self.weather_data_for_dispatch = weather_data_for_dispatch
@@ -200,8 +198,6 @@ class CaseStudy:
         #      Time at which the day-ahead generation schedule is due coincides with the start of an optimization interval
 
         #--- Calculate time-related values
-        self.current_time = self.start_date
-        time = self.current_time
         tod = int(util.get_time_of_day(time))                       # Current time of day (s)
         toy = int(util.get_time_of_year(time))                      # Current time of year (s)    
         start_time = util.get_time_of_year(time)                    # Time (sec) elapsed since beginning of year
@@ -226,8 +222,6 @@ class CaseStudy:
         R = {k:np.zeros(ntot) for k in retvars}
         for k in retvars_disp:
             R['disp_'+k] =np.zeros(ntot)
-        self.disp_params_tracking = []
-        self.disp_soln_tracking = []
 
         #--- Update "forecasted" weather data (if relevant)
         if self.is_optimize and (tod == self.forecast_issue_time*3600):
@@ -492,23 +486,16 @@ class CaseStudy:
         
         self.results = R
         
-
-
-        #TODO: Is this just for the case study? Can it be removed?
-        # Read NVE schedules (if not already read during rolling horizon calculations)
+        # Read NVE schedules (if not already read during rolling horizon calculations) TODO: Is this just for the case study?
         if self.is_optimize == False and self.use_day_ahead_schedule and self.day_ahead_schedule_from == 'NVE':
-            date = datetime.datetime(self.start_date.year, self.start_date.month, self.start_date.day) 
             for j in range(self.sim_days):
-                newdate = date + datetime.timedelta(days = j)
-                self.schedules.append(self.get_CD_NVE_day_ahead_schedule(newdate))
+                date = datetime.datetime(self.start_date.year, self.start_date.month, self.start_date.day + j)
+                self.schedules.append(self.get_CD_NVE_day_ahead_schedule(date))
 
         # Calculate post-simulation financials
         self.revenue = self.calculate_revenue()
         day_ahead_penalties = self.calculate_day_ahead_penalty()
         startup_ramping_penalties = self.calculate_startup_ramping_penalty()        
-        
-        if self.save_results_to_file:
-            self.save_results()            # Filename to save results: 
         
         outputs = {
             'revenue': self.revenue,
@@ -1232,7 +1219,6 @@ if __name__ == '__main__':
         'CD_raw_data_direc':                './input_files/CD_raw',             # Directory containing raw data files from CD
         'CD_processed_data_direc':          './input_files/CD_processed',       # Directory containing files with 1min data already extracted
         'set_initial_state_from_CD_data':   True,
-        'save_results_to_file':             False,
         'store_full_dispatch_solns':        False                               # This keeps a copy of every set inputs/outputs from the dispatch model calls in memory.
                                                                                 #  Useful for debugging, but might want to turn off when running large simulations
     }
