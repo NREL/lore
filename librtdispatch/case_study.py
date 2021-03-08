@@ -171,22 +171,20 @@ class CaseStudy:
         self.schedules = schedules
         self.current_day_schedule = current_day_schedule
         self.next_day_schedule = next_day_schedule
+        if initial_plant_state is not None:
+            self.plant.state = initial_plant_state
 
-        self.current_time = self.start_date
         self.current_time_midnight = datetime.datetime(self.start_date.year, self.start_date.month, self.start_date.day)  # Start simulation at midnight (standard time) on the specifed day.
                                                                                                             #  Note that annual arrays derived from CD data will not have
                                                                                                             #  "real" data after 11pm standard time during DST
                                                                                                             #  (unless data also exists for the following day)
 
-        if initial_plant_state is not None:
-            self.plant.state = initial_plant_state
-
         # Start compiling ssc inputs (D)
         D = self.plant.design.copy()
         D.update(self.plant.state)
         D.update(self.plant.flux_maps)
-        D['time_start'] = util.get_time_of_year(self.current_time_midnight)  # Time (sec) elapsed since beginning of year
-        D['time_stop'] = D['time_start'] + self.sim_days*24*3600
+        D['time_start'] = int(util.get_time_of_year(self.start_date))
+        D['time_stop'] = util.get_time_of_year(self.current_time_midnight) + self.sim_days*24*3600
         D['sf_adjust:hourly'] = self.get_field_availability_adjustment(self.ssc_time_steps_per_hour, self.current_time_midnight.year)
         if self.control_receiver == 'CD_data':
             mult = np.ones_like(self.CD_mflow_path2_data)
@@ -207,7 +205,11 @@ class CaseStudy:
         #      Time at which the day-ahead generation schedule is due coincides with the start of an optimization interval
 
         #--- Calculate time-related values
-        start_time = util.get_time_of_year(self.current_time)       # Time (sec) elapsed since beginning of year
+        self.current_time = self.start_date
+        time = self.current_time
+        tod = int(util.get_time_of_day(time))                       # Current time of day (s)
+        toy = int(util.get_time_of_year(time))                      # Current time of year (s)    
+        start_time = util.get_time_of_year(time)                    # Time (sec) elapsed since beginning of year
         start_hour = int(start_time / 3600)                         # Time (hours) elapsed since beginning of year
         end_hour = start_hour + self.sim_days*24
         nph = int(self.ssc_time_steps_per_hour)                     # Number of time steps per hour
@@ -231,18 +233,6 @@ class CaseStudy:
             R['disp_'+k] =np.zeros(ntot)
         self.disp_params_tracking = []
         self.disp_soln_tracking = []
-
-        #--- Update input dictionary from current plant state
-        D.update(self.plant.state)
-        
-        #--- Calculate times
-        time = self.current_time
-        tod = int(util.get_time_of_day(time))  # Current time of day (s)
-        toy = int(util.get_time_of_year(time))  # Current time of year (s)
-        D['time_start'] = toy
-        startpt = int(toy/3600)*nph  # First point in annual arrays corresponding to this time         
-        
-        npts_horizon = int(horizon/3600 * nph)
 
         #--- Update "forecasted" weather data (if relevant)
         if self.is_optimize and (tod == self.forecast_issue_time*3600):
@@ -270,8 +260,6 @@ class CaseStudy:
             include_day_ahead_in_dispatch = False
         else:
             include_day_ahead_in_dispatch = self.use_day_ahead_schedule
-
-
 
         #--- Run dispatch optimization (if relevant)
         if self.is_optimize:
@@ -339,6 +327,7 @@ class CaseStudy:
                 assert math.isclose(sum(list(self.weather_data_for_dispatch['tdry'])), 10737.5, rel_tol=1e-4)
 
             #--- Run ssc for dispatch estimates: (using weather forecast time resolution for weather data and specified ssc time step)
+            npts_horizon = int(horizon/3600 * nph)
             R_est = dispatch.estimates_for_dispatch_model(
                 plant_design = D,
                 toy = toy,
