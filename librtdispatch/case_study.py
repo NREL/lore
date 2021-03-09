@@ -397,6 +397,9 @@ class CaseStudy:
                 assert math.isclose(dispatch_soln.s0, 832181, rel_tol=1e-4)
 
             if dispatch_soln is not None:
+                Rdisp_all = dispatch_soln.get_solution_at_ssc_steps(self.dispatch_params, sscstep/3600., freq/3600.)
+                Rdisp = {'disp_'+key:value for key,value in Rdisp_all.items() if key in retvars_disp}
+
                 # TODO: make the time triggering more robust; shouldn't be an '==' as the program may be offline at the time or running at intervals
                 #  that won't exactly hit it
                 if self.use_day_ahead_schedule and self.day_ahead_schedule_from == 'calculated' and tod/3600 == self.day_ahead_schedule_time:
@@ -439,6 +442,11 @@ class CaseStudy:
             else:  # Infeasible solution was returned, revert back to running ssc without dispatch targets
                 pass
         
+
+            #
+            # Return ssc_dispatch_targets and Rdisp
+            #
+
         
         ################################
         #--- Run ssc and collect results
@@ -478,17 +486,13 @@ class CaseStudy:
             assert math.isclose(self.plant.state['disp_rec_off0'], 1002, rel_tol=1e-4)
             assert math.isclose(self.plant.state['disp_pc_persist0'], 1002, rel_tol=1e-4)
             assert math.isclose(self.plant.state['disp_pc_off0'], 1002, rel_tol=1e-4)
-
-        #--- Add dispatch solution to compiled results (R)
-        if self.is_optimize and dispatch_soln is not None:
-            Rdisp = dispatch_soln.get_solution_at_ssc_steps(self.dispatch_params, sscstep/3600., freq/3600.)
-            for k in retvars_disp:
-                if k in Rdisp.keys():
-                    R['disp_'+k] = Rdisp[k]
         
+        R.update(Rdisp)         # add in dispatch results
         self.results = R
         
-        # Read NVE schedules (if not already read during rolling horizon calculations) TODO: Is this just for the case study?
+
+        # TODO: Just remove this?
+        # Read NVE schedules (if not already read during rolling horizon calculations)
         if self.is_optimize == False and self.use_day_ahead_schedule and self.day_ahead_schedule_from == 'NVE':
             for j in range(self.sim_days):
                 date = datetime.datetime(self.start_date.year, self.start_date.month, self.start_date.day + j)
