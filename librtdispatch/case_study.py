@@ -178,8 +178,10 @@ class CaseStudy:
         D.update(self.plant.flux_maps)
         D['time_start'] = int(util.get_time_of_year(self.start_date))
         D['time_stop'] = util.get_time_of_year(self.start_date.replace(hour=0, minute=0, second=0)) + self.sim_days*24*3600
-        D['sf_adjust:hourly'] = self.get_field_availability_adjustment(self.ssc_time_steps_per_hour, self.start_date.year)
-        self.reupdate_constant_ssc_inputs(D)
+        D['sf_adjust:hourly'] = CaseStudy.get_field_availability_adjustment(self.ssc_time_steps_per_hour, self.start_date.year, self.control_field,
+            self.use_CD_measured_reflectivity, self.plant.design, self.fixed_soiling_loss)
+        CaseStudy.reupdate_constant_ssc_inputs(D, self.price_data, self.ssc_time_steps_per_hour, self.use_transient_model, self.use_transient_startup,
+            self.ground_truth_weather_data, self.is_optimize, self.control_cycle, self.control_field, self.control_receiver, self.clearsky_data)
         if self.control_receiver == 'CD_data':
             CaseStudy.load_user_flow_paths(
                 D=D,
@@ -562,13 +564,6 @@ class CaseStudy:
         if self.control_receiver == 'CD_data' and self.control_field != 'CD_data':
             print ('Warning: Receiver flow is controlled from CD data, but field tracking fraction is controlled by ssc. Temperatures will likely be unrealistically high')
 
-        # Initialize price data
-        price_multipliers = np.genfromtxt(self.price_multiplier_file)
-        if self.price_steps_per_hour != self.ssc_time_steps_per_hour:
-            price_multipliers = util.translate_to_new_timestep(price_multipliers, 1./self.price_steps_per_hour, 1./self.ssc_time_steps_per_hour)
-        pmavg = sum(price_multipliers)/len(price_multipliers)  
-        self.price_data = [self.avg_price*p/pmavg  for p in price_multipliers]  # Electricity price at ssc time steps ($/MWh)
-
         self.is_initialized = True
         return
     
@@ -640,7 +635,8 @@ class CaseStudy:
         return current_forecast_weather_data
     
     
-    def get_field_availability_adjustment(self, steps_per_hour, year):
+    @staticmethod
+    def get_field_availability_adjustment(steps_per_hour, year, control_field, use_CD_measured_reflectivity, plant_design, fixed_soiling_loss):
         """
         Inputs:
             steps_per_hour
@@ -656,18 +652,18 @@ class CaseStudy:
             adjust
         """
 
-        if self.control_field == 'ssc':
-            if self.use_CD_measured_reflectivity:
-                adjust = util.get_field_adjustment_from_CD_data(year, self.plant.design['N_hel'], self.plant.design['helio_reflectance']*100, True, None, False)            
+        if control_field == 'ssc':
+            if use_CD_measured_reflectivity:
+                adjust = util.get_field_adjustment_from_CD_data(year, plant_design['N_hel'], plant_design['helio_reflectance']*100, True, None, False)            
             else:
-                adjust = (self.fixed_soiling_loss * 100 * np.ones(steps_per_hour*24*365))  
+                adjust = (fixed_soiling_loss * 100 * np.ones(steps_per_hour*24*365))  
 
-        elif self.control_field == 'CD_data':
-            if self.use_CD_measured_reflectivity:
-                adjust = util.get_field_adjustment_from_CD_data(year, self.plant.design['N_hel'], self.plant.design['helio_reflectance']*100, True, None, True)
+        elif control_field == 'CD_data':
+            if use_CD_measured_reflectivity:
+                adjust = util.get_field_adjustment_from_CD_data(year, plant_design['N_hel'], plant_design['helio_reflectance']*100, True, None, True)
             else:
-                refl = (1-self.fixed_soiling_loss) * self.plant.design['helio_reflectance'] * 100  # Simulated heliostat reflectivity
-                adjust = util.get_field_adjustment_from_CD_data(year, self.plant.design['N_hel'], self.plant.design['helio_reflectance']*100, False, refl, True)
+                refl = (1-fixed_soiling_loss) * plant_design['helio_reflectance'] * 100  # Simulated heliostat reflectivity
+                adjust = util.get_field_adjustment_from_CD_data(year, plant_design['N_hel'], plant_design['helio_reflectance']*100, False, refl, True)
  
         adjust = adjust.tolist()
         data_steps_per_hour = len(adjust)/8760  
@@ -706,38 +702,40 @@ class CaseStudy:
         return {'A_sf_in': A_sf_in, 'eta_map': eta_map, 'flux_maps': flux_maps}
     
     
-    def reupdate_constant_ssc_inputs(self, D):
+    @staticmethod
+    def reupdate_constant_ssc_inputs(D, price_data, ssc_time_steps_per_hour, use_transient_model, use_transient_startup,
+                                     ground_truth_weather_data, is_optimize, control_cycle, control_field, control_receiver, clearsky_data):
         D['ppa_multiplier_model'] = 1
-        D['dispatch_factors_ts'] = self.price_data
-        D['time_steps_per_hour'] = self.ssc_time_steps_per_hour
-        D['is_rec_model_trans'] = self.use_transient_model
-        D['is_rec_startup_trans'] = self.use_transient_startup
+        D['dispatch_factors_ts'] = price_data
+        D['time_steps_per_hour'] = ssc_time_steps_per_hour
+        D['is_rec_model_trans'] = use_transient_model
+        D['is_rec_startup_trans'] = use_transient_startup
         D['rec_control_per_path'] = True
-        D['solar_resource_data'] = self.ground_truth_weather_data
+        D['solar_resource_data'] = ground_truth_weather_data
         D['field_model_type'] = 3
         D['eta_map_aod_format'] = False
         D['is_rec_to_coldtank_allowed'] = True
         D['rec_control_per_path'] = True
         D['is_dispatch'] = 0    # Always disable dispatch optimization in ssc
-        D['is_dispatch_targets'] = True if (self.is_optimize or self.control_cycle == 'CD_data') else False
+        D['is_dispatch_targets'] = True if (is_optimize or control_cycle == 'CD_data') else False
 
         #--- Set field control parameters
-        if self.control_field == 'CD_data':
+        if control_field == 'CD_data':
             D['is_rec_startup_trans'] = False
             D['rec_su_delay'] = 0.01            # Set receiver start time and energy to near zero to enforce CD receiver startup timing
             D['rec_qf_delay'] = 0.01
 
         #--- Set receiver control parameters
-        if self.control_receiver == 'CD_data':
+        if control_receiver == 'CD_data':
             D['is_rec_user_mflow'] = True
             D['is_rec_startup_trans'] = False
             D['rec_su_delay'] = 0.01   # Set receiver start time and energy to near zero to enforce CD receiver startup timing
             D['rec_qf_delay'] = 0.01            
-        elif self.control_receiver == 'ssc_clearsky':
+        elif control_receiver == 'ssc_clearsky':
             D['rec_clearsky_fraction'] = 1.0
             D['rec_clearsky_model'] = 0
-            D['rec_clearsky_dni'] = self.clearsky_data.tolist()
-        elif self.control_receiver == 'ssc_actual_dni':
+            D['rec_clearsky_dni'] = clearsky_data.tolist()
+        elif control_receiver == 'ssc_actual_dni':
             D['rec_clearsky_fraction'] = 0.0
 
         return
@@ -1166,6 +1164,17 @@ if __name__ == '__main__':
     day_ahead_schedule_time = 10
     use_day_ahead_schedule = True
     day_ahead_schedule_from = 'calculated'
+    control_field = 'ssc'
+    control_receiver = 'ssc_clearsky'
+    control_cycle = 'ssc_heuristic'
+    use_CD_measured_reflectivity = False
+    fixed_soiling_loss = 0.02
+    price_steps_per_hour = 1
+    price_multiplier_file = 'prices_flat.csv'  # TODO: File containing annual price multipliers
+    avg_price = 138
+    is_optimize = True
+    use_transient_model = False
+    use_transient_startup = False
     ground_truth_weather_file = './model-validation/input_files/weather_files/ssc_weatherfile_1min_2018.csv'  # Weather file derived from CD data: DNI, ambient temperature,
                                                                                                                    #  wind speed, etc. are averaged over 4 CD weather stations,
                                                                                                                    #  after filtering DNI readings for bad measurements. 
@@ -1185,7 +1194,14 @@ if __name__ == '__main__':
     if ssc_time_steps_per_hour != 60:
         clearsky_data = np.array(util.translate_to_new_timestep(clearsky_data, 1./60, 1./ssc_time_steps_per_hour))
         CD_mflow_path1_data = np.array(util.translate_to_new_timestep(CD_mflow_path1_data, 1./60, 1./ssc_time_steps_per_hour))
-        CD_mflow_path2_data = np.array(util.translate_to_new_timestep(CD_mflow_path2_data, 1./60, 1./ssc_time_steps_per_hour))    
+        CD_mflow_path2_data = np.array(util.translate_to_new_timestep(CD_mflow_path2_data, 1./60, 1./ssc_time_steps_per_hour))
+
+    # Initialize price data
+    price_multipliers = np.genfromtxt(price_multiplier_file)
+    if price_steps_per_hour != ssc_time_steps_per_hour:
+        price_multipliers = util.translate_to_new_timestep(price_multipliers, 1./price_steps_per_hour, 1./ssc_time_steps_per_hour)
+    pmavg = sum(price_multipliers)/len(price_multipliers)  
+    price_data = [avg_price*p/pmavg  for p in price_multipliers]  # Electricity price at ssc time steps ($/MWh)
 
     #-- Setup plant including calculating flux maps
     plant = plant_.Plant(design=plant_.plant_design, initial_state=plant_.plant_initial_state)   # Default parameters contain best representation of CD plant and dispatch properties
@@ -1204,16 +1220,17 @@ if __name__ == '__main__':
         'plant':                            plant,
         'ssc_time_steps_per_hour':          ssc_time_steps_per_hour,
         'ground_truth_weather_data':        ground_truth_weather_data,
+        'price_data':                       price_data,
         'clearsky_data':                    clearsky_data,
         'CD_mflow_path1_data':              CD_mflow_path1_data,
         'CD_mflow_path2_data':              CD_mflow_path2_data,
         'isdebug':                          False,
-        'control_field':                    'ssc',
-        'control_receiver':                 'ssc_clearsky',
-        'is_optimize':                      True,
+        'control_field':                    control_field,
+        'control_receiver':                 control_receiver,
+        'is_optimize':                      is_optimize,
         'dispatch_weather_horizon':         2,                                  # TODO: what horizon do we want to use?
-        'use_CD_measured_reflectivity':     False,  
-        'fixed_soiling_loss':               0.02,                               # 1 - (reflectivity / clean reflectivity)
+        'use_CD_measured_reflectivity':     use_CD_measured_reflectivity,  
+        'fixed_soiling_loss':               fixed_soiling_loss,                 # 1 - (reflectivity / clean reflectivity)
         'use_day_ahead_schedule':           use_day_ahead_schedule,
         'day_ahead_schedule_from':          day_ahead_schedule_from,
         'CD_raw_data_direc':                './input_files/CD_raw',             # Directory containing raw data files from CD
