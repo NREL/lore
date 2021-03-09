@@ -871,9 +871,9 @@ class CaseStudy:
             q_pb
             P_cycle
             q_dot_pc_startup
-            Crsu
-            Ccsu
-            C_delta_w
+            Crsu                    plant.design
+            Ccsu                    plant.design
+            C_delta_w               plant.design
 
         Outputs:
             n_starts_rec
@@ -953,12 +953,6 @@ class CaseStudy:
                'yrsd', 'ursd']
     
 
-
-
-
-
-
-
     @staticmethod
     def load_user_flow_paths(D, flow_path_1_data, flow_path_2_data, use_measured_reflectivity, soiling_avail=None, fixed_soiling_loss=None):
         """Load user flow paths into the ssc input dict (D)"""
@@ -971,186 +965,7 @@ class CaseStudy:
         D['rec_user_mflow_path_2'] = (flow_path_2_data * mult).tolist()
 
 
-    ########################################################################################################################################################
-    ### NOT USED: ####
-    #########################
 
-
-    def get_dispatch_targets_from_CD_actuals(self, use_avg_flow = False, set_rec_sb = False, ctrl_adj = False):
-        # initialize targets stucture
-        targets = dispatch.DispatchTargets()
-
-        CD_plot_data = ['Gross Power [MW]', 'Net Power [MW]', 'E charge TES [MWht]', 'Hot Tank Temp [C]', 'Cold Tank Temp [C]', 'Rec avg Tout [C]']
-        for key in CD_plot_data:
-            self.CD_data_for_plotting[key] = []
-
-        pc_on = []
-        need_last_hour = False
-        date = self.start_date
-        for i in range(self.sim_days+1): 
-            # Get data
-            data = util.read_CD_data(date, self.CD_raw_data_direc, self.CD_processed_data_direc)
-            if data is None:
-                return  None
-
-            if date == self.start_date and util.is_dst(date):
-                # drop the first hour -> standard time
-                data = data.iloc[60:]
-                need_last_hour = True
-            elif i == self.sim_days and need_last_hour:
-                data = data.iloc[:60]
-
-            cd = util.get_clean_CD_cycle_data(data)
-
-            if use_avg_flow:
-                targets.q_pc_target_on_in.extend(list(cd['Avg Q into cycle [MW]']))
-            else:
-                targets.q_pc_target_on_in.extend(list(cd['Q into cycle [MW]']))
-
-            ## Cycle start up binary
-            if ctrl_adj:
-                pc_su = np.array([1 if x > 25. else 0 for x in cd['Gross Power [MW]']])  # Is cycle running?
-            else:
-                pc_su = np.array([1 if x > 5. else 0 for x in cd['Gross Power [MW]']])  # Is cycle running?
-                
-            pc_on.extend(pc_su.tolist())
-
-            for ind in np.where(pc_su[:-1] != pc_su[1:])[0]:        # cycle changes condition
-                if pc_su[ind + 1] == 1:
-                    buffer = 20 #10
-                    pc_su[int(ind - self.plant.design['startup_time']*60 + buffer): ind+1] = 1   # push start-up forward
-
-            targets.is_pc_su_allowed_in.extend(pc_su.tolist())   # Is cycle running?
-
-            if set_rec_sb:
-                # Receiver stand-by operation - attempt to control standby by tank temperature
-                Nfbs = [1,2,3,4,5]
-                tstep = 1/60
-                dev = {}
-                for Nfb in Nfbs:
-                    dev[str(Nfb)] = [0]*Nfb
-                    for j in range(Nfb, len(cd['Cold Tank Temp [C]']) - Nfb):
-                        dev[str(Nfb)].append((cd['Cold Tank Temp [C]'].iloc[j+Nfb] - cd['Cold Tank Temp [C]'].iloc[j-Nfb])/2*Nfb*tstep)
-                    dev[str(Nfb)].extend([0.]*Nfb)
-                '''
-                import matplotlib.pyplot as plt
-                plt.figure()
-                for Nfb in Nfbs:
-                    plt.plot(dev[str(Nfb)], label = 'Nfb = ' + str(Nfb))
-                plt.legend(loc = 'lower left')
-                ax = plt.gca()
-                ax2 = ax.twinx()
-                ax2.plot(list(cd['Cold Tank Temp [C]']), label = 'Cold tank temp.')
-                plt.legend(loc = 'lower right')
-                plt.show()
-                '''
-                rec_sb = [1 if dTdt > 0.004 else 0 for dTdt in dev[str(1)]]
-                targets.is_rec_sb_allowed_in.extend(rec_sb)
-
-            for key in CD_plot_data:
-                self.CD_data_for_plotting[key].extend(list(cd[key]))
-
-            date += datetime.timedelta(days=1)  # advance a day
-        
-        max_pc_qin = (self.plant.design['P_ref']/self.plant.design['design_eff'])*self.plant.design['cycle_max_frac']
-        n = len(targets.is_pc_su_allowed_in)
-        targets.q_pc_target_on_in = [targets.q_pc_target_on_in[j] if pc_on[j] == 1 else 0.0 for j in range(n)]
-        targets.q_pc_target_su_in = [max_pc_qin if (targets.is_pc_su_allowed_in[j] == 1 and pc_on[j] == 0) else 0.0 for j in range(n)]
-        targets.q_pc_max_in = [max_pc_qin for j in range(n)]     
-        targets.is_pc_sb_allowed_in = [0 for j in range(n)]  # Cycle can not go into standby (using TES to keep cycle warm)
-        targets.is_rec_su_allowed_in = [1 for j in range(n)]  # Receiver can always start up if available energy
-        
-        if not set_rec_sb:
-            targets.is_rec_sb_allowed_in = [0 for j in range(n)]  # For now only allowing standby based on ssc determination from temperature threshold.  Specifying a value of 1 in any time period will force the receiver into standby regardless of temperature
-
-        return targets
-
-    def get_CD_NVE_day_ahead_schedule(self, date):
-        targets = util.read_NVE_schedule(date, self.CD_raw_data_direc)
-        if util.is_dst(date) and targets is not None: # First target in file is cumulative generation between 12am-1am PDT (11pm - 12am PST).  Ignore first point and read next-day file to define last point
-            targets2 = util.read_NVE_schedule(date+datetime.timedelta(days=1), self.CD_raw_data_direc)
-            targets = np.append(targets[1:], targets2[0])
-        return targets
-    
-    def save_results(self):
-        # Save time series results
-        filename = self.results_file
-        array = np.transpose(np.array([v for v in self.results.values()]))
-        n = array.shape[0]
-        times = np.reshape(np.arange(n)* 1./self.ssc_time_steps_per_hour, (n,1))
-        array = np.append(times, array, 1)
-        header = ','.join(['Time']+list(self.results.keys()))
-        np.savetxt(filename+'_results.csv', array, delimiter = ',', header = header, comments = '', fmt = '%.6f')
-        
-        # Save schedules
-        if self.use_day_ahead_schedule:
-            nday = len(self.schedules)
-            nperday = int(24*self.day_ahead_schedule_steps_per_hour)
-            array = np.zeros((nperday, nday))
-            for d in range(nday):
-                array[:,d] = self.schedules[d] if self.schedules[d] is not None else np.nan * np.ones(nperday)
-            times = np.reshape(np.arange(nperday)* 24/nperday, (nperday,1))
-            array = np.append(times, array, 1)
-            header = ','.join(['Hour']+['Day %d'%d for d in range(nday)])
-            np.savetxt(filename+'_schedules.csv', array, delimiter = ',', header = header, comments = '', fmt = '%.6f')
-            
-            
-        # Save summary output   
-        keys = ['revenue', 'startup_ramping_penalty', 'n_starts_rec', 'n_starts_rec_attempted', 'n_starts_cycle', 'n_starts_cycle_attempted',
-                'cycle_ramp_up', 'cycle_ramp_down', 'total_receiver_thermal', 'total_cycle_gross', 'total_cycle_net']        
-        data = [getattr(self,k) for k in keys] 
-        data += [self.day_ahead_penalty_tot[k] for k in ['ssc', 'disp']]
-        data += [self.day_ahead_diff_over_tol_plus[k] for k in ['ssc', 'disp']]
-        data += [self.day_ahead_diff_over_tol_minus[k] for k in ['ssc', 'disp']]
-        
-        keys += ['day_ahead_penalty_tot (ssc)', 'day_ahead_penalty_tot (disp)']
-        keys += ['day_ahead_diff_over_tol_plus (ssc)', 'day_ahead_diff_over_tol_plus (disp)']
-        keys += ['day_ahead_diff_over_tol_minus (ssc)', 'day_ahead_diff_over_tol_minus (disp)']
-        
-        np.savetxt(filename+ '_summary.csv', np.reshape(data, (1,len(data))), header = ','.join(keys), delimiter = ',', comments = '', fmt = '%.6f')
-
-        return
-
-
-    def load_results_from_file(self, filename):
-        self.results = {}
-        self.schedules = []
-        cols = np.genfromtxt(filename +'_results.csv', delimiter = ',', max_rows = 1, dtype = str)
-        data = np.genfromtxt(filename+'_results.csv', delimiter = ',', skip_header = 1)
-        for c in range(len(cols)):
-            self.results[cols[c]] = data[:,c]
-            
-        # Read summary
-        cols = np.genfromtxt(filename +'_summary.csv', delimiter = ',', max_rows = 1, dtype = str)
-        data = np.genfromtxt(filename+'_summary.csv', delimiter = ',', skip_header = 1)        
-        self.day_ahead_penalty_tot = {}
-        self.day_ahead_diff_over_tol_plus = {}
-        self.day_ahead_diff_over_tol_minus = {}
-        
-        for c in range(len(cols)):
-            if cols[c] not in ['day_ahead_penalty_tot (ssc)', 'day_ahead_penalty_tot (disp)', 
-                               'day_ahead_diff_over_tol_plus (ssc)', 'day_ahead_diff_over_tol_plus (disp)', 
-                               'day_ahead_diff_over_tol_minus (ssc)', 'day_ahead_diff_over_tol_minus (disp)']:
-                setattr(self, cols[c], data[c])
-            else:
-                name = cols[c].split(' ')[0]
-                k = cols[c].split(' ')[1][1:-1]
-                if name == 'day_ahead_penalty_tot':
-                    self.day_ahead_penalty_tot[k] = data[c]
-                elif name == 'day_ahead_diff_over_tol_plus':
-                    self.day_ahead_diff_over_tol_plus[k] = data[c]
-                elif name == 'day_ahead_diff_over_tol_minus':
-                    self.day_ahead_diff_over_tol_minus[k] = data[c]                    
-
-        # Read schedules
-        try:
-            data = np.genfromtxt(filename+'_schedules.csv', delimiter = ',', skip_header = 1)
-            for d in range(1,data.shape[1]):
-                self.schedules.append(None if np.isnan(data[0,d]) else data[:,d])
-        except:
-            print ('Unable to read day-ahead schedules')
-        
-        return
 
 
 ########################################################################################################################################################
