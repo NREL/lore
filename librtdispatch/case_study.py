@@ -88,12 +88,6 @@ class CaseStudy:
 
         #--- Input data files: weather, masslow, clearsky DNI must have length of full annual array based on ssc time step size
         self.user_defined_cycle_input_file = 'udpc_noTamb_dependency.csv'  # Only required if cycle_type is user_defined
-        self.price_multiplier_file = 'prices_flat.csv'  # TODO: File containing annual price multipliers
-        self.clearsky_file = './model-validation/input_files/weather_files/clearsky_pvlib_ineichen_1min_2018.csv'      # Expected clear-sky DNI from Ineichen model (via pvlib).  
-        self.CD_mflow_path1_file = './model-validation/input_files/mflow_path1_2018_1min.csv'                          # File containing CD data for receiver path 1 mass flow rate (note, all values are zeros on days without data)
-        self.CD_mflow_path2_file = './model-validation/input_files/mflow_path2_2018_1min.csv'                          # File containing CD data for receiver path 2 mass flow rate (note, all values are zeros on days without data)
-        self.CD_raw_data_direc = '../../../Crescent Dunes data/NREL - CD collaboration/Steam Generation/Daily Reports/'  # Directory containing raw data files from CD
-        self.CD_processed_data_direc = '../../../Crescent Dunes data/Daily operations data/'                             # Directory containing files with 1min data already extracted
 
         #--- Miscellaneous
         self.store_full_dispatch_solns = True           # Store full dispatch input parameters and solutions for each call to the dispatch model
@@ -709,13 +703,15 @@ class CaseStudy:
     @staticmethod
     def reupdate_constant_ssc_inputs(D, price_data, ssc_time_steps_per_hour, use_transient_model, use_transient_startup,
                                      ground_truth_weather_data, is_optimize, control_cycle, control_field, control_receiver, clearsky_data):
-        D['ppa_multiplier_model'] = 1
+        D['solar_resource_data'] = ground_truth_weather_data
         D['dispatch_factors_ts'] = price_data
+        # see also clearsky_data below
+
+        D['ppa_multiplier_model'] = 1
         D['time_steps_per_hour'] = ssc_time_steps_per_hour
         D['is_rec_model_trans'] = use_transient_model
         D['is_rec_startup_trans'] = use_transient_startup
         D['rec_control_per_path'] = True
-        D['solar_resource_data'] = ground_truth_weather_data
         D['field_model_type'] = 3
         D['eta_map_aod_format'] = False
         D['is_rec_to_coldtank_allowed'] = True
@@ -1048,15 +1044,14 @@ if __name__ == '__main__':
     # Dispatch parameters
     params = {
         'plant':                            plant,
-        'ssc_time_steps_per_hour':          ssc_time_steps_per_hour,
-        'ground_truth_weather_data':        ground_truth_weather_data,
+
         'price_data':                       price_data,
         'clearsky_data':                    clearsky_data,
+        'ground_truth_weather_data':        ground_truth_weather_data,
         'CD_mflow_path1_data':              CD_mflow_path1_data,
         'CD_mflow_path2_data':              CD_mflow_path2_data,
-        'CD_raw_data_direc':                './input_files/CD_raw',             # Directory containing raw data files from CD
-        'CD_processed_data_direc':          './input_files/CD_processed',       # Directory containing files with 1min data already extracted
-        'isdebug':                          False,
+
+        'ssc_time_steps_per_hour':          ssc_time_steps_per_hour,
         'dispatch_weather_horizon':         2,                                  # TODO: what horizon do we want to use?
         'use_day_ahead_schedule':           use_day_ahead_schedule,
         'day_ahead_schedule_from':          day_ahead_schedule_from,
@@ -1074,7 +1069,9 @@ if __name__ == '__main__':
     weather_data_for_dispatch = util.create_empty_weather_data(ground_truth_weather_data, ssc_time_steps_per_hour)
     current_day_schedule = np.zeros(24*day_ahead_schedule_steps_per_hour)
     next_day_schedule = np.zeros(24*day_ahead_schedule_steps_per_hour)
-    initial_plant_state = util.get_initial_state_from_CD_data(start_date, params['CD_raw_data_direc'], params['CD_processed_data_direc'], plant.design)
+    CD_raw_data_direc = './input_files/CD_raw'                     # Directory containing raw data files from CD
+    CD_processed_data_direc = './input_files/CD_processed'         # Directory containing files with 1min data already extracted
+    initial_plant_state = util.get_initial_state_from_CD_data(start_date, CD_raw_data_direc, CD_processed_data_direc, plant.design)
     current_forecast_weather_data = CaseStudy.update_forecast_weather_data(
                 date=start_date - datetime.timedelta(hours = 24-forecast_issue_time),
                 current_forecast_weather_data=util.create_empty_weather_data(ground_truth_weather_data, ssc_time_steps_per_hour),
