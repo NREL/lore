@@ -80,8 +80,8 @@ class CaseStudy:
         self.day_ahead_ignore_off = True                # Don't apply schedule penalties when cycle is scheduled to be off for the full hour (MWhe)
 
         #--- Field, receiver, and cycle simulation options
-        self.use_CD_measured_reflectivity = True        # Use measured heliostat reflectivity from CD data
-        self.fixed_soiling_loss = 0.035                 # Fixed soiling loss (if not using CD measured reflectivity) = 1 - (reflectivity / clean_reflectivity)
+        self.use_CD_measured_reflectivity = False       # Use measured heliostat reflectivity from CD data
+        self.fixed_soiling_loss = 0.02                  # Fixed soiling loss (if not using CD measured reflectivity) = 1 - (reflectivity / clean_reflectivity)
         self.use_transient_startup = False              # TODO: Disabling transient startup -> ssc not yet configured to start/stop calculations in the middle of startup with this model
         self.use_transient_model = False                # TODO: Disabling transient receiver model -> ssc not yet configured to store/retrieve receiver temperature profiles
         self.cycle_type = 'user_defined'                # 'user-defined', 'sliding', or 'fixed'
@@ -159,11 +159,11 @@ class CaseStudy:
 
     #-------------------------------------------------------------------------
     #--- Run simulation
-    def run(self, start_date, sim_days, horizon, ursd_last, yrsd_last, current_forecast_weather_data, weather_data_for_dispatch,
+    def run(self, start_date, timestep_days, horizon, ursd_last, yrsd_last, current_forecast_weather_data, weather_data_for_dispatch,
             schedules, current_day_schedule, next_day_schedule, initial_plant_state=None):
 
         time = self.current_time = self.start_date = start_date
-        self.sim_days = sim_days
+        self.sim_days = timestep_days
         self.current_forecast_weather_data = current_forecast_weather_data
         self.weather_data_for_dispatch = weather_data_for_dispatch
         self.schedules = schedules
@@ -1156,54 +1156,64 @@ class CaseStudy:
 
 
 if __name__ == '__main__':
+    start = timeit.default_timer()
     os.chdir(os.path.dirname(__file__))
     
+    # Mediator parameters
     ssc_time_steps_per_hour = 60
     forecast_steps_per_hour = 1
     forecast_issue_time = 16
     day_ahead_schedule_time = 10
     use_day_ahead_schedule = True
     day_ahead_schedule_from = 'calculated'
-    control_field = 'ssc'
-    control_receiver = 'ssc_clearsky'
-    control_cycle = 'ssc_heuristic'
-    use_CD_measured_reflectivity = False
-    fixed_soiling_loss = 0.02
     price_steps_per_hour = 1
     price_multiplier_file = 'prices_flat.csv'  # TODO: File containing annual price multipliers
     avg_price = 138
-    is_optimize = True
-    use_transient_model = False
-    use_transient_startup = False
+    day_ahead_schedule_steps_per_hour = 1           # TODO make this not hardcoded
+    dispatch_frequency = 1          # [hr] TODO  make this not hardcoded
+    forecast_issue_time = 16        # TODO  make this not hardcoded
+    ######
+    # control_field = 'ssc'
+    # control_receiver = 'ssc_clearsky'
+    # control_cycle = 'ssc_heuristic'
+    # use_CD_measured_reflectivity = False
+    # fixed_soiling_loss = 0.02
+    # is_optimize = True
+    # use_transient_model = False
+    # use_transient_startup = False
+    ######
     ground_truth_weather_file = './model-validation/input_files/weather_files/ssc_weatherfile_1min_2018.csv'  # Weather file derived from CD data: DNI, ambient temperature,
                                                                                                                    #  wind speed, etc. are averaged over 4 CD weather stations,
                                                                                                                    #  after filtering DNI readings for bad measurements. 
 
-    #-- Read in historical weather data
+    # Get historical weather data
     ground_truth_weather_data = util.read_weather_data(ground_truth_weather_file)
     if ssc_time_steps_per_hour != 60:
         ground_truth_weather_data = util.update_weather_timestep(ground_truth_weather_data, ssc_time_steps_per_hour)
 
-    # Read in annual arrays for clear-sky DNI, receiver mass flow, etc.
+    # Get clear-sky DNI annual arrays
     clearsky_file = './model-validation/input_files/weather_files/clearsky_pvlib_ineichen_1min_2018.csv'      # Expected clear-sky DNI from Ineichen model (via pvlib).  
+    clearsky_data = np.genfromtxt(clearsky_file)
+    if ssc_time_steps_per_hour != 60:
+        clearsky_data = np.array(util.translate_to_new_timestep(clearsky_data, 1./60, 1./ssc_time_steps_per_hour))
+
+    # Get receiver mass flow annual arrays
     CD_mflow_path1_file = './model-validation/input_files/mflow_path1_2018_1min.csv'                          # File containing CD data for receiver path 1 mass flow rate (note, all values are zeros on days without data)
     CD_mflow_path2_file = './model-validation/input_files/mflow_path2_2018_1min.csv'                          # File containing CD data for receiver path 2 mass flow rate (note, all values are zeros on days without data)
-    clearsky_data = np.genfromtxt(clearsky_file)
     CD_mflow_path1_data = np.genfromtxt(CD_mflow_path1_file)
     CD_mflow_path2_data = np.genfromtxt(CD_mflow_path2_file)
     if ssc_time_steps_per_hour != 60:
-        clearsky_data = np.array(util.translate_to_new_timestep(clearsky_data, 1./60, 1./ssc_time_steps_per_hour))
         CD_mflow_path1_data = np.array(util.translate_to_new_timestep(CD_mflow_path1_data, 1./60, 1./ssc_time_steps_per_hour))
         CD_mflow_path2_data = np.array(util.translate_to_new_timestep(CD_mflow_path2_data, 1./60, 1./ssc_time_steps_per_hour))
 
-    # Initialize price data
+    # Get price data
     price_multipliers = np.genfromtxt(price_multiplier_file)
     if price_steps_per_hour != ssc_time_steps_per_hour:
         price_multipliers = util.translate_to_new_timestep(price_multipliers, 1./price_steps_per_hour, 1./ssc_time_steps_per_hour)
     pmavg = sum(price_multipliers)/len(price_multipliers)  
     price_data = [avg_price*p/pmavg  for p in price_multipliers]  # Electricity price at ssc time steps ($/MWh)
 
-    #-- Setup plant including calculating flux maps
+    # Setup plant including calculating flux maps
     plant = plant_.Plant(design=plant_.plant_design, initial_state=plant_.plant_initial_state)   # Default parameters contain best representation of CD plant and dispatch properties
     if plant.flux_maps['A_sf_in'] == 0.0:
         plant.flux_maps = CaseStudy.simulate_flux_maps(
@@ -1216,6 +1226,7 @@ if __name__ == '__main__':
         assert math.isclose(np.sum(plant.flux_maps['flux_maps']), 44.0, rel_tol=1e-4)
 
 
+    # Dispatch parameters
     params = {
         'plant':                            plant,
         'ssc_time_steps_per_hour':          ssc_time_steps_per_hour,
@@ -1224,42 +1235,30 @@ if __name__ == '__main__':
         'clearsky_data':                    clearsky_data,
         'CD_mflow_path1_data':              CD_mflow_path1_data,
         'CD_mflow_path2_data':              CD_mflow_path2_data,
-        'isdebug':                          False,
-        'control_field':                    control_field,
-        'control_receiver':                 control_receiver,
-        'is_optimize':                      is_optimize,
-        'dispatch_weather_horizon':         2,                                  # TODO: what horizon do we want to use?
-        'use_CD_measured_reflectivity':     use_CD_measured_reflectivity,  
-        'fixed_soiling_loss':               fixed_soiling_loss,                 # 1 - (reflectivity / clean reflectivity)
-        'use_day_ahead_schedule':           use_day_ahead_schedule,
-        'day_ahead_schedule_from':          day_ahead_schedule_from,
         'CD_raw_data_direc':                './input_files/CD_raw',             # Directory containing raw data files from CD
         'CD_processed_data_direc':          './input_files/CD_processed',       # Directory containing files with 1min data already extracted
+        'isdebug':                          False,
+        'dispatch_weather_horizon':         2,                                  # TODO: what horizon do we want to use?
+        'use_day_ahead_schedule':           use_day_ahead_schedule,
+        'day_ahead_schedule_from':          day_ahead_schedule_from,
         'set_initial_state_from_CD_data':   True,
         'store_full_dispatch_solns':        False                               # This keeps a copy of every set inputs/outputs from the dispatch model calls in memory.
                                                                                 #  Useful for debugging, but might want to turn off when running large simulations
     }
-        
-    start = timeit.default_timer()
-    outputs_total = {}
 
-    sim_days = 1
-    total_horizon = sim_days*24     # [hr]
-    dispatch_frequency = 1          # [hr] TODO  make this not hardcoded
-    nupdate = int(total_horizon / dispatch_frequency)
-
+    # Dispatch inputs
     start_date = datetime.datetime(2018, 10, 14)
+    sim_days = 1
     horizon = 86400                 # TODO  make this not hardcoded
-    forecast_issue_time = 16        # TODO  make this not hardcoded
     ursd_last = 0
-    yrsd_last = 0
-
-    # Initialize forecast weather data using the day prior to the first simulated day
-    forecast_time = start_date - datetime.timedelta(hours = 24-forecast_issue_time)
-    current_forecast_weather_data = util.create_empty_weather_data(ground_truth_weather_data, ssc_time_steps_per_hour)
+    yrsd_last = 0  
+    weather_data_for_dispatch = util.create_empty_weather_data(ground_truth_weather_data, ssc_time_steps_per_hour)
+    current_day_schedule = np.zeros(24*day_ahead_schedule_steps_per_hour)
+    next_day_schedule = np.zeros(24*day_ahead_schedule_steps_per_hour)
+    initial_plant_state = util.get_initial_state_from_CD_data(start_date, params['CD_raw_data_direc'], params['CD_processed_data_direc'], plant.design)
     current_forecast_weather_data = CaseStudy.update_forecast_weather_data(
-                date=forecast_time,
-                current_forecast_weather_data=current_forecast_weather_data,
+                date=start_date - datetime.timedelta(hours = 24-forecast_issue_time),
+                current_forecast_weather_data=util.create_empty_weather_data(ground_truth_weather_data, ssc_time_steps_per_hour),
                 ssc_time_steps_per_hour=ssc_time_steps_per_hour,
                 forecast_steps_per_hour=forecast_steps_per_hour,
                 ground_truth_weather_data=ground_truth_weather_data,
@@ -1267,25 +1266,20 @@ if __name__ == '__main__':
                 day_ahead_schedule_time=day_ahead_schedule_time,
                 clearsky_data=clearsky_data
                 )
-
-    weather_data_for_dispatch = util.create_empty_weather_data(ground_truth_weather_data, ssc_time_steps_per_hour)
-    day_ahead_schedule_steps_per_hour = 1           # TODO make this not hardcoded
-    n = 24*day_ahead_schedule_steps_per_hour
     schedules = []
-    current_day_schedule = np.zeros(n)
-    next_day_schedule = np.zeros(n)
-    initial_plant_state = util.get_initial_state_from_CD_data(start_date, params['CD_raw_data_direc'], params['CD_processed_data_direc'], plant.design)
-
-    tod = int(util.get_time_of_day(start_date))
-    if tod == 0 and use_day_ahead_schedule and day_ahead_schedule_from == 'calculated':
+    if int(util.get_time_of_day(start_date)) == 0 and use_day_ahead_schedule and day_ahead_schedule_from == 'calculated':
         schedules.append(None)
 
+
+    # Run models
+    outputs_total = {}
+    nupdate = int(sim_days*24 / dispatch_frequency)
     for j in range(nupdate):
         tod = int(util.get_time_of_day(start_date))
         cs = CaseStudy(params=params)
         results = cs.run(
             start_date=start_date,
-            sim_days=dispatch_frequency/24.,
+            timestep_days=dispatch_frequency/24.,
             horizon=horizon,
             ursd_last=ursd_last,
             yrsd_last=yrsd_last,
@@ -1304,7 +1298,6 @@ if __name__ == '__main__':
         if tod == 0 and use_day_ahead_schedule and day_ahead_schedule_from == 'calculated':
             current_day_schedule = [s for s in next_day_schedule]
             schedules.append(current_day_schedule)
-
         start_date += datetime.timedelta(hours=dispatch_frequency)
         horizon -= 3600         # TODO make this not hardcoded
         ursd_last = results['ursd_last']
