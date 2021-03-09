@@ -468,11 +468,30 @@ class CaseStudy:
         ################################
         #--- Run ssc and collect results
         ################################
-        if self.is_optimize and dispatch_soln is not None:
-            D.update(vars(ssc_dispatch_targets))
+        # Start compiling ssc input dict (D2)
+        D2 = self.plant.design.copy()
+        D2.update(self.plant.state)
+        D2.update(self.plant.flux_maps)
+        D2['time_start'] = int(util.get_time_of_year(self.start_date))
+        D2['time_stop'] = util.get_time_of_year(self.start_date.replace(hour=0, minute=0, second=0)) + self.sim_days*24*3600
+        D2['sf_adjust:hourly'] = CaseStudy.get_field_availability_adjustment(self.ssc_time_steps_per_hour, self.start_date.year, self.control_field,
+            self.use_CD_measured_reflectivity, self.plant.design, self.fixed_soiling_loss)
+        CaseStudy.reupdate_ssc_constants(D2, self.params, self.data)
+        if self.control_receiver == 'CD_data':
+            CaseStudy.load_user_flow_paths(
+                D=D2,
+                flow_path_1_data=self.CD_mflow_path2_data,          # Note ssc path numbers are reversed relative to CD path numbers
+                flow_path_2_data=self.CD_mflow_path1_data,
+                use_measured_reflectivity=self.use_CD_measured_reflectivity,
+                soiling_avail=util.get_CD_soiling_availability(self.start_date.year, D2['helio_reflectance'] * 100), # CD soiled / clean reflectivity (daily array),
+                fixed_soiling_loss=self.fixed_soiling_loss
+                )
 
-        D['time_stop'] = toy+freq
-        R, new_plant_state = ssc_wrapper.call_ssc(D, retvars, plant_state_pt = napply-1, npts = napply)
+        if self.is_optimize and dispatch_soln is not None:
+            D2.update(vars(ssc_dispatch_targets))
+
+        D2['time_stop'] = toy+freq
+        R, new_plant_state = ssc_wrapper.call_ssc(D2, retvars, plant_state_pt = napply-1, npts = napply)
         
         #--- Update saved plant state
         persistance_vars = plant_.Plant.update_persistence(
@@ -722,7 +741,7 @@ class CaseStudy:
         flux_maps = [x[2:] for x in R['flux_maps_for_import']]
         return {'A_sf_in': A_sf_in, 'eta_map': eta_map, 'flux_maps': flux_maps}
 
-    
+
     @staticmethod
     def reupdate_ssc_constants(D, params, data):
         D['solar_resource_data'] = data['solar_resource_data']
