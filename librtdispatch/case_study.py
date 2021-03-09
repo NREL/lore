@@ -199,8 +199,7 @@ class CaseStudy:
         D['time_stop'] = util.get_time_of_year(self.start_date.replace(hour=0, minute=0, second=0)) + self.sim_days*24*3600
         D['sf_adjust:hourly'] = CaseStudy.get_field_availability_adjustment(self.ssc_time_steps_per_hour, self.start_date.year, self.control_field,
             self.use_CD_measured_reflectivity, self.plant.design, self.fixed_soiling_loss)
-        CaseStudy.reupdate_constant_ssc_inputs(D, self.price_data, self.ssc_time_steps_per_hour, self.use_transient_model, self.use_transient_startup,
-            self.ground_truth_weather_data, self.is_optimize, self.control_cycle, self.control_field, self.control_receiver, self.clearsky_data)
+        CaseStudy.reupdate_ssc_constants(D, self.params, self.data)
         if self.control_receiver == 'CD_data':
             CaseStudy.load_user_flow_paths(
                 D=D,
@@ -723,45 +722,40 @@ class CaseStudy:
         eta_map = R['eta_map_out']
         flux_maps = [x[2:] for x in R['flux_maps_for_import']]
         return {'A_sf_in': A_sf_in, 'eta_map': eta_map, 'flux_maps': flux_maps}
-    
+
     
     @staticmethod
-    def reupdate_constant_ssc_inputs(D, price_data, ssc_time_steps_per_hour, use_transient_model, use_transient_startup,
-                                     ground_truth_weather_data, is_optimize, control_cycle, control_field, control_receiver, clearsky_data):
-        D['solar_resource_data'] = ground_truth_weather_data
-        D['dispatch_factors_ts'] = price_data
-        # see also clearsky_data below
+    def reupdate_ssc_constants(D, params, data):
+        D['solar_resource_data'] = data['solar_resource_data']
+        D['dispatch_factors_ts'] = data['dispatch_factors_ts']
 
-        D['ppa_multiplier_model'] = 1
-        D['time_steps_per_hour'] = ssc_time_steps_per_hour
-        D['is_rec_model_trans'] = use_transient_model
-        D['is_rec_startup_trans'] = use_transient_startup
-        D['rec_control_per_path'] = True
-        D['field_model_type'] = 3
-        D['eta_map_aod_format'] = False
-        D['is_rec_to_coldtank_allowed'] = True
-        D['rec_control_per_path'] = True
-        D['is_dispatch'] = 0    # Always disable dispatch optimization in ssc
-        D['is_dispatch_targets'] = True if (is_optimize or control_cycle == 'CD_data') else False
+        D['ppa_multiplier_model'] = params['ppa_multiplier_model']
+        D['time_steps_per_hour'] = params['time_steps_per_hour']
+        D['is_rec_model_trans'] = params['is_rec_model_trans']
+        D['is_rec_startup_trans'] = params['is_rec_startup_trans']
+        D['rec_control_per_path'] = params['rec_control_per_path']
+        D['field_model_type'] = params['field_model_type']
+        D['eta_map_aod_format'] = params['eta_map_aod_format']
+        D['is_rec_to_coldtank_allowed'] = params['is_rec_to_coldtank_allowed']
+        D['is_dispatch'] = params['is_dispatch']
+        D['is_dispatch_targets'] = params['is_dispatch_targets']
 
         #--- Set field control parameters
-        if control_field == 'CD_data':
-            D['is_rec_startup_trans'] = False
-            D['rec_su_delay'] = 0.01            # Set receiver start time and energy to near zero to enforce CD receiver startup timing
-            D['rec_qf_delay'] = 0.01
+        if params['control_field'] == 'CD_data':
+            D['rec_su_delay'] = params['rec_su_delay']
+            D['rec_qf_delay'] = params['rec_qf_delay']
 
         #--- Set receiver control parameters
-        if control_receiver == 'CD_data':
-            D['is_rec_user_mflow'] = True
-            D['is_rec_startup_trans'] = False
-            D['rec_su_delay'] = 0.01   # Set receiver start time and energy to near zero to enforce CD receiver startup timing
-            D['rec_qf_delay'] = 0.01            
-        elif control_receiver == 'ssc_clearsky':
-            D['rec_clearsky_fraction'] = 1.0
-            D['rec_clearsky_model'] = 0
-            D['rec_clearsky_dni'] = clearsky_data.tolist()
-        elif control_receiver == 'ssc_actual_dni':
-            D['rec_clearsky_fraction'] = 0.0
+        if params['control_receiver'] == 'CD_data':
+            D['is_rec_user_mflow'] = params['is_rec_user_mflow']
+            D['rec_su_delay'] = params['rec_su_delay']
+            D['rec_qf_delay'] = params['rec_qf_delay']
+        elif params['control_receiver'] == 'ssc_clearsky':
+            D['rec_clearsky_fraction'] = params['rec_clearsky_fraction']
+            D['rec_clearsky_model'] = params['rec_clearsky_model']
+            D['rec_clearsky_dni'] = data['clearsky_data'].tolist()
+        elif params['control_receiver'] == 'ssc_actual_dni':
+            D['rec_clearsky_fraction'] = params['rec_clearsky_fraction']
 
         return
 
