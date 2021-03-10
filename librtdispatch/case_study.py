@@ -538,7 +538,15 @@ class CaseStudy:
         self.revenue = CaseStudy.calculate_revenue(self.start_date, self.sim_days, self.results['P_out_net'], self.params, self.data)
         day_ahead_penalties = CaseStudy.calculate_day_ahead_penalty(self.sim_days, self.schedules, self.results['P_out_net'], self.params, self.disp_soln_tracking, 
             self.disp_params_tracking)
-        startup_ramping_penalties = self.calculate_startup_ramping_penalty()        
+        startup_ramping_penalties = CaseStudy.calculate_startup_ramping_penalty(
+            plant_design=self.plant.design,
+            q_startup=self.results['q_startup'],
+            Q_thermal=self.results['Q_thermal'],
+            q_pb=self.results['q_pb'],
+            P_cycle=self.results['P_cycle'],
+            q_dot_pc_startup=self.results['q_dot_pc_startup'],
+            params=self.params
+        )
         
         outputs = {
             'revenue': self.revenue,
@@ -901,7 +909,8 @@ class CaseStudy:
         return outputs
 
     
-    def calculate_startup_ramping_penalty(self):
+    @staticmethod
+    def calculate_startup_ramping_penalty(plant_design, q_startup, Q_thermal, q_pb, P_cycle, q_dot_pc_startup, params):
         """
         Inputs:
             q_startup
@@ -909,9 +918,9 @@ class CaseStudy:
             q_pb
             P_cycle
             q_dot_pc_startup
-            Crsu                    plant.design
-            Ccsu                    plant.design
-            C_delta_w               plant.design
+            Crsu
+            Ccsu
+            C_delta_w
 
         Outputs:
             n_starts_rec
@@ -938,35 +947,35 @@ class CaseStudy:
                         
             return n_starts, n_start_attempts_completed
 
-        self.n_starts_rec, self.n_starts_rec_attempted = find_starts(self.results['q_startup'], self.results['Q_thermal'])
+        n_starts_rec, n_starts_rec_attempted = find_starts(q_startup, Q_thermal)
 
-        qpb_on = self.results['q_pb']   # Cycle thermal power includes startup
-        inds_off = np.where(self.results['P_cycle']<1.e-3)[0]
+        qpb_on = q_pb   # Cycle thermal power includes startup
+        inds_off = np.where(P_cycle<1.e-3)[0]
         qpb_on[inds_off] = 0.0
-        self.n_starts_cycle, self.n_starts_cycle_attempted = find_starts(self.results['q_dot_pc_startup'], qpb_on)
+        n_starts_cycle, n_starts_cycle_attempted = find_starts(q_dot_pc_startup, qpb_on)
 
-        n = len(self.results['P_cycle'])
-        self.cycle_ramp_up = 0.0
-        self.cycle_ramp_down = 0.0
-        w = self.results['P_cycle']
+        n = len(P_cycle)
+        cycle_ramp_up = 0.0
+        cycle_ramp_down = 0.0
+        w = P_cycle
         for j in range(1,n):
             diff =  w[j] - w[j-1]
             if diff > 0:
-                self.cycle_ramp_up += diff
+                cycle_ramp_up += diff
             elif diff < 0:
-                self.cycle_ramp_down += (-diff)
+                cycle_ramp_down += (-diff)
         
-        self.startup_ramping_penalty = self.n_starts_rec*self.plant.design['Crsu'] + self.n_starts_cycle*self.plant.design['Ccsu'] 
-        self.startup_ramping_penalty += self.cycle_ramp_up*self.plant.design['C_delta_w']*1000 + self.cycle_ramp_down*self.plant.design['C_delta_w']*1000
+        startup_ramping_penalty = n_starts_rec*plant_design['Crsu'] + n_starts_cycle*plant_design['Ccsu'] 
+        startup_ramping_penalty += cycle_ramp_up*plant_design['C_delta_w']*1000 + cycle_ramp_down*plant_design['C_delta_w']*1000
 
         outputs = {
-            'n_starts_rec': self.n_starts_rec,
-            'n_starts_rec_attempted': self.n_starts_rec_attempted,
-            'n_starts_cycle': self.n_starts_cycle,
-            'n_starts_cycle_attempted': self.n_starts_cycle_attempted,
-            'cycle_ramp_up': self.cycle_ramp_up,
-            'cycle_ramp_down': self.cycle_ramp_down,
-            'startup_ramping_penalty': self.startup_ramping_penalty
+            'n_starts_rec': n_starts_rec,
+            'n_starts_rec_attempted': n_starts_rec_attempted,
+            'n_starts_cycle': n_starts_cycle,
+            'n_starts_cycle_attempted': n_starts_cycle_attempted,
+            'cycle_ramp_up': cycle_ramp_up,
+            'cycle_ramp_down': cycle_ramp_down,
+            'startup_ramping_penalty': startup_ramping_penalty
         }
         return outputs
         
