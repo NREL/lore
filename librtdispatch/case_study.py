@@ -173,7 +173,7 @@ class CaseStudy:
 
 
     #--- Run simulation
-    def run(self, start_date, timestep_days, horizon, ursd_last, yrsd_last, current_forecast_weather_data, weather_data_for_dispatch,
+    def run(self, start_date, timestep_days, horizon, retvars, ursd_last, yrsd_last, current_forecast_weather_data, weather_data_for_dispatch,
             schedules, current_day_schedule, next_day_schedule, initial_plant_state=None):
 
         time = self.current_time = self.start_date = start_date
@@ -222,15 +222,6 @@ class CaseStudy:
         nominal_horizon = int(self.dispatch_horizon*3600)  
         horizon_update = int(self.dispatch_horizon_update*3600)
         freq = int(self.dispatch_frequency*3600)                    # Frequency of rolling horizon update (s)
-
-        #--- Initialize results
-        retvars = CaseStudy.default_ssc_return_vars()
-        retvars_disp = CaseStudy.default_disp_stored_vars()
-        if self.is_optimize:
-            retvars += vars(dispatch.DispatchTargets()).keys()
-        R = {k:np.zeros(ntot) for k in retvars}
-        for k in retvars_disp:
-            R['disp_'+k] =np.zeros(ntot)
 
         #--- Update "forecasted" weather data (if relevant)
         if self.is_optimize and (tod == self.forecast_issue_time*3600):
@@ -403,9 +394,12 @@ class CaseStudy:
                 assert math.isclose(dispatch_soln.objective_value, 208838, rel_tol=1e-4)
                 assert math.isclose(dispatch_soln.s0, 832181, rel_tol=1e-4)
 
+            # Populate results
+            if self.is_optimize:
+                retvars += vars(dispatch.DispatchTargets()).keys()
             if dispatch_soln is not None:
                 Rdisp_all = dispatch_soln.get_solution_at_ssc_steps(self.dispatch_params, sscstep/3600., freq/3600.)
-                Rdisp = {'disp_'+key:value for key,value in Rdisp_all.items() if key in retvars_disp}
+                Rdisp = {'disp_'+key:value for key,value in Rdisp_all.items() if key in retvars}
 
                 # TODO: make the time triggering more robust; shouldn't be an '==' as the program may be offline at the time or running at intervals
                 #  that won't exactly hit it
@@ -1024,6 +1018,7 @@ if __name__ == '__main__':
             start_date=start_date,
             timestep_days=timestep_days,
             horizon=horizon,
+            retvars=CaseStudy.default_disp_stored_vars(),
             ursd_last=ursd_last,
             yrsd_last=yrsd_last,
             current_forecast_weather_data=current_forecast_weather_data,
