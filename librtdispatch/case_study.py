@@ -458,7 +458,8 @@ class CaseStudy:
                 yrsd_last = dispatch_soln.get_value_at_time(self.dispatch_params, freq/3600, 'yrsd')      # set to False when it doesn't exists
 
             else:  # Infeasible solution was returned, revert back to running ssc without dispatch targets
-                pass
+                Rdisp = None
+                ssc_dispatch_targets = None
         
 
             #
