@@ -193,8 +193,7 @@ class CaseStudy:
         D.update(self.plant.flux_maps)
         D['time_start'] = int(util.get_time_of_year(self.start_date))
         D['time_stop'] = util.get_time_of_year(self.start_date.replace(hour=0, minute=0, second=0)) + self.sim_days*24*3600
-        D['sf_adjust:hourly'] = CaseStudy.get_field_availability_adjustment(self.ssc_time_steps_per_hour, self.start_date.year, self.control_field,
-            self.use_CD_measured_reflectivity, self.plant.design, self.fixed_soiling_loss)
+        D['sf_adjust:hourly'] = self.data['sf_adjust:hourly']
         CaseStudy.reupdate_ssc_constants(D, self.params, self.data)
         if self.control_receiver == 'CD_data':
             D['rec_user_mflow_path_1'] = self.data['rec_user_mflow_path_1']
@@ -946,6 +945,10 @@ if __name__ == '__main__':
         assert math.isclose(np.sum(plant.flux_maps['eta_map']), 10385.8, rel_tol=1e-4)
         assert math.isclose(np.sum(plant.flux_maps['flux_maps']), 44.0, rel_tol=1e-4)
 
+    # Data - get field availability adjustment
+    sf_adjust_hourly = CaseStudy.get_field_availability_adjustment(ssc_time_steps_per_hour, start_date.year, m_vars['control_field'],
+            m_vars['use_CD_measured_reflectivity'], plant.design, m_vars['fixed_soiling_loss'])
+
     # Data - get clear-sky DNI annual arrays
     clearsky_file = './model-validation/input_files/weather_files/clearsky_pvlib_ineichen_1min_2018.csv'      # Expected clear-sky DNI from Ineichen model (via pvlib).  
     clearsky_data = np.genfromtxt(clearsky_file)
@@ -974,6 +977,7 @@ if __name__ == '__main__':
     price_data = [m_vars['avg_price']*p/pmavg  for p in price_multipliers]  # Electricity price at ssc time steps ($/MWh)
 
     data = {
+        'sf_adjust:hourly':                 sf_adjust_hourly,
         'dispatch_factors_ts':              price_data,
         'clearsky_data':                    clearsky_data,
         'solar_resource_data':              ground_truth_weather_data,
@@ -1036,8 +1040,7 @@ if __name__ == '__main__':
         D2.update(plant.flux_maps)
         D2['time_start'] = int(util.get_time_of_year(start_date))
         D2['time_stop'] = util.get_time_of_year(start_date.replace(hour=0, minute=0, second=0)) + timestep_days*24*3600
-        D2['sf_adjust:hourly'] = CaseStudy.get_field_availability_adjustment(ssc_time_steps_per_hour, start_date.year, m_vars['control_field'],
-            m_vars['use_CD_measured_reflectivity'], plant.design, m_vars['fixed_soiling_loss'])
+        D2['sf_adjust:hourly'] = data['sf_adjust:hourly']
         CaseStudy.reupdate_ssc_constants(D2, m_vars, data)
         if m_vars['control_receiver'] == 'CD_data':
             D2['rec_user_mflow_path_1'] = data['rec_user_mflow_path_1']
