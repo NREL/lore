@@ -536,7 +536,8 @@ class CaseStudy:
 
         # Calculate post-simulation financials
         self.revenue = CaseStudy.calculate_revenue(self.start_date, self.sim_days, self.results['P_out_net'], self.params, self.data)
-        day_ahead_penalties = self.calculate_day_ahead_penalty()
+        day_ahead_penalties = CaseStudy.calculate_day_ahead_penalty(self.sim_days, self.schedules, self.results['P_out_net'], self.params, self.disp_soln_tracking, 
+            self.disp_params_tracking)
         startup_ramping_penalties = self.calculate_startup_ramping_penalty()        
         
         outputs = {
@@ -810,11 +811,13 @@ class CaseStudy:
 
     
     # Calculate penalty for missing day-ahead schedule (assuming day-ahead schedule step is 1-hour for now)
-    def calculate_day_ahead_penalty(self):
+    @staticmethod
+    def calculate_day_ahead_penalty(sim_days, schedules, P_out_net, params, disp_soln_tracking, 
+        disp_params_tracking, disp_net_electrical_output=None):
         """
         Inputs:
             sim_days
-            ssc_time_steps_per_hour
+            time_steps_per_hour                     ssc_time_steps_per_hour
             schedules
             P_out_net
             disp_net_electrical_output
@@ -838,59 +841,62 @@ class CaseStudy:
         """
 
 
-        ndays = max(1, self.sim_days)
-        nph = int(self.ssc_time_steps_per_hour)
+        ndays = max(1, sim_days)
+        nph = int(params['time_steps_per_hour'])
 
-        self.day_ahead_diff = {k:np.zeros((ndays, 24)) for k in ['ssc', 'disp', 'disp_raw']}
-        self.day_ahead_penalty = {k:np.zeros((ndays, 24)) for k in ['ssc', 'disp', 'disp_raw']}
-        self.day_ahead_diff_over_tol_plus = {k:0.0 for k in ['ssc', 'disp', 'disp_raw']}  
-        self.day_ahead_diff_over_tol_minus = {k:0.0 for k in ['ssc', 'disp', 'disp_raw']}
+        day_ahead_diff = {k:np.zeros((ndays, 24)) for k in ['ssc', 'disp', 'disp_raw']}
+        day_ahead_penalty = {k:np.zeros((ndays, 24)) for k in ['ssc', 'disp', 'disp_raw']}
+        day_ahead_diff_over_tol_plus = {k:0.0 for k in ['ssc', 'disp', 'disp_raw']}  
+        day_ahead_diff_over_tol_minus = {k:0.0 for k in ['ssc', 'disp', 'disp_raw']}
         
-        self.day_ahead_diff_ssc_disp_gross = np.zeros((ndays, 24))
+        day_ahead_diff_ssc_disp_gross = np.zeros((ndays, 24))
                 
         # Calculate penalty from ssc or dispatch results (translated to ssc time steps)
         for d in range(ndays):
-            if len(self.schedules) > d and self.schedules[d] is not None:  # Schedule exists
+            if len(schedules) > d and schedules[d] is not None:  # Schedule exists
                 for j in range(24):  # Hours per day
-                    target = self.schedules[d][j]       # Target generation during the schedule step
+                    target = schedules[d][j]       # Target generation during the schedule step
                     p = d*24*nph + j*nph                # First point in result arrays from ssc solutions
                     
                     wnet = {k:0.0 for k in ['ssc', 'disp', 'disp_raw']}
-                    wnet['ssc'] = self.results['P_out_net'][p:p+nph].sum() * 1./nph                             # Total generation from ssc during the schedule step (MWhe)
-                    if 'disp_net_electrical_output' in self.results.keys():
-                        wnet['disp'] = self.results['disp_net_electrical_output'][p:p+nph].sum() * 1./nph * 1.e-3   # Total generation from dispatch solution during the schedule step (MWhe)
+                    wnet['ssc'] = P_out_net[p:p+nph].sum() * 1./nph                             # Total generation from ssc during the schedule step (MWhe)
+                    if disp_net_electrical_output is not None:
+                        wnet['disp'] = disp_net_electrical_output[p:p+nph].sum() * 1./nph * 1.e-3   # Total generation from dispatch solution during the schedule step (MWhe)
                     
-                    self.day_ahead_diff_ssc_disp_gross[d,j] = wnet['ssc'] - wnet['disp']
+                    day_ahead_diff_ssc_disp_gross[d,j] = wnet['ssc'] - wnet['disp']
                     
                     # Calculate generation directly from dispatch schedule before interpolation
-                    if len(self.disp_soln_tracking)>0:  # Dispatch solutions were saved
+                    if len(disp_soln_tracking)>0:  # Dispatch solutions were saved
                         i = d*24+j
-                        delta_e = self.disp_params_tracking[i].Delta_e
-                        delta = self.disp_params_tracking[i].Delta 
-                        wdisp = self.disp_soln_tracking[i].net_electrical_output/1000.  # Net energy sold to grid (MWe)
+                        delta_e = disp_params_tracking[i].Delta_e
+                        delta = disp_params_tracking[i].Delta 
+                        wdisp = disp_soln_tracking[i].net_electrical_output/1000.  # Net energy sold to grid (MWe)
                         inds = np.where(np.array(delta_e) <= 1.0)[0]
                         wnet['disp_raw'] = sum([wdisp[i]*delta[i] for i in inds])  # MWhe cumulative generation 
                         
-                    for k in self.day_ahead_diff.keys():
-                        self.day_ahead_diff[k][d,j] = wnet[k] - target
+                    for k in day_ahead_diff.keys():
+                        day_ahead_diff[k][d,j] = wnet[k] - target
                         
-                        if not self.day_ahead_ignore_off or target>0.0 or wnet[k]>0:  # Enforce penalties for missing schedule
-                            self.day_ahead_diff[k][d,j] = wnet[k] - target
-                            if self.day_ahead_diff[k][d,j] > self.day_ahead_tol_plus:
-                                self.day_ahead_penalty[k][d,j] = self.day_ahead_diff[k][d,j] * self.day_ahead_pen_plus
-                                self.day_ahead_diff_over_tol_plus[k] += self.day_ahead_diff[k][d,j]
-                            elif self.day_ahead_diff[k][d,j] < self.day_ahead_tol_minus:
-                                self.day_ahead_penalty[k][d,j] = (-self.day_ahead_diff[k][d,j]) * self.day_ahead_pen_minus
-                                self.day_ahead_diff_over_tol_minus[k] += self.day_ahead_diff[k][d,j]
+                        if not params['day_ahead_ignore_off'] or target>0.0 or wnet[k]>0:  # Enforce penalties for missing schedule
+                            day_ahead_diff[k][d,j] = wnet[k] - target
+                            if day_ahead_diff[k][d,j] > params['day_ahead_tol_plus']:
+                                day_ahead_penalty[k][d,j] = day_ahead_diff[k][d,j] * params['day_ahead_pen_plus']
+                                day_ahead_diff_over_tol_plus[k] += day_ahead_diff[k][d,j]
+                            elif day_ahead_diff[k][d,j] < params['day_ahead_tol_minus']:
+                                day_ahead_penalty[k][d,j] = (-day_ahead_diff[k][d,j]) * params['day_ahead_pen_minus']
+                                day_ahead_diff_over_tol_minus[k] += day_ahead_diff[k][d,j]
                                 
-        self.day_ahead_penalty_tot = {k:self.day_ahead_penalty[k].sum() for k in self.day_ahead_diff.keys()}  # Total penalty ($)
-        self.day_ahead_diff_tot = {k:self.day_ahead_diff[k].sum() for k in self.day_ahead_diff.keys()}
+        day_ahead_penalty_tot = {k:day_ahead_penalty[k].sum() for k in day_ahead_diff.keys()}  # Total penalty ($)
+        day_ahead_diff_tot = {k:day_ahead_diff[k].sum() for k in day_ahead_diff.keys()}
 
         outputs = {
-            'day_ahead_penalty_tot': self.day_ahead_penalty_tot,
-            'day_ahead_diff_tot': self.day_ahead_diff_tot,
-            'day_ahead_diff_over_tol_plus': self.day_ahead_diff_over_tol_plus,
-            'day_ahead_diff_over_tol_minus': self.day_ahead_diff_over_tol_minus
+            'day_ahead_diff': day_ahead_diff,
+            'day_ahead_penalty': day_ahead_penalty,
+
+            'day_ahead_penalty_tot': day_ahead_penalty_tot,
+            'day_ahead_diff_tot': day_ahead_diff_tot,
+            'day_ahead_diff_over_tol_plus': day_ahead_diff_over_tol_plus,
+            'day_ahead_diff_over_tol_minus': day_ahead_diff_over_tol_minus
         }
         return outputs
 
