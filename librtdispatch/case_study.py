@@ -986,7 +986,7 @@ if __name__ == '__main__':
     sim_days = 1
     start_date = datetime.datetime(2018, 10, 14)
     timestep_days = m_vars['dispatch_frequency']/24.
-    horizon = 86400                 # TODO  make this not hardcoded
+    horizon = sim_days*24*3600          # [s]
     ursd_last = 0
     yrsd_last = 0  
     weather_data_for_dispatch = util.create_empty_weather_data(ground_truth_weather_data, ssc_time_steps_per_hour)
@@ -1123,7 +1123,7 @@ if __name__ == '__main__':
             current_day_schedule = [s for s in next_day_schedule]
             schedules.append(current_day_schedule)
         start_date += datetime.timedelta(hours=m_vars['dispatch_frequency'])
-        horizon -= 3600         # TODO make this not hardcoded
+        horizon -= int(timestep_days*24*3600)
         ursd_last = dispatch_outputs['ursd_last']
         yrsd_last = dispatch_outputs['yrsd_last']
         current_forecast_weather_data = dispatch_outputs['current_forecast_weather_data']
