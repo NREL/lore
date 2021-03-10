@@ -172,10 +172,6 @@ class CaseStudy:
         return
 
 
-    #------------------------------------------------------------------------
-
-
-    #-------------------------------------------------------------------------
     #--- Run simulation
     def run(self, start_date, timestep_days, horizon, ursd_last, yrsd_last, current_forecast_weather_data, weather_data_for_dispatch,
             schedules, current_day_schedule, next_day_schedule, initial_plant_state=None):
@@ -200,14 +196,8 @@ class CaseStudy:
             self.use_CD_measured_reflectivity, self.plant.design, self.fixed_soiling_loss)
         CaseStudy.reupdate_ssc_constants(D, self.params, self.data)
         if self.control_receiver == 'CD_data':
-            CaseStudy.load_user_flow_paths(
-                D=D,
-                flow_path_1_data=self.CD_mflow_path2_data,          # Note ssc path numbers are reversed relative to CD path numbers
-                flow_path_2_data=self.CD_mflow_path1_data,
-                use_measured_reflectivity=self.use_CD_measured_reflectivity,
-                soiling_avail=util.get_CD_soiling_availability(self.start_date.year, D['helio_reflectance'] * 100), # CD soiled / clean reflectivity (daily array),
-                fixed_soiling_loss=self.fixed_soiling_loss
-                )
+            D['rec_user_mflow_path_1'] = self.data['rec_user_mflow_path_1']
+            D['rec_user_mflow_path_2'] = self.data['rec_user_mflow_path_2']
 
         #-------------------------------------------------------------------------
         # Run simulation in a rolling horizon   
@@ -235,7 +225,7 @@ class CaseStudy:
 
         #--- Initialize results
         retvars = CaseStudy.default_ssc_return_vars()
-        retvars_disp = self.default_disp_stored_vars()
+        retvars_disp = CaseStudy.default_disp_stored_vars()
         if self.is_optimize:
             retvars += vars(dispatch.DispatchTargets()).keys()
         R = {k:np.zeros(ntot) for k in retvars}
@@ -880,7 +870,8 @@ class CaseStudy:
             'startup_ramping_penalty': startup_ramping_penalty
         }
         return outputs
-        
+
+
     @staticmethod
     def default_ssc_return_vars():
         return ['beam', 'clearsky', 'tdry', 'wspd', 'solzen', 'solaz', 'pricing_mult',
@@ -894,24 +885,32 @@ class CaseStudy:
                    'is_rec_su_allowed', 'is_pc_su_allowed', 'is_pc_sb_allowed',
                    'op_mode_1', 'op_mode_2', 'op_mode_3', 'q_dot_est_cr_on', 'q_dot_est_cr_su', 'q_dot_est_tes_dc', 'q_dot_est_tes_ch', 'q_dot_pc_target_on'
                    ]
-    
 
-    def default_disp_stored_vars(self):
+
+    @staticmethod
+    def default_disp_stored_vars():
         return ['cycle_on', 'cycle_standby', 'cycle_startup', 'receiver_on', 'receiver_startup', 'receiver_standby', 
                'receiver_power', 'thermal_input_to_cycle', 'electrical_output_from_cycle', 'net_electrical_output', 'tes_soc',
                'yrsd', 'ursd']
     
 
     @staticmethod
-    def load_user_flow_paths(D, flow_path_1_data, flow_path_2_data, use_measured_reflectivity, soiling_avail=None, fixed_soiling_loss=None):
+    def get_user_flow_paths(flow_path1_file, flow_path2_file, time_steps_per_hour, helio_reflectance, use_measured_reflectivity,
+        soiling_avail=None, fixed_soiling_loss=None):
         """Load user flow paths into the ssc input dict (D)"""
-        mult = np.ones_like(flow_path_1_data)
+        flow_path1_data = np.genfromtxt(flow_path1_file)
+        flow_path2_data = np.genfromtxt(flow_path2_file)
+        if time_steps_per_hour != 60:
+            flow_path1_data = np.array(util.translate_to_new_timestep(flow_path1_data, 1./60, 1./time_steps_per_hour))
+            flow_path2_data = np.array(util.translate_to_new_timestep(flow_path2_data, 1./60, 1./time_steps_per_hour))
+        mult = np.ones_like(flow_path1_data)
         if not use_measured_reflectivity:                                                   # Scale mass flow based on simulated reflectivity vs. CD actual reflectivity
-            rho = (1-fixed_soiling_loss) * D['helio_reflectance']                           # Simulated heliostat reflectivity
-            mult = rho*np.ones(365) / (soiling_avail*D['helio_reflectance'])                # Ratio of simulated / CD reflectivity
-            mult = np.repeat(mult, 24*D['time_steps_per_hour'])                             # Annual array at ssc resolution
-        D['rec_user_mflow_path_1'] = (flow_path_1_data * mult).tolist()                     # Note ssc path numbers are reversed relative to CD path numbers
-        D['rec_user_mflow_path_2'] = (flow_path_2_data * mult).tolist()
+            rho = (1-fixed_soiling_loss) * helio_reflectance                                # Simulated heliostat reflectivity
+            mult = rho*np.ones(365) / (soiling_avail*helio_reflectance)                     # Ratio of simulated / CD reflectivity
+            mult = np.repeat(mult, 24*time_steps_per_hour)                                  # Annual array at ssc resolution
+        rec_user_mflow_path_1 = (flow_path1_data * mult).tolist()                          # Note ssc path numbers are reversed relative to CD path numbers
+        rec_user_mflow_path_2 = (flow_path2_data * mult).tolist()
+        return rec_user_mflow_path_1, rec_user_mflow_path_2
 
 
 
@@ -922,8 +921,11 @@ if __name__ == '__main__':
     start = timeit.default_timer()
     os.chdir(os.path.dirname(__file__))
     
-    # Mediator parameters
+    # Mediator inputs and parameters
+    start_date = datetime.datetime(2018, 10, 14)
+    sim_days = 1
     m_vars = mediator_params.copy()
+    timestep_days = m_vars['dispatch_frequency']/24.
     ssc_time_steps_per_hour = m_vars['time_steps_per_hour']
     disp_soln_tracking = []
     disp_params_tracking = []
@@ -937,6 +939,18 @@ if __name__ == '__main__':
     if ssc_time_steps_per_hour != 60:
         ground_truth_weather_data = util.update_weather_timestep(ground_truth_weather_data, ssc_time_steps_per_hour)
 
+    # Setup plant including calculating flux maps
+    plant = plant_.Plant(design=plant_.plant_design, initial_state=plant_.plant_initial_state)   # Default parameters contain best representation of CD plant and dispatch properties
+    if plant.flux_maps['A_sf_in'] == 0.0:
+        plant.flux_maps = CaseStudy.simulate_flux_maps(
+            plant_design = plant.design,
+            ssc_time_steps_per_hour = ssc_time_steps_per_hour,
+            ground_truth_weather_data = ground_truth_weather_data
+            )
+        assert math.isclose(plant.flux_maps['A_sf_in'], 1172997, rel_tol=1e-4)
+        assert math.isclose(np.sum(plant.flux_maps['eta_map']), 10385.8, rel_tol=1e-4)
+        assert math.isclose(np.sum(plant.flux_maps['flux_maps']), 44.0, rel_tol=1e-4)
+
     # Data - get clear-sky DNI annual arrays
     clearsky_file = './model-validation/input_files/weather_files/clearsky_pvlib_ineichen_1min_2018.csv'      # Expected clear-sky DNI from Ineichen model (via pvlib).  
     clearsky_data = np.genfromtxt(clearsky_file)
@@ -946,11 +960,15 @@ if __name__ == '__main__':
     # Data - get receiver mass flow annual arrays
     CD_mflow_path1_file = './model-validation/input_files/mflow_path1_2018_1min.csv'                          # File containing CD data for receiver path 1 mass flow rate (note, all values are zeros on days without data)
     CD_mflow_path2_file = './model-validation/input_files/mflow_path2_2018_1min.csv'                          # File containing CD data for receiver path 2 mass flow rate (note, all values are zeros on days without data)
-    CD_mflow_path1_data = np.genfromtxt(CD_mflow_path1_file)
-    CD_mflow_path2_data = np.genfromtxt(CD_mflow_path2_file)
-    if ssc_time_steps_per_hour != 60:
-        CD_mflow_path1_data = np.array(util.translate_to_new_timestep(CD_mflow_path1_data, 1./60, 1./ssc_time_steps_per_hour))
-        CD_mflow_path2_data = np.array(util.translate_to_new_timestep(CD_mflow_path2_data, 1./60, 1./ssc_time_steps_per_hour))
+    rec_user_mflow_path_1, rec_user_mflow_path_2 = CaseStudy.get_user_flow_paths(
+        flow_path1_file=CD_mflow_path2_file,          # Note ssc path numbers are reversed relative to CD path numbers
+        flow_path2_file=CD_mflow_path1_file,
+        time_steps_per_hour=ssc_time_steps_per_hour,
+        helio_reflectance=plant.design['helio_reflectance'],
+        use_measured_reflectivity=m_vars['use_CD_measured_reflectivity'],
+        soiling_avail=util.get_CD_soiling_availability(start_date.year, plant.design['helio_reflectance'] * 100), # CD soiled / clean reflectivity (daily array),
+        fixed_soiling_loss=m_vars['fixed_soiling_loss']
+        )
 
     # Data - get prices
     price_multiplier_file = 'prices_flat.csv'  # TODO: File containing annual price multipliers
@@ -964,27 +982,12 @@ if __name__ == '__main__':
         'dispatch_factors_ts':              price_data,
         'clearsky_data':                    clearsky_data,
         'solar_resource_data':              ground_truth_weather_data,
-        'CD_mflow_path1_data':              CD_mflow_path1_data,
-        'CD_mflow_path2_data':              CD_mflow_path2_data,
+        'rec_user_mflow_path_1':            rec_user_mflow_path_1,
+        'rec_user_mflow_path_2':            rec_user_mflow_path_2,
     }
-
-    # Setup plant including calculating flux maps
-    plant = plant_.Plant(design=plant_.plant_design, initial_state=plant_.plant_initial_state)   # Default parameters contain best representation of CD plant and dispatch properties
-    if plant.flux_maps['A_sf_in'] == 0.0:
-        plant.flux_maps = CaseStudy.simulate_flux_maps(
-            plant_design = plant.design,
-            ssc_time_steps_per_hour = ssc_time_steps_per_hour,
-            ground_truth_weather_data = ground_truth_weather_data
-            )
-        assert math.isclose(plant.flux_maps['A_sf_in'], 1172997, rel_tol=1e-4)
-        assert math.isclose(np.sum(plant.flux_maps['eta_map']), 10385.8, rel_tol=1e-4)
-        assert math.isclose(np.sum(plant.flux_maps['flux_maps']), 44.0, rel_tol=1e-4)
 
 
     # Dispatch inputs
-    sim_days = 1
-    start_date = datetime.datetime(2018, 10, 14)
-    timestep_days = m_vars['dispatch_frequency']/24.
     horizon = sim_days*24*3600          # [s]
     ursd_last = 0
     yrsd_last = 0  
@@ -1041,14 +1044,8 @@ if __name__ == '__main__':
             m_vars['use_CD_measured_reflectivity'], plant.design, m_vars['fixed_soiling_loss'])
         CaseStudy.reupdate_ssc_constants(D2, m_vars, data)
         if m_vars['control_receiver'] == 'CD_data':
-            CaseStudy.load_user_flow_paths(
-                D=D2,
-                flow_path_1_data=data['CD_mflow_path2_data'],          # Note ssc path numbers are reversed relative to CD path numbers
-                flow_path_2_data=data['CD_mflow_path1_data'],
-                use_measured_reflectivity=m_vars['use_CD_measured_reflectivity'],
-                soiling_avail=util.get_CD_soiling_availability(start_date.year, D2['helio_reflectance'] * 100), # CD soiled / clean reflectivity (daily array),
-                fixed_soiling_loss=m_vars['fixed_soiling_loss']
-                )
+            D2['rec_user_mflow_path_1'] = data['rec_user_mflow_path_1']
+            D2['rec_user_mflow_path_2'] = data['rec_user_mflow_path_2']
 
         if m_vars['is_optimize'] and dispatch_outputs['Rdisp'] is not None:
             D2.update(vars(dispatch_outputs['ssc_dispatch_targets']))
