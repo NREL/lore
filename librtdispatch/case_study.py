@@ -460,109 +460,10 @@ class CaseStudy:
             else:  # Infeasible solution was returned, revert back to running ssc without dispatch targets
                 Rdisp = None
                 ssc_dispatch_targets = None
-        
 
-            #
-            # Return ssc_dispatch_targets and Rdisp
-            #
-
-        
-        ################################
-        #--- Run ssc and collect results
-        ################################
-        # Start compiling ssc input dict (D2)
-        D2 = self.plant.design.copy()
-        D2.update(self.plant.state)
-        D2.update(self.plant.flux_maps)
-        D2['time_start'] = int(util.get_time_of_year(self.start_date))
-        D2['time_stop'] = util.get_time_of_year(self.start_date.replace(hour=0, minute=0, second=0)) + self.sim_days*24*3600
-        D2['sf_adjust:hourly'] = CaseStudy.get_field_availability_adjustment(self.ssc_time_steps_per_hour, self.start_date.year, self.control_field,
-            self.use_CD_measured_reflectivity, self.plant.design, self.fixed_soiling_loss)
-        CaseStudy.reupdate_ssc_constants(D2, self.params, self.data)
-        if self.control_receiver == 'CD_data':
-            CaseStudy.load_user_flow_paths(
-                D=D2,
-                flow_path_1_data=self.CD_mflow_path2_data,          # Note ssc path numbers are reversed relative to CD path numbers
-                flow_path_2_data=self.CD_mflow_path1_data,
-                use_measured_reflectivity=self.use_CD_measured_reflectivity,
-                soiling_avail=util.get_CD_soiling_availability(self.start_date.year, D2['helio_reflectance'] * 100), # CD soiled / clean reflectivity (daily array),
-                fixed_soiling_loss=self.fixed_soiling_loss
-                )
-
-        if self.is_optimize and dispatch_soln is not None:
-            D2.update(vars(ssc_dispatch_targets))
-
-        D2['time_stop'] = toy+freq
-        R, new_plant_state = ssc_wrapper.call_ssc(D2, retvars, plant_state_pt = napply-1, npts = napply)
-        
-        #--- Update saved plant state
-        persistance_vars = plant_.Plant.update_persistence(
-            self.plant.state,
-            R,
-            new_plant_state['rec_op_mode_initial'],
-            new_plant_state['pc_op_mode_initial'],
-            sscstep/3600.)
-        new_plant_state.update(persistance_vars)
-        self.plant.state.update(new_plant_state)
-
-        if start_date == datetime.datetime(2018, 10, 14, 0, 0):
-            assert math.isclose(self.plant.state['pc_startup_energy_remain_initial'], 29339.9, rel_tol=1e-4)
-            assert math.isclose(self.plant.state['pc_startup_time_remain_init'], 0.5, rel_tol=1e-4)
-            assert math.isclose(self.plant.state['rec_startup_energy_remain_init'], 141250000, rel_tol=1e-4)
-            assert math.isclose(self.plant.state['rec_startup_time_remain_init'], 1.15, rel_tol=1e-4)
-            assert math.isclose(self.plant.state['disp_rec_persist0'], 1001, rel_tol=1e-4)
-            assert math.isclose(self.plant.state['disp_rec_off0'], 1001, rel_tol=1e-4)
-            assert math.isclose(self.plant.state['disp_pc_persist0'], 1001, rel_tol=1e-4)
-            assert math.isclose(self.plant.state['disp_pc_off0'], 1001, rel_tol=1e-4)
-
-        if start_date == datetime.datetime(2018, 10, 14, 1, 0):
-            assert math.isclose(self.plant.state['pc_startup_energy_remain_initial'], 29339.9, rel_tol=1e-4)
-            assert math.isclose(self.plant.state['pc_startup_time_remain_init'], 0.5, rel_tol=1e-4)
-            assert math.isclose(self.plant.state['rec_startup_energy_remain_init'], 141250000, rel_tol=1e-4)
-            assert math.isclose(self.plant.state['rec_startup_time_remain_init'], 1.15, rel_tol=1e-4)
-            assert math.isclose(self.plant.state['disp_rec_persist0'], 1002, rel_tol=1e-4)
-            assert math.isclose(self.plant.state['disp_rec_off0'], 1002, rel_tol=1e-4)
-            assert math.isclose(self.plant.state['disp_pc_persist0'], 1002, rel_tol=1e-4)
-            assert math.isclose(self.plant.state['disp_pc_off0'], 1002, rel_tol=1e-4)
-        
-        R.update(Rdisp)         # add in dispatch results
-        self.results = R
-        
-
-        # TODO: Just remove this?
-        # Read NVE schedules (if not already read during rolling horizon calculations)
-        if self.is_optimize == False and self.use_day_ahead_schedule and self.day_ahead_schedule_from == 'NVE':
-            for j in range(self.sim_days):
-                date = datetime.datetime(self.start_date.year, self.start_date.month, self.start_date.day + j)
-                self.schedules.append(self.get_CD_NVE_day_ahead_schedule(date))
-
-        # Calculate post-simulation financials
-        self.revenue = CaseStudy.calculate_revenue(self.start_date, self.sim_days, self.results['P_out_net'], self.params, self.data)
-        day_ahead_penalties = CaseStudy.calculate_day_ahead_penalty(self.sim_days, self.schedules, self.results['P_out_net'], self.params, self.disp_soln_tracking, 
-            self.disp_params_tracking)
-        startup_ramping_penalties = CaseStudy.calculate_startup_ramping_penalty(
-            plant_design=self.plant.design,
-            q_startup=self.results['q_startup'],
-            Q_thermal=self.results['Q_thermal'],
-            q_pb=self.results['q_pb'],
-            P_cycle=self.results['P_cycle'],
-            q_dot_pc_startup=self.results['q_dot_pc_startup'],
-            params=self.params
-        )
-        
-        outputs = {
-            'revenue': self.revenue,
-            'Q_thermal': self.results['Q_thermal'],
-            'P_cycle': self.results['P_cycle'],
-            'P_out_net': self.results['P_out_net']
-        }
-        outputs.update(day_ahead_penalties)
-        outputs.update(startup_ramping_penalties)
-
-
-        results = {
-            'outputs': outputs,
-            'plant_state': self.plant.state,
+        dispatch_outputs = {
+            'ssc_dispatch_targets': ssc_dispatch_targets,
+            'Rdisp': Rdisp,
             'ursd_last': ursd_last,
             'yrsd_last': yrsd_last,
             'current_forecast_weather_data': self.current_forecast_weather_data,
@@ -572,7 +473,7 @@ class CaseStudy:
 	        'next_day_schedule': self.next_day_schedule
         }
 
-        return results
+        return dispatch_outputs
             
 
     def initialize(self):
@@ -1025,6 +926,8 @@ if __name__ == '__main__':
     # Mediator parameters
     m_vars = mediator_params.copy()
     ssc_time_steps_per_hour = m_vars['time_steps_per_hour']
+    disp_soln_tracking = []
+    disp_params_tracking = []
 
 
     # Data - get historical weather
@@ -1080,8 +983,9 @@ if __name__ == '__main__':
 
 
     # Dispatch inputs
-    start_date = datetime.datetime(2018, 10, 14)
     sim_days = 1
+    start_date = datetime.datetime(2018, 10, 14)
+    timestep_days = m_vars['dispatch_frequency']/24.
     horizon = 86400                 # TODO  make this not hardcoded
     ursd_last = 0
     yrsd_last = 0  
@@ -1112,9 +1016,11 @@ if __name__ == '__main__':
     for j in range(nupdate):
         tod = int(util.get_time_of_day(start_date))
         cs = CaseStudy(plant=plant, params=m_vars, data=data)
-        results = cs.run(
+
+        # Run dispatch model
+        dispatch_outputs = cs.run(
             start_date=start_date,
-            timestep_days=m_vars['dispatch_frequency']/24.,
+            timestep_days=timestep_days,
             horizon=horizon,
             ursd_last=ursd_last,
             yrsd_last=yrsd_last,
@@ -1126,23 +1032,113 @@ if __name__ == '__main__':
             initial_plant_state=initial_plant_state
             )
 
+        # Run ssc model:
+        D2 = plant.design.copy()            # Start compiling ssc input dict (D2)
+        D2.update(plant.state)
+        D2.update(plant.flux_maps)
+        D2['time_start'] = int(util.get_time_of_year(start_date))
+        D2['time_stop'] = util.get_time_of_year(start_date.replace(hour=0, minute=0, second=0)) + timestep_days*24*3600
+        D2['sf_adjust:hourly'] = CaseStudy.get_field_availability_adjustment(ssc_time_steps_per_hour, start_date.year, m_vars['control_field'],
+            m_vars['use_CD_measured_reflectivity'], plant.design, m_vars['fixed_soiling_loss'])
+        CaseStudy.reupdate_ssc_constants(D2, m_vars, data)
+        if m_vars['control_receiver'] == 'CD_data':
+            CaseStudy.load_user_flow_paths(
+                D=D2,
+                flow_path_1_data=data['CD_mflow_path2_data'],          # Note ssc path numbers are reversed relative to CD path numbers
+                flow_path_2_data=data['CD_mflow_path1_data'],
+                use_measured_reflectivity=m_vars['use_CD_measured_reflectivity'],
+                soiling_avail=util.get_CD_soiling_availability(start_date.year, D2['helio_reflectance'] * 100), # CD soiled / clean reflectivity (daily array),
+                fixed_soiling_loss=m_vars['fixed_soiling_loss']
+                )
+
+        if m_vars['is_optimize'] and dispatch_outputs['Rdisp'] is not None:
+            D2.update(vars(dispatch_outputs['ssc_dispatch_targets']))
+
+        D2['time_stop'] = int(util.get_time_of_year(start_date)) + int(m_vars['dispatch_frequency']*3600)
+        retvars = CaseStudy.default_ssc_return_vars()
+        napply = int(ssc_time_steps_per_hour*m_vars['dispatch_frequency'])                   # Number of ssc time points accepted after each solution 
+        results, new_plant_state = ssc_wrapper.call_ssc(D2, retvars, plant_state_pt = napply-1, npts = napply)
+        
+        # Update saved plant state, post model run
+        persistance_vars = plant_.Plant.update_persistence(
+            plant.state,
+            results,
+            new_plant_state['rec_op_mode_initial'],
+            new_plant_state['pc_op_mode_initial'],
+            1./ssc_time_steps_per_hour)
+        new_plant_state.update(persistance_vars)
+        plant.state.update(new_plant_state)
+
+        if start_date == datetime.datetime(2018, 10, 14, 0, 0):
+            assert math.isclose(plant.state['pc_startup_energy_remain_initial'], 29339.9, rel_tol=1e-4)
+            assert math.isclose(plant.state['pc_startup_time_remain_init'], 0.5, rel_tol=1e-4)
+            assert math.isclose(plant.state['rec_startup_energy_remain_init'], 141250000, rel_tol=1e-4)
+            assert math.isclose(plant.state['rec_startup_time_remain_init'], 1.15, rel_tol=1e-4)
+            assert math.isclose(plant.state['disp_rec_persist0'], 1001, rel_tol=1e-4)
+            assert math.isclose(plant.state['disp_rec_off0'], 1001, rel_tol=1e-4)
+            assert math.isclose(plant.state['disp_pc_persist0'], 1001, rel_tol=1e-4)
+            assert math.isclose(plant.state['disp_pc_off0'], 1001, rel_tol=1e-4)
+
+        if start_date == datetime.datetime(2018, 10, 14, 1, 0):
+            assert math.isclose(plant.state['pc_startup_energy_remain_initial'], 29339.9, rel_tol=1e-4)
+            assert math.isclose(plant.state['pc_startup_time_remain_init'], 0.5, rel_tol=1e-4)
+            assert math.isclose(plant.state['rec_startup_energy_remain_init'], 141250000, rel_tol=1e-4)
+            assert math.isclose(plant.state['rec_startup_time_remain_init'], 1.15, rel_tol=1e-4)
+            assert math.isclose(plant.state['disp_rec_persist0'], 1002, rel_tol=1e-4)
+            assert math.isclose(plant.state['disp_rec_off0'], 1002, rel_tol=1e-4)
+            assert math.isclose(plant.state['disp_pc_persist0'], 1002, rel_tol=1e-4)
+            assert math.isclose(plant.state['disp_pc_off0'], 1002, rel_tol=1e-4)
+        
+        results.update(dispatch_outputs['Rdisp'])         # add dispatch results to ssc results
+        
+
+        # TODO: Just remove this? Need to check with Alex first.
+        #--------------------------------------------------------------------------------------------
+        # Read NVE schedules (if not already read during rolling horizon calculations)
+        if m_vars['is_optimize'] == False and m_vars['use_day_ahead_schedule'] and m_vars['day_ahead_schedule_from'] == 'NVE':
+            for j in range(timestep_days):
+                date = datetime.datetime(start_date.year, start_date.month, start_date.day + j)
+                dispatch_outputs['schedules'].append(get_CD_NVE_day_ahead_schedule(date))
+        #--------------------------------------------------------------------------------------------
+
+        # Calculate post-simulation financials
+        revenue = CaseStudy.calculate_revenue(start_date, timestep_days, results['P_out_net'], m_vars, data)
+        day_ahead_penalties = CaseStudy.calculate_day_ahead_penalty(timestep_days, dispatch_outputs['schedules'],
+            results['P_out_net'], m_vars, disp_soln_tracking, disp_params_tracking)
+        startup_ramping_penalties = CaseStudy.calculate_startup_ramping_penalty(
+            plant_design=plant.design,
+            q_startup=results['q_startup'],
+            Q_thermal=results['Q_thermal'],
+            q_pb=results['q_pb'],
+            P_cycle=results['P_cycle'],
+            q_dot_pc_startup=results['q_dot_pc_startup'],
+            params=m_vars
+        )        
+        
         # Update inputs for next call
-        schedules = results['schedules']
-        current_day_schedule = results['current_day_schedule']
-        next_day_schedule = results['next_day_schedule']
+        schedules = dispatch_outputs['schedules']
+        current_day_schedule = dispatch_outputs['current_day_schedule']
+        next_day_schedule = dispatch_outputs['next_day_schedule']
         if tod == 0 and m_vars['use_day_ahead_schedule'] and m_vars['day_ahead_schedule_from'] == 'calculated':
             current_day_schedule = [s for s in next_day_schedule]
             schedules.append(current_day_schedule)
         start_date += datetime.timedelta(hours=m_vars['dispatch_frequency'])
         horizon -= 3600         # TODO make this not hardcoded
-        ursd_last = results['ursd_last']
-        yrsd_last = results['yrsd_last']
-        current_forecast_weather_data = results['current_forecast_weather_data']
-        weather_data_for_dispatch = results['weather_data_for_dispatch']
-        initial_plant_state = results['plant_state']
+        ursd_last = dispatch_outputs['ursd_last']
+        yrsd_last = dispatch_outputs['yrsd_last']
+        current_forecast_weather_data = dispatch_outputs['current_forecast_weather_data']
+        weather_data_for_dispatch = dispatch_outputs['weather_data_for_dispatch']
+        initial_plant_state = plant.state
 
         # Aggregate totals
-        outputs = results['outputs']
+        outputs = {
+            'revenue': revenue,
+            'Q_thermal': results['Q_thermal'],
+            'P_cycle': results['P_cycle'],
+            'P_out_net': results['P_out_net']
+        }
+        outputs.update(day_ahead_penalties)
+        outputs.update(startup_ramping_penalties)
         outputs['total_receiver_thermal'] = outputs.pop('Q_thermal').sum() * 1.e-3 * (1./ssc_time_steps_per_hour)
         outputs['total_cycle_gross'] = outputs.pop('P_cycle').sum() * 1.e-3 * (1./ssc_time_steps_per_hour)
         outputs['total_cycle_net'] = outputs.pop('P_out_net').sum() * 1.e-3 * (1./ssc_time_steps_per_hour)
