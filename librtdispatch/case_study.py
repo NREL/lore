@@ -234,7 +234,7 @@ class CaseStudy:
         freq = int(self.dispatch_frequency*3600)                    # Frequency of rolling horizon update (s)
 
         #--- Initialize results
-        retvars = self.default_ssc_return_vars()
+        retvars = CaseStudy.default_ssc_return_vars()
         retvars_disp = self.default_disp_stored_vars()
         if self.is_optimize:
             retvars += vars(dispatch.DispatchTargets()).keys()
@@ -535,7 +535,7 @@ class CaseStudy:
                 self.schedules.append(self.get_CD_NVE_day_ahead_schedule(date))
 
         # Calculate post-simulation financials
-        self.revenue = self.calculate_revenue()
+        self.revenue = CaseStudy.calculate_revenue(self.start_date, self.sim_days, self.results['P_out_net'], self.params, self.data)
         day_ahead_penalties = self.calculate_day_ahead_penalty()
         startup_ramping_penalties = self.calculate_startup_ramping_penalty()        
         
@@ -779,34 +779,33 @@ class CaseStudy:
 
 
     # Calculate revenue
-    def calculate_revenue(self):
+    @staticmethod
+    def calculate_revenue(start_date, sim_days, P_out_net, params, data):
         """
         Inputs:
-            ssc_time_steps_per_hour
-            sim_days
             start_date
-            price_data
+            sim_days
             P_out_net
+            time_steps_per_hour     (ssc_time_steps_per_hour)
             avg_price
             avg_purchase_price
+            price_data
 
         Outputs:
             revenue
         """
-        nph = int(self.ssc_time_steps_per_hour)
-        ndays = self.sim_days
-        # start = datetime.datetime(self.start_date.year, self.start_date.month, self.start_date.day)
+        nph = int(params['time_steps_per_hour'])
+        ndays = sim_days
         start = start_date
         startpt = int(util.get_time_of_year(start)/3600) * nph   # First point in annual arrays         
-        price = np.array(self.price_data[startpt:int(startpt+ndays*24*nph)])
+        price = np.array(data['dispatch_factors_ts'][startpt:int(startpt+ndays*24*nph)])
         mult = price / price.mean()   # Pricing multipliers
         
-        net_gen = self.results['P_out_net']
+        net_gen = P_out_net
         inds_sell = np.where(net_gen > 0.0)[0]
         inds_buy = np.where(net_gen < 0.0)[0]
-        rev = (net_gen[inds_sell] * mult[inds_sell] * self.avg_price).sum() * (1./self.ssc_time_steps_per_hour)   # Revenue from sales ($)
-        rev += (net_gen[inds_buy] * mult[inds_buy] * self.avg_purchase_price).sum() * (1./self.ssc_time_steps_per_hour) # Electricity purchases ($)
-        self.revenue = rev
+        rev = (net_gen[inds_sell] * mult[inds_sell] * params['avg_price']).sum() * (1./params['time_steps_per_hour'])   # Revenue from sales ($)
+        rev += (net_gen[inds_buy] * mult[inds_buy] * params['avg_purchase_price']).sum() * (1./params['time_steps_per_hour']) # Electricity purchases ($)
         return rev
 
     
@@ -965,8 +964,8 @@ class CaseStudy:
         }
         return outputs
         
-      
-    def default_ssc_return_vars(self):
+    @staticmethod
+    def default_ssc_return_vars():
         return ['beam', 'clearsky', 'tdry', 'wspd', 'solzen', 'solaz', 'pricing_mult',
                    'sf_adjust_out', 'q_sf_inc', 'eta_field', 'defocus', 
                    'q_dot_rec_inc', 'Q_thermal', 'm_dot_rec', 'q_startup', 'q_piping_losses', 'q_thermal_loss', 'eta_therm',
