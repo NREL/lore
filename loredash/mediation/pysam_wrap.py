@@ -34,6 +34,8 @@ class PysamWrap:
                 self.PreProcess()                                   # do this now so no simulation delay later
 
     def PreProcess(self):
+        """Compute the flux maps and assign them to the pysam model parameters, first getting the needed solar resource data"""
+
         if not self._WeatherFileIsSet():
             solar_resource_data = PysamWrap.GetSolarResourceDataTemplate(
                 plant_location = mediator.Plant.GetPlantConfig()['location']
@@ -286,7 +288,7 @@ class PysamWrap:
         return model_outputs
 
     def _SaveDesign(self):
-        """helper function"""
+        """Saves the applicable plant design parameters, to a json file, from when the flux maps were calculated"""
         try:
             design = {
                 'eta_map' : self.tech_model.Outputs.eta_map_out,
@@ -304,7 +306,7 @@ class PysamWrap:
             return 0
 
     def _SetDesign(self, file_path):
-        """helper function"""
+        """Sets the applicable plant design parameters, from a json file, from when the flux maps were calculated"""
         try:
             with open(file_path, 'r') as design_file:
                 design = json.load(design_file)
