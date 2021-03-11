@@ -13,6 +13,7 @@ import loredash.mediation.plant as plant
 
 #-------------------------------------------------------------------------
 # Update incompatible names in ssc
+#  (only used in call_ssc)
 def update_bad_names(D):
     name_map = { # Name used in class               # Name used in ssc
                 'csp_pt_rec_max_oper_frac':        'csp.pt.rec.max_oper_frac',
@@ -28,6 +29,7 @@ def update_bad_names(D):
 #-------------------------------------------------------------------------
 # Utility functions to pass information to/from ssc
 # Set ssc input parameters from data in Dict
+#  (only used in call_ssc)
 def set_ssc_data_from_dict(ssc_api, ssc_data, Dict):
     for key in Dict.keys():        
         try: 
