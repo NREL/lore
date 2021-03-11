@@ -225,7 +225,7 @@ class CaseStudy:
 
         #--- Update "forecasted" weather data (if relevant)
         if self.is_optimize and (tod == self.forecast_issue_time*3600):
-            self.current_forecast_weather_data = CaseStudy.update_forecast_weather_data(
+            self.current_forecast_weather_data = dispatch.update_forecast_weather_data(
                 date=time,
                 current_forecast_weather_data=self.current_forecast_weather_data,
                 ssc_time_steps_per_hour=self.ssc_time_steps_per_hour,
@@ -501,74 +501,7 @@ class CaseStudy:
 
         self.is_initialized = True
         return
-    
-    @staticmethod
-    def update_forecast_weather_data(date, current_forecast_weather_data, ssc_time_steps_per_hour, forecast_steps_per_hour, ground_truth_weather_data,
-                                     forecast_issue_time, day_ahead_schedule_time, clearsky_data):
-        """
-        Inputs:
-            date
-            current_forecast_weather_data
-            ssc_time_steps_per_hour
-            forecast_steps_per_hour
-            ground_truth_weather_data
-            forecast_issue_time
-            day_ahead_schedule_time
-            clearsky_data
-
-        Outputs:
-            current_forecast_weather_data
-        """
-
-        offset30 = True
-        print ('Updating weather forecast:', date)
-        nextdate = date + datetime.timedelta(days = 1) # Forecasts issued at 4pm PST on a given day (PST) are labeled at midnight (UTC) on the next day 
-        wfdata = util.read_weather_forecast(nextdate, offset30)
-        t = int(util.get_time_of_year(date)/3600)   # Time of year (hr)
-        pssc = int(t*ssc_time_steps_per_hour) 
-        nssc_per_wf = int(ssc_time_steps_per_hour / forecast_steps_per_hour)
-        
-        #---Update forecast data in full weather file: Assuming forecast points are on half-hour time points, valid for the surrounding hour, with the first point 30min prior to the designated forecast issue time
-        if not offset30:  # Assume forecast points are on the hour, valid for the surrounding hour
-            n = len(wfdata['dn'])
-            for j in range(n): # Time points in weather forecast
-                q  = pssc + nssc_per_wf/2  if j == 0 else pssc + nssc_per_wf/2 + (j-1)*nssc_per_wf/2  # First point in annual weather data (at ssc time resolution) for forecast time point j
-                nuse = nssc_per_wf/2 if j==0 else nssc_per_wf 
-                for k in ['dn', 'wspd', 'tdry', 'rhum', 'pres']:
-                    val =  wfdata[k][j] if k in wfdata.keys() else ground_truth_weather_data[k][pssc]  # Use current ground-truth value for full forecast period if forecast value is not available            
-                    for i in range(nuse):  
-                        current_forecast_weather_data[k][q+i] = val   
-                
-        else: # Assume forecast points are on the half-hour, valid for the surrounding hour, with the first point 30min prior to the designated forecast issue time
-            n = len(wfdata['dn']) - 1
-            for j in range(n): 
-                q = pssc + j*nssc_per_wf
-                for k in ['dn', 'wspd', 'tdry', 'rhum', 'pres']:
-                    val =  wfdata[k][j+1] if k in wfdata.keys() else ground_truth_weather_data[k][pssc]  # Use current ground-truth value for full forecast period if forecast value is not available            
-                    for i in range(nssc_per_wf):  
-                        current_forecast_weather_data[k][q+i] = val
-
-        #--- Extrapolate forecasts to be complete for next-day dispatch scheduling (if necessary)
-        forecast_duration = n*forecast_steps_per_hour if offset30 else (n-0.5)*forecast_steps_per_hour
-        if forecast_issue_time > day_ahead_schedule_time:
-            hours_avail = forecast_duration - (24 - forecast_issue_time) - day_ahead_schedule_time  # Hours of forecast available at the point the day ahead schedule is due
-        else:
-            hours_avail = forecast_duration - (day_ahead_schedule_time - forecast_issue_time)
-            
-        req_hours_avail = 48 - day_ahead_schedule_time 
-        if req_hours_avail >  hours_avail:  # Forecast is not available for the full time required for the day-ahead schedule
-            qf = pssc + int((n-0.5)*nssc_per_wf) if offset30 else pssc + (n-1)*nssc_per_wf   # Point in annual arrays corresponding to last point forecast time point
-            cratio = 0.0 if wfdata['dn'][-1]<20 else wfdata['dn'][-1] / max(clearsky_data[qf], 1.e-6)  # Ratio of actual / clearsky at last forecast time point
-            
-            nmiss = int((req_hours_avail - hours_avail) * ssc_time_steps_per_hour)  
-            q = pssc + n*nssc_per_wf if offset30 else pssc + int((n-0.5)*nssc_per_wf ) 
-            for i in range(nmiss):
-                current_forecast_weather_data['dn'][q+i] = clearsky_data[q+i] * cratio    # Approximate DNI in non-forecasted time periods from expected clear-sky DNI and actual/clear-sky ratio at latest available forecast time point
-                for k in ['wspd', 'tdry', 'rhum', 'pres']:  
-                    current_forecast_weather_data[k][q+i] = current_forecast_weather_data[k][q-1]  # Assume latest forecast value applies for the remainder of the time period
-
-        return current_forecast_weather_data
-    
+      
     
     @staticmethod
     def get_field_availability_adjustment(steps_per_hour, year, control_field, use_CD_measured_reflectivity, plant_design, fixed_soiling_loss):
@@ -996,7 +929,7 @@ if __name__ == '__main__':
     CD_raw_data_direc = './input_files/CD_raw'                     # Directory containing raw data files from CD
     CD_processed_data_direc = './input_files/CD_processed'         # Directory containing files with 1min data already extracted
     initial_plant_state = util.get_initial_state_from_CD_data(start_date, CD_raw_data_direc, CD_processed_data_direc, plant.design)
-    current_forecast_weather_data = CaseStudy.update_forecast_weather_data(
+    current_forecast_weather_data = dispatch.update_forecast_weather_data(
                 date=start_date - datetime.timedelta(hours = 24-m_vars['forecast_issue_time']),
                 current_forecast_weather_data=util.create_empty_weather_data(ground_truth_weather_data, ssc_time_steps_per_hour),
                 ssc_time_steps_per_hour=ssc_time_steps_per_hour,
