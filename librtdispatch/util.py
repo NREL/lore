@@ -45,7 +45,40 @@ def is_dst(date):
     return dst
 
 
+def get_field_availability_adjustment(steps_per_hour, year, control_field, use_CD_measured_reflectivity, plant_design, fixed_soiling_loss):
+    """
+    Inputs:
+        steps_per_hour
+        year
+        control_field
+        use_CD_measured_reflectivity
+        plant.design
+            N_hel
+            helio_reflectance
+        fixed_soiling_loss
 
+    Outputs:
+        adjust
+    """
+
+    if control_field == 'ssc':
+        if use_CD_measured_reflectivity:
+            adjust = get_field_adjustment_from_CD_data(year, plant_design['N_hel'], plant_design['helio_reflectance']*100, True, None, False)            
+        else:
+            adjust = (fixed_soiling_loss * 100 * np.ones(steps_per_hour*24*365))  
+
+    elif control_field == 'CD_data':
+        if use_CD_measured_reflectivity:
+            adjust = get_field_adjustment_from_CD_data(year, plant_design['N_hel'], plant_design['helio_reflectance']*100, True, None, True)
+        else:
+            refl = (1-fixed_soiling_loss) * plant_design['helio_reflectance'] * 100  # Simulated heliostat reflectivity
+            adjust = get_field_adjustment_from_CD_data(year, plant_design['N_hel'], plant_design['helio_reflectance']*100, False, refl, True)
+
+    adjust = adjust.tolist()
+    data_steps_per_hour = len(adjust)/8760  
+    if data_steps_per_hour != steps_per_hour:
+        adjust = translate_to_new_timestep(adjust, 1./data_steps_per_hour, 1./steps_per_hour)
+    return adjust
 
 
 # Get adjusted field availability from CD data (optionally) including soiling loss, heliostats not tracking, and heliostats offline

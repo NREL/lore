@@ -92,112 +92,8 @@ mediator_params = {
 }
 
 ## Put code here in CaseStudy that will be in mediation.
-class CaseStudy:
-    
-    @staticmethod
-    def get_field_availability_adjustment(steps_per_hour, year, control_field, use_CD_measured_reflectivity, plant_design, fixed_soiling_loss):
-        """
-        Inputs:
-            steps_per_hour
-            year
-            control_field
-            use_CD_measured_reflectivity
-            plant.design
-                N_hel
-                helio_reflectance
-            fixed_soiling_loss
+class Revenue:
 
-        Outputs:
-            adjust
-        """
-
-        if control_field == 'ssc':
-            if use_CD_measured_reflectivity:
-                adjust = util.get_field_adjustment_from_CD_data(year, plant_design['N_hel'], plant_design['helio_reflectance']*100, True, None, False)            
-            else:
-                adjust = (fixed_soiling_loss * 100 * np.ones(steps_per_hour*24*365))  
-
-        elif control_field == 'CD_data':
-            if use_CD_measured_reflectivity:
-                adjust = util.get_field_adjustment_from_CD_data(year, plant_design['N_hel'], plant_design['helio_reflectance']*100, True, None, True)
-            else:
-                refl = (1-fixed_soiling_loss) * plant_design['helio_reflectance'] * 100  # Simulated heliostat reflectivity
-                adjust = util.get_field_adjustment_from_CD_data(year, plant_design['N_hel'], plant_design['helio_reflectance']*100, False, refl, True)
- 
-        adjust = adjust.tolist()
-        data_steps_per_hour = len(adjust)/8760  
-        if data_steps_per_hour != steps_per_hour:
-            adjust = util.translate_to_new_timestep(adjust, 1./data_steps_per_hour, 1./steps_per_hour)
-        return adjust
-    
-
-    #--- Simulate flux maps
-    @staticmethod
-    def simulate_flux_maps(plant_design, ssc_time_steps_per_hour, ground_truth_weather_data):
-        """
-        Outputs:
-            A_sf_in
-            eta_map
-            flux_maps
-        """
-
-        print ('Simulating flux maps')
-        start = timeit.default_timer()
-        D = plant_design.copy()
-        D['time_steps_per_hour'] = ssc_time_steps_per_hour
-        D['solar_resource_data'] = ground_truth_weather_data
-        D['time_start'] = 0.0
-        D['time_stop'] = 1.0*3600  
-        D['field_model_type'] = 2
-        # if self.is_debug:
-        #     D['delta_flux_hrs'] = 4
-        #     D['n_flux_days'] = 2
-        R, state = ssc_wrapper.call_ssc(D, ['eta_map_out', 'flux_maps_for_import', 'A_sf'])
-        print('Time to simulate flux maps = %.2fs'%(timeit.default_timer() - start))
-        # return flux_maps
-        A_sf_in = R['A_sf']
-        eta_map = R['eta_map_out']
-        flux_maps = [x[2:] for x in R['flux_maps_for_import']]
-        return {'A_sf_in': A_sf_in, 'eta_map': eta_map, 'flux_maps': flux_maps}
-
-
-    @staticmethod
-    def reupdate_ssc_constants(D, params, data):
-        D['solar_resource_data'] = data['solar_resource_data']
-        D['dispatch_factors_ts'] = data['dispatch_factors_ts']
-
-        D['ppa_multiplier_model'] = params['ppa_multiplier_model']
-        D['time_steps_per_hour'] = params['time_steps_per_hour']
-        D['is_rec_model_trans'] = params['is_rec_model_trans']
-        D['is_rec_startup_trans'] = params['is_rec_startup_trans']
-        D['rec_control_per_path'] = params['rec_control_per_path']
-        D['field_model_type'] = params['field_model_type']
-        D['eta_map_aod_format'] = params['eta_map_aod_format']
-        D['is_rec_to_coldtank_allowed'] = params['is_rec_to_coldtank_allowed']
-        D['is_dispatch'] = params['is_dispatch']
-        D['is_dispatch_targets'] = params['is_dispatch_targets']
-
-        #--- Set field control parameters
-        if params['control_field'] == 'CD_data':
-            D['rec_su_delay'] = params['rec_su_delay']
-            D['rec_qf_delay'] = params['rec_qf_delay']
-
-        #--- Set receiver control parameters
-        if params['control_receiver'] == 'CD_data':
-            D['is_rec_user_mflow'] = params['is_rec_user_mflow']
-            D['rec_su_delay'] = params['rec_su_delay']
-            D['rec_qf_delay'] = params['rec_qf_delay']
-        elif params['control_receiver'] == 'ssc_clearsky':
-            D['rec_clearsky_fraction'] = params['rec_clearsky_fraction']
-            D['rec_clearsky_model'] = params['rec_clearsky_model']
-            D['rec_clearsky_dni'] = data['clearsky_data'].tolist()
-        elif params['control_receiver'] == 'ssc_actual_dni':
-            D['rec_clearsky_fraction'] = params['rec_clearsky_fraction']
-
-        return
-
-
-    # Calculate revenue
     @staticmethod
     def calculate_revenue(start_date, sim_days, P_out_net, params, data):
         """
@@ -389,6 +285,73 @@ class CaseStudy:
         }
         return outputs
 
+class CaseStudy:   
+
+    #--- Simulate flux maps
+    @staticmethod
+    def simulate_flux_maps(plant_design, ssc_time_steps_per_hour, ground_truth_weather_data):
+        """
+        Outputs:
+            A_sf_in
+            eta_map
+            flux_maps
+        """
+
+        print ('Simulating flux maps')
+        start = timeit.default_timer()
+        D = plant_design.copy()
+        D['time_steps_per_hour'] = ssc_time_steps_per_hour
+        D['solar_resource_data'] = ground_truth_weather_data
+        D['time_start'] = 0.0
+        D['time_stop'] = 1.0*3600  
+        D['field_model_type'] = 2
+        # if self.is_debug:
+        #     D['delta_flux_hrs'] = 4
+        #     D['n_flux_days'] = 2
+        R, state = ssc_wrapper.call_ssc(D, ['eta_map_out', 'flux_maps_for_import', 'A_sf'])
+        print('Time to simulate flux maps = %.2fs'%(timeit.default_timer() - start))
+        # return flux_maps
+        A_sf_in = R['A_sf']
+        eta_map = R['eta_map_out']
+        flux_maps = [x[2:] for x in R['flux_maps_for_import']]
+        return {'A_sf_in': A_sf_in, 'eta_map': eta_map, 'flux_maps': flux_maps}
+
+
+    @staticmethod
+    def reupdate_ssc_constants(D, params, data):
+        D['solar_resource_data'] = data['solar_resource_data']
+        D['dispatch_factors_ts'] = data['dispatch_factors_ts']
+
+        D['ppa_multiplier_model'] = params['ppa_multiplier_model']
+        D['time_steps_per_hour'] = params['time_steps_per_hour']
+        D['is_rec_model_trans'] = params['is_rec_model_trans']
+        D['is_rec_startup_trans'] = params['is_rec_startup_trans']
+        D['rec_control_per_path'] = params['rec_control_per_path']
+        D['field_model_type'] = params['field_model_type']
+        D['eta_map_aod_format'] = params['eta_map_aod_format']
+        D['is_rec_to_coldtank_allowed'] = params['is_rec_to_coldtank_allowed']
+        D['is_dispatch'] = params['is_dispatch']
+        D['is_dispatch_targets'] = params['is_dispatch_targets']
+
+        #--- Set field control parameters
+        if params['control_field'] == 'CD_data':
+            D['rec_su_delay'] = params['rec_su_delay']
+            D['rec_qf_delay'] = params['rec_qf_delay']
+
+        #--- Set receiver control parameters
+        if params['control_receiver'] == 'CD_data':
+            D['is_rec_user_mflow'] = params['is_rec_user_mflow']
+            D['rec_su_delay'] = params['rec_su_delay']
+            D['rec_qf_delay'] = params['rec_qf_delay']
+        elif params['control_receiver'] == 'ssc_clearsky':
+            D['rec_clearsky_fraction'] = params['rec_clearsky_fraction']
+            D['rec_clearsky_model'] = params['rec_clearsky_model']
+            D['rec_clearsky_dni'] = data['clearsky_data'].tolist()
+        elif params['control_receiver'] == 'ssc_actual_dni':
+            D['rec_clearsky_fraction'] = params['rec_clearsky_fraction']
+
+        return
+
 
     @staticmethod
     def default_ssc_return_vars():
@@ -470,7 +433,7 @@ if __name__ == '__main__':
         assert math.isclose(np.sum(plant.flux_maps['flux_maps']), 44.0, rel_tol=1e-4)
 
     # Data - get field availability adjustment
-    sf_adjust_hourly = CaseStudy.get_field_availability_adjustment(ssc_time_steps_per_hour, start_date.year, m_vars['control_field'],
+    sf_adjust_hourly = util.get_field_availability_adjustment(ssc_time_steps_per_hour, start_date.year, m_vars['control_field'],
             m_vars['use_CD_measured_reflectivity'], plant.design, m_vars['fixed_soiling_loss'])
 
     # Data - get clear-sky DNI annual arrays
@@ -621,10 +584,10 @@ if __name__ == '__main__':
         #--------------------------------------------------------------------------------------------
 
         # Calculate post-simulation financials
-        revenue = CaseStudy.calculate_revenue(start_date, timestep_days, results['P_out_net'], m_vars, data)
-        day_ahead_penalties = CaseStudy.calculate_day_ahead_penalty(timestep_days, dispatch_outputs['schedules'],
+        revenue = Revenue.calculate_revenue(start_date, timestep_days, results['P_out_net'], m_vars, data)
+        day_ahead_penalties = Revenue.calculate_day_ahead_penalty(timestep_days, dispatch_outputs['schedules'],
             results['P_out_net'], m_vars, disp_soln_tracking, disp_params_tracking)
-        startup_ramping_penalties = CaseStudy.calculate_startup_ramping_penalty(
+        startup_ramping_penalties = Revenue.calculate_startup_ramping_penalty(
             plant_design=plant.design,
             q_startup=results['q_startup'],
             Q_thermal=results['Q_thermal'],
