@@ -4,6 +4,9 @@ from copy import deepcopy
 import pyomo.environ as pe
 from pyomo.opt import TerminationCondition
 import datetime
+import os
+from csv import reader
+import math
 
 import util
 import ssc_wrapper
@@ -191,8 +194,8 @@ class DispatchParams:
         self.day_ahead_tol_minus= 0   # Tolerance for under-production relative to day-ahead schedule before incurring penalty (kWhe)
 
         return
-        
-        
+
+
     # Set dispatch time arrays  and time weighting factors
     def set_dispatch_time_arrays(self, steps, end_times, horizon, nonlinear_time = 0.0, timewt = 0.999):
         self.Delta = []
@@ -812,71 +815,520 @@ class DispatchTargets:
         return
 
 
-def update_forecast_weather_data(date, current_forecast_weather_data, ssc_time_steps_per_hour, forecast_steps_per_hour, ground_truth_weather_data,
-                                     forecast_issue_time, day_ahead_schedule_time, clearsky_data):
-    """
-    Inputs:
-        date
-        current_forecast_weather_data
-        ssc_time_steps_per_hour
-        forecast_steps_per_hour
-        ground_truth_weather_data
-        forecast_issue_time
-        day_ahead_schedule_time
-        clearsky_data
 
-    Outputs:
-        current_forecast_weather_data
-    """
+class DispatchWrap:
+    def __init__(self, plant, params, data):
 
-    offset30 = True
-    print ('Updating weather forecast:', date)
-    nextdate = date + datetime.timedelta(days = 1) # Forecasts issued at 4pm PST on a given day (PST) are labeled at midnight (UTC) on the next day 
-    wfdata = util.read_weather_forecast(nextdate, offset30)
-    t = int(util.get_time_of_year(date)/3600)   # Time of year (hr)
-    pssc = int(t*ssc_time_steps_per_hour) 
-    nssc_per_wf = int(ssc_time_steps_per_hour / forecast_steps_per_hour)
-    
-    #---Update forecast data in full weather file: Assuming forecast points are on half-hour time points, valid for the surrounding hour, with the first point 30min prior to the designated forecast issue time
-    if not offset30:  # Assume forecast points are on the hour, valid for the surrounding hour
-        n = len(wfdata['dn'])
-        for j in range(n): # Time points in weather forecast
-            q  = pssc + nssc_per_wf/2  if j == 0 else pssc + nssc_per_wf/2 + (j-1)*nssc_per_wf/2  # First point in annual weather data (at ssc time resolution) for forecast time point j
-            nuse = nssc_per_wf/2 if j==0 else nssc_per_wf 
-            for k in ['dn', 'wspd', 'tdry', 'rhum', 'pres']:
-                val =  wfdata[k][j] if k in wfdata.keys() else ground_truth_weather_data[k][pssc]  # Use current ground-truth value for full forecast period if forecast value is not available            
-                for i in range(nuse):  
-                    current_forecast_weather_data[k][q+i] = val   
+        ## DISPATCH INPUTS ###############################################################################################################################
+        # Input data files: weather, masslow, clearsky DNI must have length of full annual array based on ssc time step size
+        #--- Simulation start point and duration
+        self.start_date = None
+        self.sim_days = None       
+        # self.plant = None                               # Plant design and operating properties
+        
+        self.user_defined_cycle_input_file = 'udpc_noTamb_dependency.csv'  # Only required if cycle_type is user_defined
+
+        ## DISPATCH PERSISTING INTERMEDIARIES ############################################################################################################
+        self.dispatch_params = DispatchParams() # Structure to contain all inputs for dispatch model 
+        self.current_time = 0                           # Current time (tracked in standard time, not local time)
+        self.is_initialized = False                     # Has solution already been initalized?        
+        self.CD_data_for_plotting = {}                  # Only used if control_cycle = 'CD_data' 
+
+
+        ## DISPATCH OUTPUTS FOR INPUT INTO SSC ###########################################################################################################
+        # see: ssc_dispatch_targets, which is a dispatch.DispatchTargets object
+
+
+        ## SSC OUTPUTS ###################################################################################################################################
+        self.results = None                             # Results
+
+        self.current_day_schedule = []                  # Committed day-ahead generation schedule for current day (MWe)
+        self.next_day_schedule = []                     # Predicted day-ahead generation schedule for next day (MWe)
+        self.schedules = []                             # List to store all day-ahead generation schedules (MWe)
+        self.weather_at_schedule = []                   # List to store weather data at the point in time the day-ahead schedule was generated
+        self.disp_params_tracking = []                  # List to store dispatch parameters for each call to dispatch model
+        self.disp_soln_tracking = []                    # List to store dispatch solutions for each call to dispatch model (directly from dispatch model, no translation to ssc time steps)
+        self.plant_state_tracking = []                  # List to store plant state at the start of each call to the dispatch model
+        self.infeasible_count = 0
+        
+        self.revenue = 0.0                              # Revenue over simulated days ($)
+        self.startup_ramping_penalty = 0.0              # Startup and ramping penalty over all simulated days ($)
+        self.day_ahead_penalty_tot = {}                 # Penalty for missing schedule over all simulated days ($)
+        self.day_ahead_diff_tot = {}                    # Total difference between actual and scheduled generation (MWhe)
+        self.day_ahead_diff_over_tol_plus = {}          # Total (positive) difference between actual and scheduled generation over tolerance (MWhe)
+        self.day_ahead_diff_over_tol_minus = {}         # Total (negative) difference between actual and scheduled generation over tolerance (MWhe)
+        
+        self.day_ahead_diff = []                        # Difference between net generation and scheduled net generation (MWhe)
+        self.day_ahead_penalty = []                     # Penalty for difference between net generation and scheduled net generation (MWhe)
+        self.day_ahead_diff_ssc_disp_gross = []         # Difference between ssc and dispatch gross generation in schedule time steps (MWhe)
+        
+        self.n_starts_rec = 0                           # Number of receiver starts
+        self.n_starts_rec_attempted = 0                 # Number of receiver starts, including those not completed
+        self.n_starts_cycle = 0                         # Number of cycle starts
+        self.n_starts_cycle_attempted = 0               # Number of cycle starts, including those not completed
+        self.cycle_ramp_up = 0                          # Cycle ramp-up (MWe)
+        self.cycle_ramp_down = 0                        # Cycle ramp-down (MWe)
+        self.total_receiver_thermal = 0                 # Total thermal energy from receiver (GWht)
+        self.total_cycle_gross = 0                      # Total gross generation by cycle (GWhe)
+        self.total_cycle_net = 0                        # Total net generation by cycle (GWhe)
+
+
+        self.plant = plant                              # Plant design and operating properties
+        self.params = params
+        self.data = data
+
+        for key,value in params.items():
+            setattr(self, key, value)
+
+        for key,value in data.items():
+            setattr(self, key, value)
+        
+        # Aliases (that could be combined and removed)
+        self.ssc_time_steps_per_hour = params['time_steps_per_hour']
+        self.use_transient_model = params['is_rec_model_trans']
+        self.use_transient_startup = params['is_rec_startup_trans']
+        self.ground_truth_weather_data = data['solar_resource_data']
+        self.price_data = data['dispatch_factors_ts']
+
+        # Initialize and adjust above parameters
+        self.initialize()
+
+        return
+
+
+    def initialize(self):
+
+        def adjust_plant_design(plant_design, cycle_type, user_defined_cycle_input_file):
+            """Set cycle specifications (from model validation code)"""
+            if cycle_type == 'user_defined':
+                plant_design['P_ref'] = 120
+                plant_design['design_eff'] = 0.409
+                plant_design['T_htf_cold_des'] = 295.0 # [C]      # This sets design mass flowrate to that in CD's data
+                plant_design['pc_config'] = 1
+                with open(os.path.join(os.path.dirname(__file__), user_defined_cycle_input_file), 'r') as read_obj:
+                    csv_reader = reader(read_obj)
+                    plant_design['ud_ind_od'] = list(csv_reader)        
+                for i in range(len(plant_design['ud_ind_od'])):
+                    plant_design['ud_ind_od'][i] = [float(item) for item in plant_design['ud_ind_od'][i]]
+                    
+            elif cycle_type == 'sliding':  
+                ### For sliding pressure
+                ## These parameters work with heat input calculated using 290 as the lower temperature - however, there are a couple of controller issues
+                plant_design['P_ref'] = 125
+                plant_design['design_eff'] = 0.378
+                plant_design['tech_type'] = 3
             
-    else: # Assume forecast points are on the half-hour, valid for the surrounding hour, with the first point 30min prior to the designated forecast issue time
-        n = len(wfdata['dn']) - 1
-        for j in range(n): 
-            q = pssc + j*nssc_per_wf
-            for k in ['dn', 'wspd', 'tdry', 'rhum', 'pres']:
-                val =  wfdata[k][j+1] if k in wfdata.keys() else ground_truth_weather_data[k][pssc]  # Use current ground-truth value for full forecast period if forecast value is not available            
-                for i in range(nssc_per_wf):  
-                    current_forecast_weather_data[k][q+i] = val
-
-    #--- Extrapolate forecasts to be complete for next-day dispatch scheduling (if necessary)
-    forecast_duration = n*forecast_steps_per_hour if offset30 else (n-0.5)*forecast_steps_per_hour
-    if forecast_issue_time > day_ahead_schedule_time:
-        hours_avail = forecast_duration - (24 - forecast_issue_time) - day_ahead_schedule_time  # Hours of forecast available at the point the day ahead schedule is due
-    else:
-        hours_avail = forecast_duration - (day_ahead_schedule_time - forecast_issue_time)
+            else:
+                ### For fixed pressure
+                plant_design['P_ref'] = 120.
+                plant_design['design_eff'] = 0.409  # 0.385
+                plant_design['tech_type'] = 1
+            
+            return
         
-    req_hours_avail = 48 - day_ahead_schedule_time 
-    if req_hours_avail >  hours_avail:  # Forecast is not available for the full time required for the day-ahead schedule
-        qf = pssc + int((n-0.5)*nssc_per_wf) if offset30 else pssc + (n-1)*nssc_per_wf   # Point in annual arrays corresponding to last point forecast time point
-        cratio = 0.0 if wfdata['dn'][-1]<20 else wfdata['dn'][-1] / max(clearsky_data[qf], 1.e-6)  # Ratio of actual / clearsky at last forecast time point
+        # Set cycle specifications (from model validation code)
+        # TODO: do we actually want to do this? I would assume not.
+        adjust_plant_design(self.plant.design, self.cycle_type, self.user_defined_cycle_input_file)
         
-        nmiss = int((req_hours_avail - hours_avail) * ssc_time_steps_per_hour)  
-        q = pssc + n*nssc_per_wf if offset30 else pssc + int((n-0.5)*nssc_per_wf ) 
-        for i in range(nmiss):
-            current_forecast_weather_data['dn'][q+i] = clearsky_data[q+i] * cratio    # Approximate DNI in non-forecasted time periods from expected clear-sky DNI and actual/clear-sky ratio at latest available forecast time point
-            for k in ['wspd', 'tdry', 'rhum', 'pres']:  
-                current_forecast_weather_data[k][q+i] = current_forecast_weather_data[k][q-1]  # Assume latest forecast value applies for the remainder of the time period
+        # Check combinations of control conditions
+        if self.is_optimize and (self.control_field == 'CD_data' or self.control_receiver == 'CD_data'):
+            print ('Warning: Dispatch optimization is being used with field or receiver operation derived from CD data. Receiver can only operate when original CD receiver was operating')
+        if self.control_receiver == 'CD_data' and self.control_field != 'CD_data':
+            print ('Warning: Receiver flow is controlled from CD data, but field tracking fraction is controlled by ssc. Temperatures will likely be unrealistically high')
 
-    return current_forecast_weather_data
+        self.is_initialized = True
+        return
+
+
+    #--- Run simulation
+    def run(self, start_date, timestep_days, horizon, retvars, ursd_last, yrsd_last, current_forecast_weather_data, weather_data_for_dispatch,
+            schedules, current_day_schedule, next_day_schedule, initial_plant_state=None):
+
+        time = self.current_time = self.start_date = start_date
+        self.sim_days = timestep_days
+        self.current_forecast_weather_data = current_forecast_weather_data
+        self.weather_data_for_dispatch = weather_data_for_dispatch
+        self.schedules = schedules
+        self.current_day_schedule = current_day_schedule
+        self.next_day_schedule = next_day_schedule
+        if initial_plant_state is not None:
+            self.plant.state = initial_plant_state
+
+        # Start compiling ssc input dict (D)
+        D = self.plant.design.copy()
+        D.update(self.plant.state)
+        D.update(self.plant.flux_maps)
+        D['time_start'] = int(util.get_time_of_year(self.start_date))
+        D['time_stop'] = util.get_time_of_year(self.start_date.replace(hour=0, minute=0, second=0)) + self.sim_days*24*3600
+        D['sf_adjust:hourly'] = self.data['sf_adjust:hourly']
+        reupdate_ssc_constants(D, self.params, self.data)
+        if self.control_receiver == 'CD_data':
+            D['rec_user_mflow_path_1'] = self.data['rec_user_mflow_path_1']
+            D['rec_user_mflow_path_2'] = self.data['rec_user_mflow_path_2']
+
+        #-------------------------------------------------------------------------
+        # Run simulation in a rolling horizon   
+        #      The ssc simulation time resolution is assumed to be <= the shortest dispatch time step
+        #      All dispatch time steps and time horizons are assumed to be an integer multiple of the ssc time step
+        #      Time at which the weather forecast is updated coincides with the start of an optimization interval
+        #      Time at which the day-ahead generation schedule is due coincides with the start of an optimization interval
+
+        #--- Calculate time-related values
+        tod = int(util.get_time_of_day(time))                       # Current time of day (s)
+        toy = int(util.get_time_of_year(time))                      # Current time of year (s)    
+        start_time = util.get_time_of_year(time)                    # Time (sec) elapsed since beginning of year
+        start_hour = int(start_time / 3600)                         # Time (hours) elapsed since beginning of year
+        end_hour = start_hour + self.sim_days*24
+        nph = int(self.ssc_time_steps_per_hour)                     # Number of time steps per hour
+        total_horizon = self.sim_days*24
+        ntot = int(nph*total_horizon)                               # Total number of time points in full horizon
+        napply = int(nph*self.dispatch_frequency)                   # Number of ssc time points accepted after each solution 
+        nupdate = int(total_horizon / self.dispatch_frequency)      # Number of update intervals
+        startpt = int(start_hour*nph)                               # Start point in annual arrays
+        sscstep = 3600/nph                                          # ssc time step (s)
+        nominal_horizon = int(self.dispatch_horizon*3600)  
+        horizon_update = int(self.dispatch_horizon_update*3600)
+        freq = int(self.dispatch_frequency*3600)                    # Frequency of rolling horizon update (s)
+
+        #--- Update "forecasted" weather data (if relevant)
+        if self.is_optimize and (tod == self.forecast_issue_time*3600):
+            self.current_forecast_weather_data = DispatchWrap.update_forecast_weather_data(
+                date=time,
+                current_forecast_weather_data=self.current_forecast_weather_data,
+                ssc_time_steps_per_hour=self.ssc_time_steps_per_hour,
+                forecast_steps_per_hour=self.forecast_steps_per_hour,
+                ground_truth_weather_data=self.ground_truth_weather_data,
+                forecast_issue_time=self.forecast_issue_time,
+                day_ahead_schedule_time=self.day_ahead_schedule_time,
+                clearsky_data=self.clearsky_data
+                )
+
+        #--- Update stored day-ahead generation schedule for current day (if relevant)
+        if tod == 0 and self.use_day_ahead_schedule:
+            self.next_day_schedule = [0 for s in self.next_day_schedule]
+
+            if self.day_ahead_schedule_from == 'NVE':
+                self.current_day_schedule = self.get_CD_NVE_day_ahead_schedule(time)
+                self.schedules.append(self.current_day_schedule)
+            
+        # Don't include day-ahead schedule if one hasn't been calculated yet, or if there is no NVE schedule available on this day
+        if ((toy - start_time)/3600 < 24 and self.day_ahead_schedule_from == 'calculated') or (self.day_ahead_schedule_from == 'NVE' and self.current_day_schedule == None):  
+            include_day_ahead_in_dispatch = False
+        else:
+            include_day_ahead_in_dispatch = self.use_day_ahead_schedule
+
+        #--- Run dispatch optimization (if relevant)
+        if self.is_optimize:
+            
+            if start_date == datetime.datetime(2018, 10, 14, 1, 0):
+                assert math.isclose(self.weather_data_for_dispatch['tz'], -8, rel_tol=1e-4)
+                assert math.isclose(self.weather_data_for_dispatch['elev'], 1497.2, rel_tol=1e-4)
+                assert math.isclose(self.weather_data_for_dispatch['lat'], 38.24, rel_tol=1e-4)
+                assert math.isclose(self.weather_data_for_dispatch['lon'], -117.36, rel_tol=1e-4)
+                assert math.isclose(sum(list(self.weather_data_for_dispatch['dn'])), 526513.8, rel_tol=1e-4)
+                assert math.isclose(sum(list(self.weather_data_for_dispatch['df'])), 0, rel_tol=1e-4)
+                assert math.isclose(sum(list(self.weather_data_for_dispatch['gh'])), 0, rel_tol=1e-4)
+                assert math.isclose(sum(list(self.weather_data_for_dispatch['tdry'])), 10522.8, rel_tol=1e-4)
+
+                assert math.isclose(self.ground_truth_weather_data['tz'], -8, rel_tol=1e-4)
+                assert math.isclose(self.ground_truth_weather_data['elev'], 1497.2, rel_tol=1e-4)
+                assert math.isclose(self.ground_truth_weather_data['lat'], 38.24, rel_tol=1e-4)
+                assert math.isclose(self.ground_truth_weather_data['lon'], -117.36, rel_tol=1e-4)
+                assert math.isclose(sum(list(self.ground_truth_weather_data['dn'])), 150372982.8, rel_tol=1e-4)
+                assert math.isclose(sum(list(self.ground_truth_weather_data['df'])), 0, rel_tol=1e-4)
+                assert math.isclose(sum(list(self.ground_truth_weather_data['gh'])), 0, rel_tol=1e-4)
+                assert math.isclose(sum(list(self.ground_truth_weather_data['tdry'])), 6825483.6, rel_tol=1e-4)
+
+                assert math.isclose(self.current_forecast_weather_data['tz'], -8, rel_tol=1e-4)
+                assert math.isclose(self.current_forecast_weather_data['elev'], 1497.2, rel_tol=1e-4)
+                assert math.isclose(self.current_forecast_weather_data['lat'], 38.24, rel_tol=1e-4)
+                assert math.isclose(self.current_forecast_weather_data['lon'], -117.36, rel_tol=1e-4)
+                assert math.isclose(sum(list(self.current_forecast_weather_data['dn'])), 1077438.6, rel_tol=1e-4)
+                assert math.isclose(sum(list(self.current_forecast_weather_data['df'])), 0, rel_tol=1e-4)
+                assert math.isclose(sum(list(self.current_forecast_weather_data['gh'])), 0, rel_tol=1e-4)
+                assert math.isclose(sum(list(self.current_forecast_weather_data['tdry'])), 28686.6, rel_tol=1e-4)
+
+                assert time == datetime.datetime(2018, 10, 14, 1, 0 ,0)
+                assert horizon == 82800
+                assert self.dispatch_weather_horizon == 2
+
+            #--- Update weather to use in dispatch optimization for this optimization horizon
+            self.weather_data_for_dispatch = update_dispatch_weather_data(
+                weather_data = self.weather_data_for_dispatch,
+                replacement_real_weather_data = self.ground_truth_weather_data,
+                replacement_forecast_weather_data = self.current_forecast_weather_data,
+                datetime = time,
+                total_horizon = horizon/3600.,
+                dispatch_horizon = self.dispatch_weather_horizon
+                )
+
+            if start_date == datetime.datetime(2018, 10, 14, 0, 0):
+                assert math.isclose(self.weather_data_for_dispatch['tz'], -8, rel_tol=1e-4)
+                assert math.isclose(self.weather_data_for_dispatch['elev'], 1497.2, rel_tol=1e-4)
+                assert math.isclose(self.weather_data_for_dispatch['lat'], 38.24, rel_tol=1e-4)
+                assert math.isclose(self.weather_data_for_dispatch['lon'], -117.36, rel_tol=1e-4)
+                assert math.isclose(sum(list(self.weather_data_for_dispatch['dn'])), 526513.7, rel_tol=1e-4)
+                assert math.isclose(sum(list(self.weather_data_for_dispatch['df'])), 0, rel_tol=1e-4)
+                assert math.isclose(sum(list(self.weather_data_for_dispatch['gh'])), 0, rel_tol=1e-4)
+                assert math.isclose(sum(list(self.weather_data_for_dispatch['tdry'])), 10522.8, rel_tol=1e-4)
+
+            if start_date == datetime.datetime(2018, 10, 14, 1, 0):
+                assert math.isclose(self.weather_data_for_dispatch['tz'], -8, rel_tol=1e-4)
+                assert math.isclose(self.weather_data_for_dispatch['elev'], 1497.2, rel_tol=1e-4)
+                assert math.isclose(self.weather_data_for_dispatch['lat'], 38.24, rel_tol=1e-4)
+                assert math.isclose(self.weather_data_for_dispatch['lon'], -117.36, rel_tol=1e-4)
+                assert math.isclose(sum(list(self.weather_data_for_dispatch['dn'])), 526513.8, rel_tol=1e-4)
+                assert math.isclose(sum(list(self.weather_data_for_dispatch['df'])), 0, rel_tol=1e-4)
+                assert math.isclose(sum(list(self.weather_data_for_dispatch['gh'])), 0, rel_tol=1e-4)
+                assert math.isclose(sum(list(self.weather_data_for_dispatch['tdry'])), 10737.5, rel_tol=1e-4)
+
+            #--- Run ssc for dispatch estimates: (using weather forecast time resolution for weather data and specified ssc time step)
+            npts_horizon = int(horizon/3600 * nph)
+            R_est = estimates_for_dispatch_model(
+                plant_design = D,
+                toy = toy,
+                horizon = horizon,
+                weather_data = self.weather_data_for_dispatch,
+                N_pts_horizon = npts_horizon,
+                clearsky_data = self.clearsky_data,
+                start_pt = startpt
+            )
+
+            if start_date == datetime.datetime(2018, 10, 14, 0, 0):
+                assert math.isclose(sum(list(R_est["Q_thermal"])), 230346, rel_tol=1e-4)
+                assert math.isclose(sum(list(R_est["m_dot_rec"])), 599416, rel_tol=1e-4)
+                assert math.isclose(sum(list(R_est["clearsky"])), 543582, rel_tol=1e-4)
+                assert math.isclose(sum(list(R_est["P_tower_pump"])), 2460.8, rel_tol=1e-4)
+
+            if start_date == datetime.datetime(2018, 10, 14, 1, 0):
+                assert math.isclose(sum(list(R_est["Q_thermal"])), 230347, rel_tol=1e-4)
+                assert math.isclose(sum(list(R_est["m_dot_rec"])), 599355, rel_tol=1e-4)
+                assert math.isclose(sum(list(R_est["clearsky"])), 543582, rel_tol=1e-4)
+                assert math.isclose(sum(list(R_est["P_tower_pump"])), 2460.6, rel_tol=1e-4)
+
+            #--- Set dispatch optimization properties for this time horizon using ssc estimates
+            disp_in = setup_dispatch_model(
+                R_est = R_est,
+                freq = freq,
+                horizon = horizon,
+                include_day_ahead_in_dispatch = include_day_ahead_in_dispatch,
+                dispatch_params = self.dispatch_params,
+                dispatch_steplength_array = self.dispatch_steplength_array,
+                dispatch_steplength_end_time = self.dispatch_steplength_end_time,
+                dispatch_horizon = self.dispatch_horizon,
+                plant = self.plant,
+                nonlinear_model_time = self.nonlinear_model_time,
+                use_linear_dispatch_at_night = self.use_linear_dispatch_at_night,
+                clearsky_data = self.clearsky_data,
+                night_clearky_cutoff = self.night_clearsky_cutoff,
+                disp_time_weighting = self.disp_time_weighting,
+                price = self.price_data[startpt:startpt+npts_horizon],          # [$/MWh] Update prices for this horizon
+                sscstep = sscstep,
+                avg_price = self.avg_price,
+                avg_price_disp_storage_incentive = self.avg_price_disp_storage_incentive,
+                avg_purchase_price = self.avg_purchase_price,
+                day_ahead_tol_plus = self.day_ahead_tol_plus,
+                day_ahead_tol_minus = self.day_ahead_tol_minus,
+                tod = tod,
+                current_day_schedule = self.current_day_schedule,
+                day_ahead_pen_plus = self.day_ahead_pen_plus,
+                day_ahead_pen_minus = self.day_ahead_pen_minus,
+                night_clearsky_cutoff = self.night_clearsky_cutoff,
+                ursd_last = ursd_last,
+                yrsd_last = yrsd_last
+            )
+
+            include = {"pv": False, "battery": False, "persistence": False, "force_cycle": False, "op_assumptions": False,
+                        "signal":include_day_ahead_in_dispatch, "simple_receiver": False}
+                
+            dispatch_soln = run_dispatch_model(disp_in, include)
+
+            if start_date == datetime.datetime(2018, 10, 14, 0, 0):
+                assert math.isclose(sum(list(dispatch_soln.cycle_on)), 16, rel_tol=1e-4)
+                assert math.isclose(sum(list(dispatch_soln.cycle_startup)), 2, rel_tol=1e-4)
+                assert math.isclose(sum(list(dispatch_soln.drsu)), 2.15, rel_tol=1e-4)
+                assert math.isclose(sum(list(dispatch_soln.electrical_output_from_cycle)), 1731858, rel_tol=1e-4)
+                assert math.isclose(sum(list(dispatch_soln.frsu)), 1.15, rel_tol=1e-4)
+                assert math.isclose(dispatch_soln.objective_value, 206946.6, rel_tol=1e-4)
+                assert math.isclose(dispatch_soln.s0, 832639.4, rel_tol=1e-4)
+
+            if start_date == datetime.datetime(2018, 10, 14, 1, 0):
+                assert math.isclose(sum(list(dispatch_soln.cycle_on)), 15, rel_tol=1e-4)
+                assert math.isclose(sum(list(dispatch_soln.cycle_startup)), 2, rel_tol=1e-4)
+                assert math.isclose(sum(list(dispatch_soln.drsu)), 2.15, rel_tol=1e-4)
+                assert math.isclose(sum(list(dispatch_soln.electrical_output_from_cycle)), 1743183, rel_tol=1e-4)
+                assert math.isclose(sum(list(dispatch_soln.frsu)), 1.15, rel_tol=1e-4)
+                assert math.isclose(dispatch_soln.objective_value, 208838, rel_tol=1e-4)
+                assert math.isclose(dispatch_soln.s0, 832181, rel_tol=1e-4)
+
+            # Populate results
+            if self.is_optimize:
+                retvars += vars(DispatchTargets()).keys()
+            if dispatch_soln is not None:
+                Rdisp_all = dispatch_soln.get_solution_at_ssc_steps(self.dispatch_params, sscstep/3600., freq/3600.)
+                Rdisp = {'disp_'+key:value for key,value in Rdisp_all.items() if key in retvars}
+
+                # TODO: make the time triggering more robust; shouldn't be an '==' as the program may be offline at the time or running at intervals
+                #  that won't exactly hit it
+                if self.use_day_ahead_schedule and self.day_ahead_schedule_from == 'calculated' and tod/3600 == self.day_ahead_schedule_time:
+                    self.next_day_schedule = get_day_ahead_schedule(
+                        day_ahead_schedule_steps_per_hour = self.day_ahead_schedule_steps_per_hour,
+                        Delta = self.dispatch_params.Delta,
+                        Delta_e = self.dispatch_params.Delta_e,
+                        net_electrical_output = dispatch_soln.net_electrical_output,
+                        day_ahead_schedule_time = self.day_ahead_schedule_time
+                        )
+
+                    weather_at_day_ahead_schedule = get_weather_at_day_ahead_schedule(self.weather_data_for_dispatch, startpt, npts_horizon)
+                    self.weather_at_schedule.append(weather_at_day_ahead_schedule)  # Store weather used at the point in time the day ahead schedule was generated
+
+                #--- Set ssc dispatch targets
+                ssc_dispatch_targets = DispatchTargets(dispatch_soln, self.plant, self.dispatch_params, sscstep, freq/3600.)
+
+                if start_date == datetime.datetime(2018, 10, 14, 0, 0):
+                    assert hash(tuple(ssc_dispatch_targets.is_pc_sb_allowed_in)) == -4965923453060612375
+                    assert hash(tuple(ssc_dispatch_targets.is_pc_su_allowed_in)) == -4965923453060612375
+                    assert hash(tuple(ssc_dispatch_targets.is_rec_sb_allowed_in)) == -4965923453060612375
+                    assert hash(tuple(ssc_dispatch_targets.is_rec_su_allowed_in)) == -4965923453060612375
+                    assert hash(tuple(ssc_dispatch_targets.q_pc_max_in)) == -709626543671595165
+                    assert hash(tuple(ssc_dispatch_targets.q_pc_target_on_in)) == -4965923453060612375
+                    assert hash(tuple(ssc_dispatch_targets.q_pc_target_su_in)) == -4965923453060612375
+
+                if start_date == datetime.datetime(2018, 10, 14, 1, 0):
+                    assert hash(tuple(ssc_dispatch_targets.is_pc_sb_allowed_in)) == -4965923453060612375
+                    assert hash(tuple(ssc_dispatch_targets.is_pc_su_allowed_in)) == -4965923453060612375
+                    assert hash(tuple(ssc_dispatch_targets.is_rec_sb_allowed_in)) == -4965923453060612375
+                    assert hash(tuple(ssc_dispatch_targets.is_rec_su_allowed_in)) == -4965923453060612375
+                    assert hash(tuple(ssc_dispatch_targets.q_pc_max_in)) == -709626543671595165
+                    assert hash(tuple(ssc_dispatch_targets.q_pc_target_on_in)) == -4965923453060612375
+                    assert hash(tuple(ssc_dispatch_targets.q_pc_target_su_in)) == -4965923453060612375
+
+                #--- Save these values for next estimates
+                ursd_last = dispatch_soln.get_value_at_time(self.dispatch_params, freq/3600, 'ursd')      # set to False when it doesn't exists 
+                yrsd_last = dispatch_soln.get_value_at_time(self.dispatch_params, freq/3600, 'yrsd')      # set to False when it doesn't exists
+
+            else:  # Infeasible solution was returned, revert back to running ssc without dispatch targets
+                Rdisp = None
+                ssc_dispatch_targets = None
+
+        dispatch_outputs = {
+            'ssc_dispatch_targets': ssc_dispatch_targets,
+            'Rdisp': Rdisp,
+            'ursd_last': ursd_last,
+            'yrsd_last': yrsd_last,
+            'current_forecast_weather_data': self.current_forecast_weather_data,
+	        'weather_data_for_dispatch': self.weather_data_for_dispatch,
+            'schedules': self.schedules,
+	        'current_day_schedule': self.current_day_schedule,
+	        'next_day_schedule': self.next_day_schedule
+        }
+
+        return dispatch_outputs
+
+
+    @staticmethod
+    def update_forecast_weather_data(date, current_forecast_weather_data, ssc_time_steps_per_hour, forecast_steps_per_hour, ground_truth_weather_data,
+                                        forecast_issue_time, day_ahead_schedule_time, clearsky_data):
+        """
+        Inputs:
+            date
+            current_forecast_weather_data
+            ssc_time_steps_per_hour
+            forecast_steps_per_hour
+            ground_truth_weather_data
+            forecast_issue_time
+            day_ahead_schedule_time
+            clearsky_data
+
+        Outputs:
+            current_forecast_weather_data
+        """
+
+        offset30 = True
+        print ('Updating weather forecast:', date)
+        nextdate = date + datetime.timedelta(days = 1) # Forecasts issued at 4pm PST on a given day (PST) are labeled at midnight (UTC) on the next day 
+        wfdata = util.read_weather_forecast(nextdate, offset30)
+        t = int(util.get_time_of_year(date)/3600)   # Time of year (hr)
+        pssc = int(t*ssc_time_steps_per_hour) 
+        nssc_per_wf = int(ssc_time_steps_per_hour / forecast_steps_per_hour)
+        
+        #---Update forecast data in full weather file: Assuming forecast points are on half-hour time points, valid for the surrounding hour, with the first point 30min prior to the designated forecast issue time
+        if not offset30:  # Assume forecast points are on the hour, valid for the surrounding hour
+            n = len(wfdata['dn'])
+            for j in range(n): # Time points in weather forecast
+                q  = pssc + nssc_per_wf/2  if j == 0 else pssc + nssc_per_wf/2 + (j-1)*nssc_per_wf/2  # First point in annual weather data (at ssc time resolution) for forecast time point j
+                nuse = nssc_per_wf/2 if j==0 else nssc_per_wf 
+                for k in ['dn', 'wspd', 'tdry', 'rhum', 'pres']:
+                    val =  wfdata[k][j] if k in wfdata.keys() else ground_truth_weather_data[k][pssc]  # Use current ground-truth value for full forecast period if forecast value is not available            
+                    for i in range(nuse):  
+                        current_forecast_weather_data[k][q+i] = val   
+                
+        else: # Assume forecast points are on the half-hour, valid for the surrounding hour, with the first point 30min prior to the designated forecast issue time
+            n = len(wfdata['dn']) - 1
+            for j in range(n): 
+                q = pssc + j*nssc_per_wf
+                for k in ['dn', 'wspd', 'tdry', 'rhum', 'pres']:
+                    val =  wfdata[k][j+1] if k in wfdata.keys() else ground_truth_weather_data[k][pssc]  # Use current ground-truth value for full forecast period if forecast value is not available            
+                    for i in range(nssc_per_wf):  
+                        current_forecast_weather_data[k][q+i] = val
+
+        #--- Extrapolate forecasts to be complete for next-day dispatch scheduling (if necessary)
+        forecast_duration = n*forecast_steps_per_hour if offset30 else (n-0.5)*forecast_steps_per_hour
+        if forecast_issue_time > day_ahead_schedule_time:
+            hours_avail = forecast_duration - (24 - forecast_issue_time) - day_ahead_schedule_time  # Hours of forecast available at the point the day ahead schedule is due
+        else:
+            hours_avail = forecast_duration - (day_ahead_schedule_time - forecast_issue_time)
+            
+        req_hours_avail = 48 - day_ahead_schedule_time 
+        if req_hours_avail >  hours_avail:  # Forecast is not available for the full time required for the day-ahead schedule
+            qf = pssc + int((n-0.5)*nssc_per_wf) if offset30 else pssc + (n-1)*nssc_per_wf   # Point in annual arrays corresponding to last point forecast time point
+            cratio = 0.0 if wfdata['dn'][-1]<20 else wfdata['dn'][-1] / max(clearsky_data[qf], 1.e-6)  # Ratio of actual / clearsky at last forecast time point
+            
+            nmiss = int((req_hours_avail - hours_avail) * ssc_time_steps_per_hour)  
+            q = pssc + n*nssc_per_wf if offset30 else pssc + int((n-0.5)*nssc_per_wf ) 
+            for i in range(nmiss):
+                current_forecast_weather_data['dn'][q+i] = clearsky_data[q+i] * cratio    # Approximate DNI in non-forecasted time periods from expected clear-sky DNI and actual/clear-sky ratio at latest available forecast time point
+                for k in ['wspd', 'tdry', 'rhum', 'pres']:  
+                    current_forecast_weather_data[k][q+i] = current_forecast_weather_data[k][q-1]  # Assume latest forecast value applies for the remainder of the time period
+
+        return current_forecast_weather_data
+
+
+def reupdate_ssc_constants(D, params, data):
+    D['solar_resource_data'] = data['solar_resource_data']
+    D['dispatch_factors_ts'] = data['dispatch_factors_ts']
+
+    D['ppa_multiplier_model'] = params['ppa_multiplier_model']
+    D['time_steps_per_hour'] = params['time_steps_per_hour']
+    D['is_rec_model_trans'] = params['is_rec_model_trans']
+    D['is_rec_startup_trans'] = params['is_rec_startup_trans']
+    D['rec_control_per_path'] = params['rec_control_per_path']
+    D['field_model_type'] = params['field_model_type']
+    D['eta_map_aod_format'] = params['eta_map_aod_format']
+    D['is_rec_to_coldtank_allowed'] = params['is_rec_to_coldtank_allowed']
+    D['is_dispatch'] = params['is_dispatch']
+    D['is_dispatch_targets'] = params['is_dispatch_targets']
+
+    #--- Set field control parameters
+    if params['control_field'] == 'CD_data':
+        D['rec_su_delay'] = params['rec_su_delay']
+        D['rec_qf_delay'] = params['rec_qf_delay']
+
+    #--- Set receiver control parameters
+    if params['control_receiver'] == 'CD_data':
+        D['is_rec_user_mflow'] = params['is_rec_user_mflow']
+        D['rec_su_delay'] = params['rec_su_delay']
+        D['rec_qf_delay'] = params['rec_qf_delay']
+    elif params['control_receiver'] == 'ssc_clearsky':
+        D['rec_clearsky_fraction'] = params['rec_clearsky_fraction']
+        D['rec_clearsky_model'] = params['rec_clearsky_model']
+        D['rec_clearsky_dni'] = data['clearsky_data'].tolist()
+    elif params['control_receiver'] == 'ssc_actual_dni':
+        D['rec_clearsky_fraction'] = params['rec_clearsky_fraction']
+
+    return
+
+
 
 
 def update_dispatch_weather_data(weather_data, replacement_real_weather_data, replacement_forecast_weather_data, datetime, total_horizon, dispatch_horizon):
