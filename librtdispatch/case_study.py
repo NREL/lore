@@ -463,7 +463,6 @@ if __name__ == '__main__':
     params.update(d_vars)                   # combine mediator and dispatch params
     params['start_date'] = start_date       # needed for initializing schedules
     for j in range(nupdate):
-        # tod = int(util.get_time_of_day(start_date))
         dispatch_wrap = DispatchWrap(plant=plant, params=params, data=data)
 
         # Run dispatch model
@@ -562,9 +561,6 @@ if __name__ == '__main__':
         schedules = dispatch_outputs['schedules']
         current_day_schedule = dispatch_outputs['current_day_schedule']
         next_day_schedule = dispatch_outputs['next_day_schedule']
-        # if tod == 0 and d_vars['use_day_ahead_schedule'] and d_vars['day_ahead_schedule_from'] == 'calculated':
-        #     current_day_schedule = [s for s in next_day_schedule]
-        #     schedules.append(current_day_schedule)
         start_date += datetime.timedelta(hours=d_vars['dispatch_frequency'])
         horizon -= int(timestep_days*24*3600)
         ursd_last = dispatch_outputs['ursd_last']
