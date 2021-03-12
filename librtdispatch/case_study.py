@@ -533,16 +533,6 @@ if __name__ == '__main__':
             assert math.isclose(plant.state['disp_pc_off0'], 1002, rel_tol=1e-4)
         
         results.update(dispatch_outputs['Rdisp'])         # add dispatch results to ssc results
-        
-
-        # TODO: Just remove this? Need to check with Alex first.
-        #--------------------------------------------------------------------------------------------
-        # Read NVE schedules (if not already read during rolling horizon calculations)
-        if m_vars['is_optimize'] == False and d_vars['use_day_ahead_schedule'] and d_vars['day_ahead_schedule_from'] == 'NVE':
-            for j in range(timestep_days):
-                date = datetime.datetime(start_date.year, start_date.month, start_date.day + j)
-                dispatch_outputs['schedules'].append(get_CD_NVE_day_ahead_schedule(date))
-        #--------------------------------------------------------------------------------------------
 
         # Calculate post-simulation financials
         revenue = Revenue.calculate_revenue(start_date, timestep_days, results['P_out_net'], m_vars, data)
