@@ -855,13 +855,16 @@ class DispatchWrap:
         # Input data files: weather, masslow, clearsky DNI must have length of full annual array based on ssc time step size
         #--- Simulation start point and duration
         self.start_date = None
-        self.sim_days = None       
-        # self.plant = None                               # Plant design and operating properties
+        self.sim_days = None
+        # self.plant = None                             # Plant design and operating properties
         
         self.user_defined_cycle_input_file = 'udpc_noTamb_dependency.csv'  # Only required if cycle_type is user_defined
 
         ## DISPATCH PERSISTING INTERMEDIARIES ############################################################################################################
-        self.dispatch_params = DispatchParams() # Structure to contain all inputs for dispatch model 
+        self.first_run = True                           # Is this the first time run() is called?
+        self.ursd_last = 0
+        self.yrsd_last = 0
+        self.dispatch_params = DispatchParams()         # Structure to contain all inputs for dispatch model 
         self.current_time = 0                           # Current time (tracked in standard time, not local time)
         self.is_initialized = False                     # Has solution already been initalized?        
         self.CD_data_for_plotting = {}                  # Only used if control_cycle = 'CD_data' 
@@ -874,6 +877,7 @@ class DispatchWrap:
         ## SSC OUTPUTS ###################################################################################################################################
         self.results = None                             # Results
 
+        self.weather_data_for_dispatch = []
         self.current_day_schedule = []                  # Committed day-ahead generation schedule for current day (MWe)
         self.next_day_schedule = []                     # Predicted day-ahead generation schedule for next day (MWe)
         self.schedules = []                             # List to store all day-ahead generation schedules (MWe)
@@ -968,6 +972,25 @@ class DispatchWrap:
         if self.control_receiver == 'CD_data' and self.control_field != 'CD_data':
             print ('Warning: Receiver flow is controlled from CD data, but field tracking fraction is controlled by ssc. Temperatures will likely be unrealistically high')
 
+
+        self.weather_data_for_dispatch = util.create_empty_weather_data(self.ground_truth_weather_data, self.ssc_time_steps_per_hour)
+        self.current_day_schedule = np.zeros(24*self.day_ahead_schedule_steps_per_hour)
+        self.next_day_schedule = np.zeros(24*self.day_ahead_schedule_steps_per_hour)
+        if int(util.get_time_of_day(self.start_date)) == 0 and self.use_day_ahead_schedule and self.day_ahead_schedule_from == 'calculated':
+            self.schedules.append(None)
+        
+        self.current_forecast_weather_data = DispatchWrap.update_forecast_weather_data(
+                date=self.start_date - datetime.timedelta(hours = 24-self.forecast_issue_time),
+                current_forecast_weather_data=util.create_empty_weather_data(self.ground_truth_weather_data, self.ssc_time_steps_per_hour),
+                ssc_time_steps_per_hour=self.ssc_time_steps_per_hour,
+                forecast_steps_per_hour=self.forecast_steps_per_hour,
+                ground_truth_weather_data=self.ground_truth_weather_data,
+                forecast_issue_time=self.forecast_issue_time,
+                day_ahead_schedule_time=self.day_ahead_schedule_time,
+                clearsky_data=self.clearsky_data
+                )
+
+
         self.is_initialized = True
         return
 
@@ -975,6 +998,17 @@ class DispatchWrap:
     #--- Run simulation
     def run(self, start_date, timestep_days, horizon, retvars, ursd_last, yrsd_last, current_forecast_weather_data, weather_data_for_dispatch,
             schedules, current_day_schedule, next_day_schedule, initial_plant_state=None):
+
+        if self.first_run == True:
+            if ursd_last is None: ursd_last = self.ursd_last
+            if yrsd_last is None: yrsd_last = self.yrsd_last
+            if weather_data_for_dispatch is None: weather_data_for_dispatch = self.weather_data_for_dispatch
+            if current_day_schedule is None: current_day_schedule = self.current_day_schedule
+            if next_day_schedule is None: next_day_schedule = self.next_day_schedule
+            if schedules is None: schedules = self.schedules
+            if current_forecast_weather_data is None: current_forecast_weather_data = self.current_forecast_weather_data
+
+            self.first_run == False
 
         time = self.current_time = self.start_date = start_date
         self.sim_days = timestep_days
@@ -1242,6 +1276,11 @@ class DispatchWrap:
             else:  # Infeasible solution was returned, revert back to running ssc without dispatch targets
                 Rdisp = None
                 ssc_dispatch_targets = None
+
+        tod = int(util.get_time_of_day(self.start_date))
+        if tod == 0 and self.use_day_ahead_schedule and self.day_ahead_schedule_from == 'calculated':
+            self.current_day_schedule = [s for s in self.next_day_schedule]
+            self.schedules.append(self.current_day_schedule)
 
         dispatch_outputs = {
             'ssc_dispatch_targets': ssc_dispatch_targets,
