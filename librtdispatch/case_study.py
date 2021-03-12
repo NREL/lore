@@ -10,29 +10,19 @@ import math
 import datetime
 
 import util
+import dispatch
 from dispatch import DispatchWrap
 import ssc_wrapper
 import loredash.mediation.plant as plant_
 
 
-mediator_params = {
-    # Not yet categorized:
-	'ppa_multiplier_model':			        1,
-	'rec_control_per_path':			        True,
-	'field_model_type':				        3,
-	'eta_map_aod_format':			        False,
-	'is_dispatch':					        0,                      # Always disable dispatch optimization in ssc
-	'is_dispatch_targets':			        True,		            # True if (is_optimize or control_cycle == 'CD_data')
-	'is_rec_user_mflow':			        False,		            # or this should be unassigned, True if control_receiver == 'CD_data'
-	'rec_clearsky_fraction':		        1.0,
-    'rec_clearsky_model':                   0,
-    'rec_su_delay':                         0.,                     # = 0.01 if control_field == 'CD_data' or control_receiver == 'CD_data'  Set receiver start time and energy to near zero to enforce CD receiver startup timing
-    'rec_qf_delay':                         0.,                     # = 0.01 if control_field == 'CD_data' or control_receiver == 'CD_data'
-    'is_rec_to_coldtank_allowed':           True,
 
+mediator_params = {
     # Control conditions
 	'time_steps_per_hour':			        60,			            # Simulation time resolution in ssc (1min)   DUPLICATED to: ssc_time_steps_per_hour
-    'is_optimize':					        True,                   # Use dispatch optimziation
+	'is_dispatch':					        0,                      # Always disable dispatch optimization in ssc
+	'is_dispatch_targets':			        True,		            # True if (is_optimize or control_cycle == 'CD_data')
+    'is_optimize':					        True,                   # Use dispatch optimization
 	'control_field':				        'ssc',                  #'CD_data' = use CD data to control heliostats tracking, heliostats offline, and heliostat daily reflectivity.  Receiver startup time is set to zero so that simulated receiver starts when CD tracking begins
                                                                     #'ssc' = allow ssc to control heliostat field operations, assuming all heliostats are available
 
@@ -44,51 +34,39 @@ mediator_params = {
                                                                     # 'CD_data' = use CD actual cycle operation to control cycle dispatch targets
                                                                     # 'ssc_heuristic' = allow ssc heuristic (no consideration of TOD price) to control cycle dispatch
 
-    # Dispatch optimization
-	'dispatch_frequency':			        1,                      # Frequency of dispatch re-optimization (hr)
-	'dispatch_weather_horizon':		        2,                      # Time point in hours (relative to start of optimization horizon) defining the transition from actual weather to forecasted weather used in the dispatch model. Set to 0 to use forecasts for the full horizon, set to -1 to use actual weather for the full horizon, or any value > 0 to combine actual/forecasted weather
-    'dispatch_horizon':                     48.,                    # Dispatch time horizon (hr) 
-    'dispatch_horizon_update':              24.,                    # Frequency of dispatch time horizon update (hr) -> set to the same value as dispatch_frequency for a fixed-length horizon 
-    'dispatch_steplength_array':            [5, 15, 60],            # Dispatch time step sizes (min)
-    'dispatch_steplength_end_time':         [1, 4, 48],             # End time for dispatch step lengths (hr)
-    'nonlinear_model_time':                 4.0,                    # Amount of time to apply nonlinear dispatch model (hr) (not currently used)
-    'disp_time_weighting':                  0.999,                  # Dispatch time weighting factor. 
-    'use_linear_dispatch_at_night':         False,                  # Revert to the linear dispatch model when all of the time-horizon in the nonlinear model is at night.
-    'night_clearsky_cutoff':                100.,                   # Cutoff value for clear-sky DNI defining "night"
-
-    # Weather forecasts
-	'forecast_issue_time':			        16,                     # Time at which weather forecast is issued (hr, 0-23), assumed to be in standard time.  Forecasts issued at midnight UTC 
-	'forecast_steps_per_hour':		        1,                      # Number of time steps per hour in weather forecasts
-    'forecast_update_frequency':            24,                     # Weather forecast update interval (hr)
-
     # Price
+    'price_multiplier_file':                'prices_flat.csv',
+	'ppa_multiplier_model':			        1,
 	'price_steps_per_hour':			        1,                      # Number of steps per hour in electricity price multipliers
 	'avg_price':					        138,                    # Average electricity price ($/MWh):  CD original PPA was $138/MWh
     'avg_purchase_price':                   30,                     # Average electricity purchase price ($/MWh) (note, this isn't currently used in the dispatch model)
     'avg_price_disp_storage_incentive':     0.0,                    # Average electricity price ($/MWh) used in dispatch model storage inventory incentive
 
-    # Day-ahead schedule targets
-	'use_day_ahead_schedule':		        True,                   # Use day-ahead generation targets
-	'day_ahead_schedule_from':		        'calculated',           # 'calculated' = calculate day-ahead schedule during solution, 'NVE'= use NVE-provided schedule for CD
-	'day_ahead_schedule_time':		        10,                     # Time of day at which day-ahead schedule is due (hr, 0-23), assumed to be in standard time
-	'day_ahead_schedule_steps_per_hour':    1,                      # Time resolution of day-ahead schedule
-    'day_ahead_pen_plus':                   500,                    # Penalty for over-generation relative to day-ahead schedule ($/MWhe)
-    'day_ahead_pen_minus':                  500,                    # Penalty for under-generation relative to day-ahead schedule ($/MWhe)
-    'day_ahead_tol_plus':                   5,                      # Tolerance for over-production relative to day-ahead schedule before incurring penalty (MWhe)
-    'day_ahead_tol_minus':                  5,                      # Tolerance for under-production relative to day-ahead schedule before incurring penalty (MWhe)
-    'day_ahead_ignore_off':                 True,                   # Don't apply schedule penalties when cycle is scheduled to be off for the full hour (MWhe)
-
     # Field, receiver, and cycle simulation options
+    'ground_truth_weather_file':            './model-validation/input_files/weather_files/ssc_weatherfile_1min_2018.csv',   # Weather file derived from CD data: DNI, ambient temperature,
+                                                                                                                            #  wind speed, etc. are averaged over 4 CD weather stations,
+                                                                                                                            #  after filtering DNI readings for bad measurements. 
+    'clearsky_file':                        './model-validation/input_files/weather_files/clearsky_pvlib_ineichen_1min_2018.csv',   # Expected clear-sky DNI from Ineichen model (via pvlib). 
+    'CD_mflow_path1_file':                  './model-validation/input_files/mflow_path1_2018_1min.csv',  # File containing CD data for receiver path 1 mass flow rate (note, all values are zeros on days without data)
+    'CD_mflow_path2_file':                  './model-validation/input_files/mflow_path2_2018_1min.csv',  # File containing CD data for receiver path 2 mass flow rate (note, all values are zeros on days without data)
+    'CD_raw_data_direc':                    './input_files/CD_raw',                                      # Directory containing raw data files from CD
+    'CD_processed_data_direc':              './input_files/CD_processed',                                # Directory containing files with 1min data already extracted
+	'rec_control_per_path':			        True,
+	'field_model_type':				        3,
+	'eta_map_aod_format':			        False,
+	'is_rec_user_mflow':			        False,		            # or this should be unassigned, True if control_receiver == 'CD_data'
+	'rec_clearsky_fraction':		        1.0,
+    'rec_clearsky_model':                   0,
+    'rec_su_delay':                         0.,                     # = 0.01 if control_field == 'CD_data' or control_receiver == 'CD_data'  Set receiver start time and energy to near zero to enforce CD receiver startup timing
+    'rec_qf_delay':                         0.,                     # = 0.01 if control_field == 'CD_data' or control_receiver == 'CD_data'
+    'is_rec_to_coldtank_allowed':           True,
     'use_CD_measured_reflectivity':	        False,                  # Use measured heliostat reflectivity from CD data
     'fixed_soiling_loss':			        0.02,                   # Fixed soiling loss (if not using CD measured reflectivity) = 1 - (reflectivity / clean_reflectivity)
 	'is_rec_startup_trans':			        False,                  # TODO: Disabling transient startup -> ssc not yet configured to start/stop calculations in the middle of startup with this model
 	'is_rec_model_trans':			        False,                  # TODO: Disabling transient receiver model -> ssc not yet configured to store/retrieve receiver temperature profiles
     'cycle_type':                           'user_defined',         # 'user-defined', 'sliding', or 'fixed'
-
-    # Miscellaneous
-	'store_full_dispatch_solns':	        False,                  # Store full dispatch input parameters and solutions for each call to the dispatch model
-    'force_rolling_horizon':                False,                  # Force simulation using ssc heuristic dispatch to follow a rolling horizon for debugging?
 }
+
 
 ## Put code here in CaseStudy that will be in mediation.
 class Revenue:
@@ -405,17 +383,15 @@ if __name__ == '__main__':
     start_date = datetime.datetime(2018, 10, 14)
     sim_days = 1
     m_vars = mediator_params.copy()
-    timestep_days = m_vars['dispatch_frequency']/24.
+    d_vars = dispatch.dispatch_wrap_params.copy()
+    timestep_days = d_vars['dispatch_frequency']/24.
     ssc_time_steps_per_hour = m_vars['time_steps_per_hour']
     disp_soln_tracking = []
     disp_params_tracking = []
 
 
     # Data - get historical weather
-    ground_truth_weather_file = './model-validation/input_files/weather_files/ssc_weatherfile_1min_2018.csv'  # Weather file derived from CD data: DNI, ambient temperature,
-                                                                                                                   #  wind speed, etc. are averaged over 4 CD weather stations,
-                                                                                                                   #  after filtering DNI readings for bad measurements. 
-    ground_truth_weather_data = util.read_weather_data(ground_truth_weather_file)
+    ground_truth_weather_data = util.read_weather_data(m_vars['ground_truth_weather_file'])
     if ssc_time_steps_per_hour != 60:
         ground_truth_weather_data = util.update_weather_timestep(ground_truth_weather_data, ssc_time_steps_per_hour)
 
@@ -435,18 +411,15 @@ if __name__ == '__main__':
     sf_adjust_hourly = util.get_field_availability_adjustment(ssc_time_steps_per_hour, start_date.year, m_vars['control_field'],
             m_vars['use_CD_measured_reflectivity'], plant.design, m_vars['fixed_soiling_loss'])
 
-    # Data - get clear-sky DNI annual arrays
-    clearsky_file = './model-validation/input_files/weather_files/clearsky_pvlib_ineichen_1min_2018.csv'      # Expected clear-sky DNI from Ineichen model (via pvlib).  
-    clearsky_data = np.genfromtxt(clearsky_file)
+    # Data - get clear-sky DNI annual arrays 
+    clearsky_data = np.genfromtxt(m_vars['clearsky_file'])
     if ssc_time_steps_per_hour != 60:
         clearsky_data = np.array(util.translate_to_new_timestep(clearsky_data, 1./60, 1./ssc_time_steps_per_hour))
 
     # Data - get receiver mass flow annual arrays
-    CD_mflow_path1_file = './model-validation/input_files/mflow_path1_2018_1min.csv'                          # File containing CD data for receiver path 1 mass flow rate (note, all values are zeros on days without data)
-    CD_mflow_path2_file = './model-validation/input_files/mflow_path2_2018_1min.csv'                          # File containing CD data for receiver path 2 mass flow rate (note, all values are zeros on days without data)
     rec_user_mflow_path_1, rec_user_mflow_path_2 = CaseStudy.get_user_flow_paths(
-        flow_path1_file=CD_mflow_path2_file,          # Note ssc path numbers are reversed relative to CD path numbers
-        flow_path2_file=CD_mflow_path1_file,
+        flow_path1_file=m_vars['CD_mflow_path2_file'],          # Note ssc path numbers are reversed relative to CD path numbers
+        flow_path2_file=m_vars['CD_mflow_path1_file'],
         time_steps_per_hour=ssc_time_steps_per_hour,
         helio_reflectance=plant.design['helio_reflectance'],
         use_measured_reflectivity=m_vars['use_CD_measured_reflectivity'],
@@ -455,8 +428,7 @@ if __name__ == '__main__':
         )
 
     # Data - get prices
-    price_multiplier_file = 'prices_flat.csv'  # TODO: File containing annual price multipliers
-    price_multipliers = np.genfromtxt(price_multiplier_file)
+    price_multipliers = np.genfromtxt(m_vars['price_multiplier_file'])
     if m_vars['price_steps_per_hour'] != ssc_time_steps_per_hour:
         price_multipliers = util.translate_to_new_timestep(price_multipliers, 1./m_vars['price_steps_per_hour'], 1./ssc_time_steps_per_hour)
     pmavg = sum(price_multipliers)/len(price_multipliers)  
@@ -477,32 +449,32 @@ if __name__ == '__main__':
     ursd_last = 0
     yrsd_last = 0  
     weather_data_for_dispatch = util.create_empty_weather_data(ground_truth_weather_data, ssc_time_steps_per_hour)
-    current_day_schedule = np.zeros(24*m_vars['day_ahead_schedule_steps_per_hour'])
-    next_day_schedule = np.zeros(24*m_vars['day_ahead_schedule_steps_per_hour'])
-    CD_raw_data_direc = './input_files/CD_raw'                     # Directory containing raw data files from CD
-    CD_processed_data_direc = './input_files/CD_processed'         # Directory containing files with 1min data already extracted
-    initial_plant_state = util.get_initial_state_from_CD_data(start_date, CD_raw_data_direc, CD_processed_data_direc, plant.design)
+    current_day_schedule = np.zeros(24*d_vars['day_ahead_schedule_steps_per_hour'])
+    next_day_schedule = np.zeros(24*d_vars['day_ahead_schedule_steps_per_hour'])
+    initial_plant_state = util.get_initial_state_from_CD_data(start_date, m_vars['CD_raw_data_direc'], m_vars['CD_processed_data_direc'], plant.design)
     current_forecast_weather_data = DispatchWrap.update_forecast_weather_data(
-                date=start_date - datetime.timedelta(hours = 24-m_vars['forecast_issue_time']),
+                date=start_date - datetime.timedelta(hours = 24-d_vars['forecast_issue_time']),
                 current_forecast_weather_data=util.create_empty_weather_data(ground_truth_weather_data, ssc_time_steps_per_hour),
                 ssc_time_steps_per_hour=ssc_time_steps_per_hour,
-                forecast_steps_per_hour=m_vars['forecast_steps_per_hour'],
+                forecast_steps_per_hour=d_vars['forecast_steps_per_hour'],
                 ground_truth_weather_data=ground_truth_weather_data,
-                forecast_issue_time=m_vars['forecast_issue_time'],
-                day_ahead_schedule_time=m_vars['day_ahead_schedule_time'],
+                forecast_issue_time=d_vars['forecast_issue_time'],
+                day_ahead_schedule_time=d_vars['day_ahead_schedule_time'],
                 clearsky_data=clearsky_data
                 )
     schedules = []
-    if int(util.get_time_of_day(start_date)) == 0 and m_vars['use_day_ahead_schedule'] and m_vars['day_ahead_schedule_from'] == 'calculated':
+    if int(util.get_time_of_day(start_date)) == 0 and d_vars['use_day_ahead_schedule'] and d_vars['day_ahead_schedule_from'] == 'calculated':
         schedules.append(None)
 
 
     # Run models
     outputs_total = {}
-    nupdate = int(sim_days*24 / m_vars['dispatch_frequency'])
+    nupdate = int(sim_days*24 / d_vars['dispatch_frequency'])
+    params = m_vars.copy()
+    params.update(d_vars)       # combine mediator and dispatch params
     for j in range(nupdate):
         tod = int(util.get_time_of_day(start_date))
-        dispatch_wrap = DispatchWrap(plant=plant, params=m_vars, data=data)
+        dispatch_wrap = DispatchWrap(plant=plant, params=params, data=data)
 
         # Run dispatch model
         dispatch_outputs = dispatch_wrap.run(
@@ -535,9 +507,9 @@ if __name__ == '__main__':
         if m_vars['is_optimize'] and dispatch_outputs['Rdisp'] is not None:
             D2.update(vars(dispatch_outputs['ssc_dispatch_targets']))
 
-        D2['time_stop'] = int(util.get_time_of_year(start_date)) + int(m_vars['dispatch_frequency']*3600)
+        D2['time_stop'] = int(util.get_time_of_year(start_date)) + int(d_vars['dispatch_frequency']*3600)
         retvars = CaseStudy.default_ssc_return_vars()
-        napply = int(ssc_time_steps_per_hour*m_vars['dispatch_frequency'])                   # Number of ssc time points accepted after each solution 
+        napply = int(ssc_time_steps_per_hour*d_vars['dispatch_frequency'])                   # Number of ssc time points accepted after each solution 
         results, new_plant_state = ssc_wrapper.call_ssc(D2, retvars, plant_state_pt = napply-1, npts = napply)
         
         # Update saved plant state, post model run
@@ -576,7 +548,7 @@ if __name__ == '__main__':
         # TODO: Just remove this? Need to check with Alex first.
         #--------------------------------------------------------------------------------------------
         # Read NVE schedules (if not already read during rolling horizon calculations)
-        if m_vars['is_optimize'] == False and m_vars['use_day_ahead_schedule'] and m_vars['day_ahead_schedule_from'] == 'NVE':
+        if m_vars['is_optimize'] == False and d_vars['use_day_ahead_schedule'] and d_vars['day_ahead_schedule_from'] == 'NVE':
             for j in range(timestep_days):
                 date = datetime.datetime(start_date.year, start_date.month, start_date.day + j)
                 dispatch_outputs['schedules'].append(get_CD_NVE_day_ahead_schedule(date))
@@ -600,10 +572,10 @@ if __name__ == '__main__':
         schedules = dispatch_outputs['schedules']
         current_day_schedule = dispatch_outputs['current_day_schedule']
         next_day_schedule = dispatch_outputs['next_day_schedule']
-        if tod == 0 and m_vars['use_day_ahead_schedule'] and m_vars['day_ahead_schedule_from'] == 'calculated':
+        if tod == 0 and d_vars['use_day_ahead_schedule'] and d_vars['day_ahead_schedule_from'] == 'calculated':
             current_day_schedule = [s for s in next_day_schedule]
             schedules.append(current_day_schedule)
-        start_date += datetime.timedelta(hours=m_vars['dispatch_frequency'])
+        start_date += datetime.timedelta(hours=d_vars['dispatch_frequency'])
         horizon -= int(timestep_days*24*3600)
         ursd_last = dispatch_outputs['ursd_last']
         yrsd_last = dispatch_outputs['yrsd_last']
