@@ -1277,6 +1277,12 @@ class DispatchWrap:
                 Rdisp = None
                 ssc_dispatch_targets = None
 
+        # Read NVE schedules (if not already read during rolling horizon calculations)
+        if self.is_optimize == False and self.use_day_ahead_schedule and self.day_ahead_schedule_from == 'NVE':
+            for j in range(self.sim_days):
+                date = datetime.datetime(self.start_date.year, self.start_date.month, self.start_date.day + j)
+                dispatch_outputs['schedules'].append(get_CD_NVE_day_ahead_schedule(date))
+
         tod = int(util.get_time_of_day(self.start_date))
         if tod == 0 and self.use_day_ahead_schedule and self.day_ahead_schedule_from == 'calculated':
             self.current_day_schedule = [s for s in self.next_day_schedule]
