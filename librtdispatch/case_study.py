@@ -397,7 +397,7 @@ if __name__ == '__main__':
         ground_truth_weather_data = util.update_weather_timestep(ground_truth_weather_data, ssc_time_steps_per_hour)
 
     # Setup plant including calculating flux maps
-    plant = plant_.Plant(design=plant_.plant_design, initial_state=plant_.plant_initial_state)   # Default parameters contain best representation of CD plant and dispatch properties
+    plant = plant_.Plant(design=plant_.plant_design, initial_state=plant_.plant_initial_state_CD)   # Default parameters contain best representation of CD plant and dispatch properties
     if plant.flux_maps['A_sf_in'] == 0.0:
         plant.flux_maps = CaseStudy.simulate_flux_maps(
             plant_design = plant.design,
@@ -454,7 +454,7 @@ if __name__ == '__main__':
     current_forecast_weather_data = None
     schedules = None
     horizon = sim_days*24*3600          # [s]
-    initial_plant_state = util.get_initial_state_from_CD_data(start_date, m_vars['CD_raw_data_direc'], m_vars['CD_processed_data_direc'], plant.design)
+    initial_plant_state = util.get_initial_state_from_CD_data(start_date, m_vars['CD_raw_data_direc'], m_vars['CD_processed_data_direc'], plant.design)     # Returns None
 
 
     # Run models

@@ -3,6 +3,11 @@ sys.path.insert(1, os.path.join(sys.path[0], '..'))
 
 from enum import Enum
 import numpy as np
+try:
+    from mediation import data_validator
+except:
+    from loredash.mediation import data_validator       # if running from case_study.py
+
 #TODO: Implement these for 'rec_op_mode_initial'
 class ReceiverState(Enum):
     OFF = 0
@@ -48,7 +53,7 @@ class Plant:
             'qdot0':                                0.,                                 # Cycle thermal input (MWt)
         }
 
-        self.design.update(design)
+        self.set_design(design)
         self.state.update((k, initial_state[k]) for k in self.state.keys() & initial_state.keys())     # update state using initial_state, but don't add any new keys
         self.set_solar_multiple()
         self.set_heliostat_field(self.design['heliostat_field_file'], delimiter = ',')
@@ -58,6 +63,29 @@ class Plant:
         self.state['T_tank_hot_init'] = self.design['T_htf_hot_des']
         self.state['pc_startup_time_remain_init'] = self.design['startup_time']
         self.state['pc_startup_energy_remain_initial'] = self.design['startup_frac'] * self.get_cycle_thermal_rating() * 1000.
+
+    def set_design(self, design):
+        """
+        Reads a plant configuration from a JSON file or dict, validates the values, then loads them into the respective db table
+        TODO: reinstitute the validation once the plant configuration is more finalized (most likely in a JSON file)
+        """
+
+        # If design is a file path, read plant configuration from a JSON file
+        if isinstance(design, str) and os.path.isfile(design):
+            with open(config_path) as f:
+                plant_config = rapidjson.load(f)
+        elif isinstance(design, dict):
+            plant_config = design.copy()
+        else:
+            raise Exception('Plant configuration not found.')
+        
+        # TODO: reinstitute this once configuration is more finalized:
+        # Validate plant configuration values
+        # validated_plant_config = data_validator.validate(plant_config, data_validator.plant_config_schema)
+
+        # Load plant configuration
+        # self.design.update(validated_plant_config)
+        self.design.update(plant_config)
 
     def set_flux_maps(self, S):
         """ S = dictionary of ssc ouputs """
@@ -142,18 +170,18 @@ class Plant:
     @staticmethod
     def update_persistence(previous_state, S, rec_op_mode_initial, pc_op_mode_initial, ssc_time_step):
         """
-        Calculates:
-            self.disp_rec_persist0
-            self.disp_rec_off0
-            self.disp_pc_persist0
-            self.disp_pc_off0
-
         Inputs:
             previous_state                      previous plant state
             S                                   subset of ssc solution
             rec_op_mode_initial
             pc_op_mode_initial
             ssc_time_step
+
+        Outputs:
+            disp_rec_persist0
+            disp_rec_off0
+            disp_pc_persist0
+            disp_pc_off0
         """
         # TODO: note that this doesn't consider subdivision of time steps
         
@@ -268,13 +296,8 @@ class Plant:
         return state
 
 
-
-
-#################################
-# TODO: Put the following in mediator.py
-#################################
-
-plant_initial_state = {
+# Used just for case study
+plant_initial_state_CD = {
     # Field and receiver:
     'is_field_tracking_init':               False,                              # Is field tracking?
     'rec_op_mode_initial':                  0,                                  # Receiver operating mode
@@ -297,88 +320,32 @@ plant_initial_state = {
     'qdot0':                                0.,                                 # Cycle thermal input (MWt)
 }
 
-#TODO: Implement these more ideal names
-# plant_initial_state = {
-#     # Field and receiver:
-#     'field_is_tracking':                    False,                              # Is field tracking?
-#     'receiver_state':                       0,                                  # Receiver operating mode
-#     'receiver_startup_duration_remaining':  0.,                                 # Receiver startup time remaining (hr)
-#     'receiver_startup_energy_remaining':    0.,                                 # Receiver startup energy remaining (Wh)
-#     'receiver_current_state_duration':      1000.,                              # Time (hr) that receiver has been in its current state
-#     'receiver_duration_not_on':             1000.,                              # Time (hr) that receiver has not been operating (off or startup)
-#     # TES:
-#     'T_tes_tank_cold':                      0.,                                 # Cold tank temperature (C)
-#     'T_tes_tank_hot':                       0.,                                 # Hot tank temperature (C)
-#     'Fill_fraction_hot_tank':               30.,                                # Fraction of available storage in hot tank (%)
-#     # Power cycle:
-#     'cycle_state':                          3,                                  # Initial cycle operating mode (0 = startup, 1 = on, 2 = standby, 3 = off, 4 = startup_controlled)
-#     'cycle_startup_duration_remaining':     0.,                                 # Cycle startup time remaining (hr)
-#     'cycle_startup_energy_remaining':       0.,                                 # Cycle startup energy remaining (kWh)
-#     'cycle_current_state_duration':         1000.,                              # Time (hr) that cycle has been in its current state
-#     'cycle_duration_not_on':                1000.,                              # Time (hr) that cycle has not been generating electric power (off, startup, or standby)
-#     # TODO: these are cycle state variables?:
-#     'W_cycle':                              0.,                                 # Cycle electricity generation (MWe)
-#     'Q_cycle':                              0.,                                 # Cycle thermal input (MWt)
-# }
 
-#TODO: Implement this with the above
-# plant_state_to_ssc_inputs = {    
-#     # Field and receiver
-#     'field_is_tracking':                    'is_field_tracking_init',           # Is field tracking?
-#     'receiver_state':                       'rec_op_mode_initial',              # Receiver operating mode (0 = off, 1 = startup, 2 = on)
-#     'receiver_startup_duration_remaining':  'rec_startup_time_remain_init',     # Receiver startup time remaining (hr)
-#     'receiver_startup_energy_remaining':    'rec_startup_energy_remain_init',   # Receiver startup energy remaining (Wh)
-#     'receiver_current_state_duration':      'disp_rec_persist0',                # Time (hr) that receiver has been in its current state
-#     'receiver_duration_not_on':             'disp_rec_off0',                    # Time (hr) that receiver has not been operating (off or startup)
-    
-#     # TES
-#     'T_tes_tank_cold':                      'T_tank_cold_init',                 # Cold tank temperature (C)
-#     'T_tes_tank_hot':                       'T_tank_hot_init',                  # Hot tank temperature (C)
-#     'Fill_fraction_hot_tank':               'csp_pt_tes_init_hot_htf_percent',  # Fraction of available storage in hot tank (%)
-    
-#     # Power cycle
-#     'cycle_state':                          'pc_op_mode_initial',               # Initial cycle operating mode (0 = startup, 1 = on, 2 = standby, 3 = off, 4 = startup_controlled)
-#     'cycle_startup_duration_remaining':     'pc_startup_time_remain_init',      # Cycle startup time remaining (hr)
-#     'cycle_startup_energy_remaining':       'pc_startup_energy_remain_initial', # Cycle startup energy remaining (kWh)
-#     'cycle_current_state_duration':         'disp_pc_persist0',                 # Time (hr) that cycle has been in its current state
-#     'cycle_duration_not_on':                'disp_pc_off0',                     # Time (hr) that cycle has not been generating electric power (off, startup, or standby)
-#     # TODO: these are state variables?:
-#     'W_cycle':                              'wdot0',                            # Cycle electricity generation (MWe)
-#     'Q_cycle':                              'qdot0'                             # Cycle thermal input (MWt)
-# }
+# NOTE: These are the values of the corresponding outputs after 5 minutes of operation,
+# starting with the PySAM default initialization
+plant_initial_state = {
+    # Field and receiver:
+    'is_field_tracking_init':               0,                                  # Is field tracking?
+    'rec_op_mode_initial':                  0,                                  # Receiver operating mode
+    'rec_startup_time_remain_init':         0.2,                                # Receiver startup time remaining (hr)
+    'rec_startup_energy_remain_init':       167475728,                          # Receiver startup energy remaining (Wh)
+    'disp_rec_persist0':                    1000.,                              # Time (hr) that receiver has been in its current state
+    'disp_rec_off0':                        1000.,                              # Time (hr) that receiver has not been operating (off or startup)
+    # TES:
+    'T_tank_cold_init':                     290.,                               # Cold tank temperature (C)
+    'T_tank_hot_init':                      573.9,                              # Hot tank temperature (C)
+    'csp_pt_tes_init_hot_htf_percent':      25.0,                               # Fraction of available storage in hot tank (%)
+    # Power cycle:
+    'pc_op_mode_initial':                   1,                                  # Initial cycle operating mode (0 = startup, 1 = on, 2 = standby, 3 = off, 4 = startup_controlled)
+    'pc_startup_time_remain_init':          0.,                                 # Cycle startup time remaining (hr)
+    'pc_startup_energy_remain_initial':     0.,                                 # Cycle startup energy remaining (kWh)
+    'disp_pc_persist0':                     1000.,                              # Time (hr) that cycle has been in its current state
+    'disp_pc_off0':                         1000.,                              # Time (hr) that cycle has not been generating electric power (off, startup, or standby)
+    # TODO: these are cycle state variables?:
+    'wdot0':                                0.,                                 # Cycle electricity generation (MWe)
+    'qdot0':                                0.,                                 # Cycle thermal input (MWt)
+}
 
-
-def rename_dict_keys(dictionary, key_map):
-    """
-    Renames in place the keys in dictionary using the key_map. May not preserve dict order.
-
-    key_map -   keys are starting names, values are ending names
-    """
-    for k,v in key_map.items():
-        try:
-            dictionary[v] = dictionary.pop(k)
-        except:
-            pass
-    
-    return
-
-
-def rename_dict_keys_reversed(dictionary, key_map):
-    """
-    Renames in place the keys in dictionary using the key_map, reverse convention. May not preserve dict order.
-
-    key_map -   keys are ending names, values are starting names
-    """
-    for k,v in key_map.items():
-        try:
-            dictionary[k] = dictionary.pop(v)
-        except:
-            pass
-    
-    return
-
-
-# inv_map = {v: k for k, v in my_map.items()}
 
 plant_design = {
     # System
@@ -542,3 +509,54 @@ plant_design = {
     'beta_m':                       -1.76744346976718,
     'beta_mT':                      2.84782141640903
 }
+
+
+#TODO: Implement these more ideal names
+# plant_initial_state = {
+#     # Field and receiver:
+#     'field_is_tracking':                    False,                              # Is field tracking?
+#     'receiver_state':                       0,                                  # Receiver operating mode
+#     'receiver_startup_duration_remaining':  0.,                                 # Receiver startup time remaining (hr)
+#     'receiver_startup_energy_remaining':    0.,                                 # Receiver startup energy remaining (Wh)
+#     'receiver_current_state_duration':      1000.,                              # Time (hr) that receiver has been in its current state
+#     'receiver_duration_not_on':             1000.,                              # Time (hr) that receiver has not been operating (off or startup)
+#     # TES:
+#     'T_tes_tank_cold':                      0.,                                 # Cold tank temperature (C)
+#     'T_tes_tank_hot':                       0.,                                 # Hot tank temperature (C)
+#     'Fill_fraction_hot_tank':               30.,                                # Fraction of available storage in hot tank (%)
+#     # Power cycle:
+#     'cycle_state':                          3,                                  # Initial cycle operating mode (0 = startup, 1 = on, 2 = standby, 3 = off, 4 = startup_controlled)
+#     'cycle_startup_duration_remaining':     0.,                                 # Cycle startup time remaining (hr)
+#     'cycle_startup_energy_remaining':       0.,                                 # Cycle startup energy remaining (kWh)
+#     'cycle_current_state_duration':         1000.,                              # Time (hr) that cycle has been in its current state
+#     'cycle_duration_not_on':                1000.,                              # Time (hr) that cycle has not been generating electric power (off, startup, or standby)
+#     # TODO: these are cycle state variables?:
+#     'W_cycle':                              0.,                                 # Cycle electricity generation (MWe)
+#     'Q_cycle':                              0.,                                 # Cycle thermal input (MWt)
+# }
+
+#TODO: Implement this with the above
+# plant_state_to_ssc_inputs = {    
+#     # Field and receiver
+#     'field_is_tracking':                    'is_field_tracking_init',           # Is field tracking?
+#     'receiver_state':                       'rec_op_mode_initial',              # Receiver operating mode (0 = off, 1 = startup, 2 = on)
+#     'receiver_startup_duration_remaining':  'rec_startup_time_remain_init',     # Receiver startup time remaining (hr)
+#     'receiver_startup_energy_remaining':    'rec_startup_energy_remain_init',   # Receiver startup energy remaining (Wh)
+#     'receiver_current_state_duration':      'disp_rec_persist0',                # Time (hr) that receiver has been in its current state
+#     'receiver_duration_not_on':             'disp_rec_off0',                    # Time (hr) that receiver has not been operating (off or startup)
+    
+#     # TES
+#     'T_tes_tank_cold':                      'T_tank_cold_init',                 # Cold tank temperature (C)
+#     'T_tes_tank_hot':                       'T_tank_hot_init',                  # Hot tank temperature (C)
+#     'Fill_fraction_hot_tank':               'csp_pt_tes_init_hot_htf_percent',  # Fraction of available storage in hot tank (%)
+    
+#     # Power cycle
+#     'cycle_state':                          'pc_op_mode_initial',               # Initial cycle operating mode (0 = startup, 1 = on, 2 = standby, 3 = off, 4 = startup_controlled)
+#     'cycle_startup_duration_remaining':     'pc_startup_time_remain_init',      # Cycle startup time remaining (hr)
+#     'cycle_startup_energy_remaining':       'pc_startup_energy_remain_initial', # Cycle startup energy remaining (kWh)
+#     'cycle_current_state_duration':         'disp_pc_persist0',                 # Time (hr) that cycle has been in its current state
+#     'cycle_duration_not_on':                'disp_pc_off0',                     # Time (hr) that cycle has not been generating electric power (off, startup, or standby)
+#     # TODO: these are state variables?:
+#     'W_cycle':                              'wdot0',                            # Cycle electricity generation (MWe)
+#     'Q_cycle':                              'qdot0'                             # Cycle thermal input (MWt)
+# }

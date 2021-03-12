@@ -437,7 +437,7 @@ def read_NVE_schedule(date, raw_data_direc):
 
 # Get plant state at 12am standard time (1am local time if during DST)
 def get_initial_state_from_CD_data(date, raw_data_direc, processed_data_direc, design):
-    state = plant.plant_initial_state
+    state = plant.plant_initial_state_CD
     
     data = read_CD_data(date, raw_data_direc, processed_data_direc)
     if data is None:
@@ -473,3 +473,36 @@ def salt_cp(T):  # T in K
 
 def salt_density(T): # T in K
     return 2299.4-0.7875*(T) + 2.e-4*(T**2) - 1.e-7*(T**3)
+
+
+def rename_dict_keys(dictionary, key_map):
+    """
+    Renames in place the keys in dictionary using the key_map. May not preserve dict order.
+
+    key_map -   keys are starting names, values are ending names
+    """
+    for k,v in key_map.items():
+        try:
+            dictionary[v] = dictionary.pop(k)
+        except:
+            pass
+    
+    return
+
+
+def rename_dict_keys_reversed(dictionary, key_map):
+    """
+    Renames in place the keys in dictionary using the key_map, reverse convention. May not preserve dict order.
+
+    key_map -   keys are ending names, values are starting names
+    """
+    for k,v in key_map.items():
+        try:
+            dictionary[k] = dictionary.pop(v)
+        except:
+            pass
+    
+    return
+
+
+# inv_map = {v: k for k, v in my_map.items()}
