@@ -392,7 +392,7 @@ plant_design = {
     'solarm':                       None,           # = self.Qrec * self.design_eff / self.P_ref
 
     # Solar field
-    'heliostat_field_file':         'C:/Users/mboyd/Documents/Project Docs/Real-Time_Opt/lore/librtdispatch/input_files/CD_processed/Crescent_Dunes_heliostat_layout.csv',   # TODO: This the field layout with a fixed z-coordinate.
+    'heliostat_field_file':         './input_files/CD_processed/Crescent_Dunes_heliostat_layout.csv',   # TODO: This the field layout with a fixed z-coordinate.
                                                                                                         # Could update to call through SolarPILOT API with actual z-coordinates?
                                                                                                         # (but model validation cases suggest this is not terribly important)
     'helio_positions':              [],
