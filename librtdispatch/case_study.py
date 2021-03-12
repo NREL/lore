@@ -385,6 +385,9 @@ if __name__ == '__main__':
     sim_days = 1
     m_vars = mediator_params.copy()
     d_vars = dispatch.dispatch_wrap_params.copy()
+    params = m_vars.copy()
+    params.update(d_vars)                   # combine mediator and dispatch params
+    params['start_date'] = start_date       # needed for initializing schedules
     timestep_days = d_vars['dispatch_frequency']/24.
     ssc_time_steps_per_hour = m_vars['time_steps_per_hour']
     disp_soln_tracking = []
@@ -460,9 +463,6 @@ if __name__ == '__main__':
     # Run models
     outputs_total = {}
     nupdate = int(sim_days*24 / d_vars['dispatch_frequency'])
-    params = m_vars.copy()
-    params.update(d_vars)                   # combine mediator and dispatch params
-    params['start_date'] = start_date       # needed for initializing schedules
     for j in range(nupdate):
         dispatch_wrap = DispatchWrap(plant=plant, params=params, data=data)
 
