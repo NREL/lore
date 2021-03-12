@@ -12,6 +12,38 @@ import util
 import ssc_wrapper
 import dispatch_model
 
+
+dispatch_wrap_params = {
+    # Dispatch optimization
+	'dispatch_frequency':			        1,                      # Frequency of dispatch re-optimization (hr)
+	'dispatch_weather_horizon':		        2,                      # Time point in hours (relative to start of optimization horizon) defining the transition from actual weather to forecasted weather used in the dispatch model. Set to 0 to use forecasts for the full horizon, set to -1 to use actual weather for the full horizon, or any value > 0 to combine actual/forecasted weather
+    'dispatch_horizon':                     48.,                    # Dispatch time horizon (hr) 
+    'dispatch_horizon_update':              24.,                    # Frequency of dispatch time horizon update (hr) -> set to the same value as dispatch_frequency for a fixed-length horizon 
+    'dispatch_steplength_array':            [5, 15, 60],            # Dispatch time step sizes (min)
+    'dispatch_steplength_end_time':         [1, 4, 48],             # End time for dispatch step lengths (hr)
+    'nonlinear_model_time':                 4.0,                    # Amount of time to apply nonlinear dispatch model (hr) (not currently used)
+    'disp_time_weighting':                  0.999,                  # Dispatch time weighting factor. 
+    'use_linear_dispatch_at_night':         False,                  # Revert to the linear dispatch model when all of the time-horizon in the nonlinear model is at night.
+    'night_clearsky_cutoff':                100.,                   # Cutoff value for clear-sky DNI defining "night"
+
+    # Weather forecasts
+	'forecast_issue_time':			        16,                     # Time at which weather forecast is issued (hr, 0-23), assumed to be in standard time.  Forecasts issued at midnight UTC 
+	'forecast_steps_per_hour':		        1,                      # Number of time steps per hour in weather forecasts
+    'forecast_update_frequency':            24,                     # Weather forecast update interval (hr)
+
+    # Day-ahead schedule targets
+	'use_day_ahead_schedule':		        True,                   # Use day-ahead generation targets
+	'day_ahead_schedule_from':		        'calculated',           # 'calculated' = calculate day-ahead schedule during solution, 'NVE'= use NVE-provided schedule for CD
+	'day_ahead_schedule_time':		        10,                     # Time of day at which day-ahead schedule is due (hr, 0-23), assumed to be in standard time
+	'day_ahead_schedule_steps_per_hour':    1,                      # Time resolution of day-ahead schedule
+    'day_ahead_pen_plus':                   500,                    # Penalty for over-generation relative to day-ahead schedule ($/MWhe)
+    'day_ahead_pen_minus':                  500,                    # Penalty for under-generation relative to day-ahead schedule ($/MWhe)
+    'day_ahead_tol_plus':                   5,                      # Tolerance for over-production relative to day-ahead schedule before incurring penalty (MWhe)
+    'day_ahead_tol_minus':                  5,                      # Tolerance for under-production relative to day-ahead schedule before incurring penalty (MWhe)
+    'day_ahead_ignore_off':                 True,                   # Don't apply schedule penalties when cycle is scheduled to be off for the full hour (MWhe)
+}
+
+
 class DispatchParams:
     def __init__(self):
         
