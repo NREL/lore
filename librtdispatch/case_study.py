@@ -103,8 +103,8 @@ class Revenue:
     
     # Calculate penalty for missing day-ahead schedule (assuming day-ahead schedule step is 1-hour for now)
     @staticmethod
-    def calculate_day_ahead_penalty(sim_days, schedules, P_out_net, params, disp_soln_tracking, 
-        disp_params_tracking, disp_net_electrical_output=None):
+    def calculate_day_ahead_penalty(sim_days, schedules, P_out_net, params, disp_soln_tracking=[], 
+        disp_params_tracking=[], disp_net_electrical_output=None):
         """
         Inputs:
             sim_days
@@ -389,8 +389,6 @@ if __name__ == '__main__':
     params['start_date'] = start_date       # needed for initializing schedules
     timestep_days = d_vars['dispatch_frequency']/24.
     ssc_time_steps_per_hour = m_vars['time_steps_per_hour']
-    disp_soln_tracking = []
-    disp_params_tracking = []
 
 
     # Data - get historical weather
@@ -536,7 +534,7 @@ if __name__ == '__main__':
         # Calculate post-simulation financials
         revenue = Revenue.calculate_revenue(start_date, timestep_days, results['P_out_net'], m_vars, data)
         day_ahead_penalties = Revenue.calculate_day_ahead_penalty(timestep_days, dispatch_outputs['schedules'],
-            results['P_out_net'], m_vars, disp_soln_tracking, disp_params_tracking)
+            results['P_out_net'], m_vars)
         startup_ramping_penalties = Revenue.calculate_startup_ramping_penalty(
             plant_design=plant.design,
             q_startup=results['q_startup'],
