@@ -446,35 +446,25 @@ if __name__ == '__main__':
 
 
     # Dispatch inputs
+    ursd_last = None
+    yrsd_last = None
+    weather_data_for_dispatch = None
+    current_day_schedule = None
+    next_day_schedule = None
+    current_forecast_weather_data = None
+    schedules = None
     horizon = sim_days*24*3600          # [s]
-    ursd_last = 0
-    yrsd_last = 0  
-    weather_data_for_dispatch = util.create_empty_weather_data(ground_truth_weather_data, ssc_time_steps_per_hour)
-    current_day_schedule = np.zeros(24*d_vars['day_ahead_schedule_steps_per_hour'])
-    next_day_schedule = np.zeros(24*d_vars['day_ahead_schedule_steps_per_hour'])
     initial_plant_state = util.get_initial_state_from_CD_data(start_date, m_vars['CD_raw_data_direc'], m_vars['CD_processed_data_direc'], plant.design)
-    current_forecast_weather_data = DispatchWrap.update_forecast_weather_data(
-                date=start_date - datetime.timedelta(hours = 24-d_vars['forecast_issue_time']),
-                current_forecast_weather_data=util.create_empty_weather_data(ground_truth_weather_data, ssc_time_steps_per_hour),
-                ssc_time_steps_per_hour=ssc_time_steps_per_hour,
-                forecast_steps_per_hour=d_vars['forecast_steps_per_hour'],
-                ground_truth_weather_data=ground_truth_weather_data,
-                forecast_issue_time=d_vars['forecast_issue_time'],
-                day_ahead_schedule_time=d_vars['day_ahead_schedule_time'],
-                clearsky_data=clearsky_data
-                )
-    schedules = []
-    if int(util.get_time_of_day(start_date)) == 0 and d_vars['use_day_ahead_schedule'] and d_vars['day_ahead_schedule_from'] == 'calculated':
-        schedules.append(None)
 
 
     # Run models
     outputs_total = {}
     nupdate = int(sim_days*24 / d_vars['dispatch_frequency'])
     params = m_vars.copy()
-    params.update(d_vars)       # combine mediator and dispatch params
+    params.update(d_vars)                   # combine mediator and dispatch params
+    params['start_date'] = start_date       # needed for initializing schedules
     for j in range(nupdate):
-        tod = int(util.get_time_of_day(start_date))
+        # tod = int(util.get_time_of_day(start_date))
         dispatch_wrap = DispatchWrap(plant=plant, params=params, data=data)
 
         # Run dispatch model
@@ -573,9 +563,9 @@ if __name__ == '__main__':
         schedules = dispatch_outputs['schedules']
         current_day_schedule = dispatch_outputs['current_day_schedule']
         next_day_schedule = dispatch_outputs['next_day_schedule']
-        if tod == 0 and d_vars['use_day_ahead_schedule'] and d_vars['day_ahead_schedule_from'] == 'calculated':
-            current_day_schedule = [s for s in next_day_schedule]
-            schedules.append(current_day_schedule)
+        # if tod == 0 and d_vars['use_day_ahead_schedule'] and d_vars['day_ahead_schedule_from'] == 'calculated':
+        #     current_day_schedule = [s for s in next_day_schedule]
+        #     schedules.append(current_day_schedule)
         start_date += datetime.timedelta(hours=d_vars['dispatch_frequency'])
         horizon -= int(timestep_days*24*3600)
         ursd_last = dispatch_outputs['ursd_last']
