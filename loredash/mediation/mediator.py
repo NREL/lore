@@ -11,6 +11,7 @@ from mediation import data_validator, pysam_wrap, models
 import pandas as pd
 from mediation.models import PlantConfig
 import rapidjson
+import mediation.plant as plant_
 # import models
 
 class Mediator:
@@ -225,14 +226,22 @@ class Mediator:
 class Plant:
     @staticmethod
     def LoadPlantConfig(config_path):
+        ###
+        ### NOTE: This has been migrated to plant.Plant::set_design(), minus the db table, which is being removed
+        ###
+
+        """Reads a plant configuration from a JSON file or dict, validates the values, then loads them into the respective db table"""
+        # Read plant configuration from a JSON file
         if isinstance(config_path, str) and os.path.isfile(config_path):
             with open(config_path) as f:
                 plant_config = rapidjson.load(f)
         else:
-            raise Exception('Plant configuration file not found.')
-            
+            raise Exception('Plant configuration not found.')
+        
+        # Validate plant configuration values
         validated_outputs = data_validator.validate(plant_config, data_validator.plant_config_schema)
 
+        # Load plant configuration into a Django db table
         plant_config_table = PlantConfig()
         plant_config_table.name = plant_config['name']
         plant_config_table.save()
@@ -241,6 +250,9 @@ class Plant:
 
     @staticmethod
     def LoadPlantLocation(plant_location, validate=True):
+        # TODO: Just remove this, as we're not using a db table for this any longer
+
+        """Optionally validates and then loads a plant configuration dict into the respective db table"""
         if validate == True:
             plant_location = data_validator.validate(plant_location, data_validator.plant_location_schema)
 
@@ -254,6 +266,9 @@ class Plant:
 
     @staticmethod
     def GetPlantConfig():
+        # TODO: Just remove this, as we're not using a db table for this any longer
+
+        """Retrieves the plant configuration (dict) from the respective db table"""
         result = list(PlantConfig.objects.filter(site_id=settings.SITE_ID).values())[0]
         result['location'] = {}
         result['location']['latitude'] = result.pop('latitude')
@@ -265,12 +280,18 @@ class Plant:
 
     @staticmethod
     def GetPlantState(validated_outputs_prev, **kwargs):
-        """put virtual/real call here instead"""
+        # TODO: remove this function, no longer needed
+
+
+        """
+        Extract the plant state from the simulated results and return as dict
+        -put virtual/real call here instead
+        """
         assert 'pysam_wrap' in kwargs
         pysam_wrap = kwargs.get('pysam_wrap')
         plant_state = pysam_wrap.GetSimulatedPlantState(validated_outputs_prev)      # for initializing next simulation from a prior one
         if plant_state is None:
-            plant_state = pysam_wrap.GetDefaultPlantState()
+            plant_state = plant_.plant_initial_state
         return plant_state    
 
 

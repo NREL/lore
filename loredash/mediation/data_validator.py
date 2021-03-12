@@ -1,7 +1,12 @@
 from django.conf import settings
+import sys, os
+sys.path.insert(1, os.path.join(sys.path[0], '..'))
 
-from mediation import nested_inputs
 from voluptuous import Schema, Required, Optional, Range, And, Or, DefaultTo, SetTo, Any, Coerce, Maybe, ALLOW_EXTRA, All, REMOVE_EXTRA, Number, Invalid
+try:
+    from mediation import nested_inputs
+except:
+    from loredash.mediation import nested_inputs    # if running from case_study.py
 
 kBigNumber = 1.0e10
 kEpsilon = 1.0e-10
@@ -43,7 +48,10 @@ def validate(values, schema, **kwargs):
         - Python NaN is created by float("NaN") and can be tested for using math.isnan()
     """
 
-    update = settings.DEBUG    # don't let missing required variables cause a failure while debugging
+    try:
+        update = settings.DEBUG    # don't let missing required variables cause a failure while debugging
+    except:
+        update = True       # set to true if not calling from Django framework
 
     validated_values = schema(values)
     sorted(validated_values)      # sort keys alphabetically

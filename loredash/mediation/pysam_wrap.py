@@ -8,6 +8,7 @@ import PySAM_DAOTk.TcsmoltenSalt as t
 import PySAM_DAOTk.Singleowner as s
 from mediation import data_validator
 from mediation import mediator
+import mediation.plant as plant_
 
 class PysamWrap:
     parent_dir = str(Path(__file__).parents[1])
@@ -73,7 +74,7 @@ class PysamWrap:
             self.tech_model.HeliostatField.eta_map_aod_format = False
 
         if plant_state is None:
-            plant_state = PysamWrap.GetDefaultPlantState()
+            plant_state = plant_.plant_initial_state
         result = self._SetPlantState(plant_state)
         result = self.SetWeatherData(weather_dataframe=weather_dataframe, solar_resource_data=solar_resource_data)
 
@@ -178,27 +179,9 @@ class PysamWrap:
         'T_tank_hot_init':                      'T_tes_hot',
         'T_tank_cold_init':                     'T_tes_cold',
         'csp_pt_tes_init_hot_htf_percent':      'hot_tank_htf_percent_final',       # in SSC this variable is named csp.pt.tes.init_hot_htf_percent
+        'wdot0':                                'P_cycle',
+        'qdot0':                                'q_pb',
         }
-
-    @staticmethod
-    def GetDefaultPlantState():
-        # NOTE: These are the values of the corresponding outputs after 5 minutes of operation,
-        # starting with the PySAM default initialization
-        default_plant_state = {
-            'pc_op_mode_initial':                   1.,
-            'pc_startup_time_remain_init':          0.,
-            'pc_startup_energy_remain_initial':     0.,
-            'is_field_tracking_init':               0.,
-            'rec_op_mode_initial':                  0.,
-            'rec_startup_time_remain_init':         0.2,
-            'rec_startup_energy_remain_init':       167475728,
-            'T_tank_hot_init':                      573.9,
-            'T_tank_cold_init':                     290.0,
-            'csp_pt_tes_init_hot_htf_percent':      25.0,
-        }
-
-        assert set(default_plant_state.keys()) == set(PysamWrap.GetPlantStateIoMap().keys())  # Verify all state values are set
-        return default_plant_state
 
     def SetWeatherData(self, tmy_file_path=None, solar_resource_data=None, weather_dataframe=None):
         """solar_resource_data is used instead of the TMY file if solar_resource_data is assigned"""

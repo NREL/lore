@@ -306,6 +306,7 @@ class Plant:
 
         return
 
+
     def get_location(self):
         location = {
             'latitude':     self.design['latitude'],
@@ -355,7 +356,7 @@ plant_design = {
     "latitude":                     38.23895540732931,
     "longitude":                    -117.36368180656123,
     "elevation":                    1524,
-    "timezone":                     -8,
+    "timezone":                     -8, 
 
     # System
     'T_htf_cold_des':               290.0,          # C
