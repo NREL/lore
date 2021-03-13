@@ -19,6 +19,7 @@ from django.conf import settings
 from django.conf.urls.static import static
 from pathlib import Path
 from mediation import mediator
+import mediation.plant as plant_
 import multiprocessing
 import datetime
 # TODO(odow): the purpose of this code is to populate the database so we have
@@ -49,6 +50,7 @@ try:
 except Exception as err:
     print("Oops! Migration failed because we don't have a database yet. Try running that command again.")
     pass
+
 
 # This is the main production code where the mediator runs continuously
 # update_interval = 10     # seconds

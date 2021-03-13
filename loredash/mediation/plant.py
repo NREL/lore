@@ -130,7 +130,6 @@ class Plant:
         df_out = df[datetime_start:(datetime_start + duration - timestep)]
         return list(df_out['field_availability'])
 
-
     def get_cycle_thermal_rating(self):
         return self.design['P_ref'] / self.design['design_eff']     # MW
     
@@ -370,8 +369,8 @@ plant_design = {
 
     # Solar field
     'heliostat_field_file':         '../../librtdispatch/input_files/default_layout.csv',   # TODO: This the field layout with a fixed z-coordinate.
-                                                                                                        # Could update to call through SolarPILOT API with actual z-coordinates?
-                                                                                                        # (but model validation cases suggest this is not terribly important)
+                                                                                                    # Could update to call through SolarPILOT API with actual z-coordinates?
+                                                                                                    # (but model validation cases suggest this is not terribly important)
     'helio_positions':              [],
     'N_hel':                        0,
     'helio_height':                 12.2,          # m

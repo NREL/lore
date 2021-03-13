@@ -39,7 +39,7 @@ class PysamWrap:
 
         if not self._WeatherFileIsSet():
             solar_resource_data = PysamWrap.GetSolarResourceDataTemplate(
-                plant_location = mediator.Plant.GetPlantConfig()['location']
+                plant_location = mediator.plant.get_location()
             )
         else:
             solar_resource_data = None
@@ -75,7 +75,7 @@ class PysamWrap:
 
         if plant_state is None:
             plant_state = plant_.plant_initial_state
-        result = self._SetPlantState(plant_state)
+        result = self._SetTechModelParams(plant_state)
         result = self.SetWeatherData(weather_dataframe=weather_dataframe, solar_resource_data=solar_resource_data)
 
         # set times:
@@ -153,34 +153,17 @@ class PysamWrap:
         return solar_resource_data
 
     @staticmethod
+    # NOTE: not currently used. See dispatch.DispatchTargets, which is used instead. Not sure if this mapping is still useful.
     def GetPlantSchedulesIoMap():
         return {
         # Array Inputs                          # Array Outputs
-        'q_pc_max_in':                          'q_dot_pc_max',
-        'is_rec_su_allowed_in':                 'is_rec_su_allowed',
-        'is_pc_su_allowed_in':                  'is_pc_su_allowed',
-        'is_pc_sb_allowed_in':                  'is_pc_sb_allowed',
         'q_pc_target_su_in':                    'q_dot_pc_target_su',
         'q_pc_target_on_in':                    'q_dot_pc_target_on',
-        }
-
-    @staticmethod
-    def GetPlantStateIoMap():
-        return {
-        # Last value in array output becomes number input?
-        # Number Inputs                         # Arrays Outputs
-        'pc_op_mode_initial':                   'pc_op_mode_final',
-        'pc_startup_time_remain_init':          'pc_startup_time_remain_final',
-        'pc_startup_energy_remain_initial':     'pc_startup_energy_remain_final',
-        'is_field_tracking_init':               'is_field_tracking_final',
-        'rec_op_mode_initial':                  'rec_op_mode_final',
-        'rec_startup_time_remain_init':         'rec_startup_time_remain_final',
-        'rec_startup_energy_remain_init':       'rec_startup_energy_remain_final',
-        'T_tank_hot_init':                      'T_tes_hot',
-        'T_tank_cold_init':                     'T_tes_cold',
-        'csp_pt_tes_init_hot_htf_percent':      'hot_tank_htf_percent_final',       # in SSC this variable is named csp.pt.tes.init_hot_htf_percent
-        'wdot0':                                'P_cycle',
-        'qdot0':                                'q_pb',
+        'q_pc_max_in':                          'q_dot_pc_max',
+        'is_rec_su_allowed_in':                 'is_rec_su_allowed',
+        'is_rec_sb_allowed_in':                 '?',    # what is this one?
+        'is_pc_su_allowed_in':                  'is_pc_su_allowed',
+        'is_pc_sb_allowed_in':                  'is_pc_sb_allowed',
         }
 
     def SetWeatherData(self, tmy_file_path=None, solar_resource_data=None, weather_dataframe=None):
@@ -218,8 +201,26 @@ class PysamWrap:
         strip_zeros = Strip zeroes from a partial-year simulation?
         times = {'time_start' [s], 'time_stop' [s], 'time_steps_per_hour' [1/hr]}
         Returns:
-        Dictionary of numbers with the same keys as pysam_wrap::GetPlantStateIoMap()
+        Dictionary of numbers with the same keys as GetPlantStateIoMap()
         '''
+
+        def GetPlantStateIoMap():
+            return {
+            # Last value in array output becomes number input?
+            # Number Inputs                         # Arrays Outputs
+            'pc_op_mode_initial':                   'pc_op_mode_final',
+            'pc_startup_time_remain_init':          'pc_startup_time_remain_final',
+            'pc_startup_energy_remain_initial':     'pc_startup_energy_remain_final',
+            'is_field_tracking_init':               'is_field_tracking_final',
+            'rec_op_mode_initial':                  'rec_op_mode_final',
+            'rec_startup_time_remain_init':         'rec_startup_time_remain_final',
+            'rec_startup_energy_remain_init':       'rec_startup_energy_remain_final',
+            'T_tank_hot_init':                      'T_tes_hot',
+            'T_tank_cold_init':                     'T_tes_cold',
+            'csp_pt_tes_init_hot_htf_percent':      'hot_tank_htf_percent_final',       # in SSC this variable is named csp.pt.tes.init_hot_htf_percent
+            'wdot0':                                'P_cycle',
+            'qdot0':                                'q_pb',
+            }
 
         if model_outputs is None: return None
 
@@ -230,7 +231,7 @@ class PysamWrap:
                 print("Trailing zeroes could not be stripped. Plant state may be invalid.")
 
         try:
-            plant_state_io_map = PysamWrap.GetPlantStateIoMap()
+            plant_state_io_map = GetPlantStateIoMap()
             plant_state = {k:model_outputs[v][-1] for (k, v) in plant_state_io_map.items()}      # return last value in each list
         except:
             plant_state = None
@@ -307,7 +308,7 @@ class PysamWrap:
             self.tech_model.HeliostatField.field_model_type = 3      # using user-defined flux and efficiency parameters
             return 0
 
-    def _SetPlantState(self, plant_state):
+    def _SetTechModelParams(self, plant_state):
         try:
             for key in plant_state:
                 self.tech_model.value(key, plant_state[key])

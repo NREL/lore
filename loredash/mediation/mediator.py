@@ -19,7 +19,7 @@ class Mediator:
     validated_outputs_prev = None
     default_pysam_model = "MSPTSingleOwner"
 
-    def __init__(self, plant_config_path=None, override_with_weather_file_location=False,
+    def __init__(self, plant_design, override_with_weather_file_location=False,
                  weather_file=None, preprocess_pysam=True, preprocess_pysam_on_init=True,
                  update_interval=datetime.timedelta(seconds=5), simulation_timestep=datetime.timedelta(minutes=5)):
         self.override_with_weather_file_location = override_with_weather_file_location
@@ -38,26 +38,25 @@ class Mediator:
             # TODO: Change so it's triggered by the user instead of an automatic initialization
             Plant.LoadPlantConfig(plant_config_path)
 
-        if plant_config_path is None:
-            # Verify plant configuration in database
-            try:
-                data_validator.validate(Plant.GetPlantConfig(), data_validator.plant_config_schema)
-            except Exception as err:
-                raise(err)  # just re-raise for now
-        else:
-            # TODO: Change so it's triggered by the user instead of an automatic initialization
-            Plant.LoadPlantConfig(plant_config_path)
+        #TODO: reinstitute this validation
+        # Instantiate plant, first validating plant design
+        # try:
+        #     data_validator.validate(plant_design, data_validator.plant_config_schema)
+        # except Exception as err:
+        #     raise(err)  # just re-raise for now
+
+        self.plant = plant_.Plant(plant_design, plant_.plant_initial_state)
 
         if weather_file is not None and override_with_weather_file_location == True:
-            plant_location = GetLocationFromWeatherFile(weather_file)
-            Plant.LoadPlantLocation(plant_location)
+            self.plant.set_location(GetLocationFromWeatherFile(weather_file))
 
-        # TODO: remove plant_config parameter and get from database instead
+
         self.pysam_wrap = pysam_wrap.PysamWrap(model_name=self.default_pysam_model,
                                                load_defaults=True,
                                                weather_file=None,
                                                enable_preprocessing=self.preprocess_pysam,
                                                preprocess_on_init=self.preprocess_pysam_on_init)
+
     
     def RunOnce(self, datetime_start=None, datetime_end=None):
         """
@@ -124,11 +123,13 @@ class Mediator:
 
         # a. Set weather values and plant state for PySAM
         weather_dataframe = self.GetWeatherDataframe(datetime_start, datetime_end, tmy3_path=self.weather_file)
-        plant_state = Plant.GetPlantState(self.validated_outputs_prev, pysam_wrap=self.pysam_wrap)
         
         # b. Call PySAM using inputs
-        tech_outputs = self.pysam_wrap.Simulate(datetime_start, datetime_end, self.simulation_timestep, plant_state, weather_dataframe=weather_dataframe)
+        tech_outputs = self.pysam_wrap.Simulate(datetime_start, datetime_end, self.simulation_timestep, self.plant.state, weather_dataframe=weather_dataframe)
         print("Annual Energy [kWh]= ", tech_outputs["annual_energy"])
+
+        new_plant_state_vars = self.pysam_wrap.GetSimulatedPlantState(tech_outputs)      # for initializing next simulation from a prior one
+        self.plant.update_state(tech_outputs, new_plant_state_vars, self.simulation_timestep.seconds/3600)
 
         # c. Validate these data
         # wanted_keys = ['time_hr', 'e_ch_tes', 'eta_therm', 'eta_field', 'P_out_net', 'tou_value', 'gen', 'q_dot_rec_inc', 'q_sf_inc', 'pricing_mult', 'beam']

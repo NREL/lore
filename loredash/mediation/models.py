@@ -28,6 +28,8 @@ class PysamData(models.Model):                                                  
 #   https://stackoverflow.com/a/4888467                         (I can't get this idea to work)
 #   https://docs.djangoproject.com/en/3.1/ref/contrib/sites/    (more background on the 'sites' framework)
 #   https://djangopackages.org/grids/g/live-setting/            (Django-Constance looks good, but maybe overkill?)
+
+# NOTE: this table is not currently being used, but left here as an example/template
 class PlantConfig(models.Model):
     site_id = models.IntegerField(default=settings.SITE_ID, primary_key=True)
     name = models.CharField(max_length=255, verbose_name="Plant name", default='plant_name')                        # max_length of 255 is a safe constraint
