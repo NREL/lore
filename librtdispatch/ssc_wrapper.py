@@ -4,6 +4,7 @@ sys.path.insert(1, os.path.join(sys.path[0], '..'))
 import PySSC as api
 import copy
 import numpy as np
+import timeit
 
 import util
 import dispatch
@@ -145,3 +146,31 @@ def set_from_ssc(sscapi, sscdata, t):
         state[k] = array[t]
     
     return state
+
+
+def simulate_flux_maps(plant_design, ssc_time_steps_per_hour, ground_truth_weather_data):
+        """
+        Outputs:
+            A_sf_in
+            eta_map
+            flux_maps
+        """
+
+        print ('Simulating flux maps')
+        start = timeit.default_timer()
+        D = plant_design.copy()
+        D['time_steps_per_hour'] = ssc_time_steps_per_hour
+        D['solar_resource_data'] = ground_truth_weather_data
+        D['time_start'] = 0.0
+        D['time_stop'] = 1.0*3600  
+        D['field_model_type'] = 2
+        # if self.is_debug:
+        #     D['delta_flux_hrs'] = 4
+        #     D['n_flux_days'] = 2
+        R, state = call_ssc(D, ['eta_map_out', 'flux_maps_for_import', 'A_sf'])
+        print('Time to simulate flux maps = %.2fs'%(timeit.default_timer() - start))
+        # return flux_maps
+        A_sf_in = R['A_sf']
+        eta_map = R['eta_map_out']
+        flux_maps = [x[2:] for x in R['flux_maps_for_import']]
+        return {'A_sf_in': A_sf_in, 'eta_map': eta_map, 'flux_maps': flux_maps}

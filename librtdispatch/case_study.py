@@ -264,36 +264,6 @@ class Revenue:
 
 class CaseStudy:   
 
-    #--- Simulate flux maps
-    @staticmethod
-    def simulate_flux_maps(plant_design, ssc_time_steps_per_hour, ground_truth_weather_data):
-        """
-        Outputs:
-            A_sf_in
-            eta_map
-            flux_maps
-        """
-
-        print ('Simulating flux maps')
-        start = timeit.default_timer()
-        D = plant_design.copy()
-        D['time_steps_per_hour'] = ssc_time_steps_per_hour
-        D['solar_resource_data'] = ground_truth_weather_data
-        D['time_start'] = 0.0
-        D['time_stop'] = 1.0*3600  
-        D['field_model_type'] = 2
-        # if self.is_debug:
-        #     D['delta_flux_hrs'] = 4
-        #     D['n_flux_days'] = 2
-        R, state = ssc_wrapper.call_ssc(D, ['eta_map_out', 'flux_maps_for_import', 'A_sf'])
-        print('Time to simulate flux maps = %.2fs'%(timeit.default_timer() - start))
-        # return flux_maps
-        A_sf_in = R['A_sf']
-        eta_map = R['eta_map_out']
-        flux_maps = [x[2:] for x in R['flux_maps_for_import']]
-        return {'A_sf_in': A_sf_in, 'eta_map': eta_map, 'flux_maps': flux_maps}
-
-
     @staticmethod
     def reupdate_ssc_constants(D, params, data):
         D['solar_resource_data'] = data['solar_resource_data']
@@ -399,7 +369,7 @@ if __name__ == '__main__':
     # Setup plant including calculating flux maps
     plant = plant_.Plant(design=plant_.plant_design, initial_state=plant_.plant_initial_state_CD)   # Default parameters contain best representation of CD plant and dispatch properties
     if plant.flux_maps['A_sf_in'] == 0.0:
-        plant.flux_maps = CaseStudy.simulate_flux_maps(
+        plant.flux_maps = ssc_wrapper.simulate_flux_maps(
             plant_design = plant.design,
             ssc_time_steps_per_hour = ssc_time_steps_per_hour,
             ground_truth_weather_data = ground_truth_weather_data
