@@ -109,7 +109,7 @@ def call_ssc(D, retvars = ['gen'], plant_state_pt = -1, npts = None):
             R[k] = np.array(R[k])
                 
     # Save plant state at designated time point
-    plant_state = plant.Plant.set_from_ssc(ssc, dat, plant_state_pt)
+    plant_state = set_from_ssc(ssc, dat, plant_state_pt)
     
     ssc.module_free(mspt)
     ssc.data_free(dat)   
@@ -117,3 +117,31 @@ def call_ssc(D, retvars = ['gen'], plant_state_pt = -1, npts = None):
     return R, plant_state
 
 
+# Set plant state from ssc data structure using conditions at time index t (relative to start of simulation)
+def set_from_ssc(sscapi, sscdata, t):
+    # Plant state input/output variable name map (from pysam_wrap.py in LORE/loredash/mediation)
+    plant_state_io_map = { # Number Inputs                         # Arrays Outputs
+                        'pc_op_mode_initial':                   'pc_op_mode_final',
+                        'pc_startup_time_remain_init':          'pc_startup_time_remain_final',
+                        'pc_startup_energy_remain_initial':     'pc_startup_energy_remain_final',
+                        'is_field_tracking_init':               'is_field_tracking_final',
+                        'rec_op_mode_initial':                  'rec_op_mode_final',
+                        'rec_startup_time_remain_init':         'rec_startup_time_remain_final',
+                        'rec_startup_energy_remain_init':       'rec_startup_energy_remain_final',
+                        'T_tank_hot_init':                      'T_tes_hot',
+                        'T_tank_cold_init':                     'T_tes_cold',
+                        'csp_pt_tes_init_hot_htf_percent':      'hot_tank_htf_percent_final',       # in SSC this variable is named csp.pt.tes.init_hot_htf_percent
+                        
+                        # Variables for dispatch model (note these are not inputs for ssc)
+                        # Number Inputs for dispatch,            # Array outputs 
+                        'wdot0':                                 'P_cycle',  # TODO: Output arrays for P_cycle and q_pb aretime-step averages. Should create new output in ssc for value at end of timestep -  but not very important for short timesteps used here
+                        'qdot0':                                 'q_pb',
+                        }
+    
+    state = {}
+    for k in plant_state_io_map.keys():
+        kout = plant_state_io_map[k]
+        array = sscapi.data_get_array(sscdata, kout.encode('utf-8'))
+        state[k] = array[t]
+    
+    return state

@@ -238,7 +238,7 @@ class Plant:
                 is_rec_current = (np.array(cycle_results['Q_thermal']) + np.array(cycle_results['q_startup'])) <= 1.e-3
 
             n = len(cycle_results['Q_thermal'])
-            if n == 1 or np.abs(np.diff(is_rec_current)).max() == 0:  # Receiver did not change state over this simulation window:
+            if n == 1 or np.abs(np.diff(is_rec_current)).max() == 0:  # Receiver did not change state over this simulation window
                 disp_rec_persist0 = n*ssc_time_step if previous_rec_state != current_rec_state else self.state['disp_rec_persist0'] + n*ssc_time_step
             else:
                 i = np.where(np.abs(np.diff(is_rec_current)) == 1)[0][-1]
