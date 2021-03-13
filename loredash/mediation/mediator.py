@@ -19,7 +19,7 @@ class Mediator:
     validated_outputs_prev = None
     default_pysam_model = "MSPTSingleOwner"
 
-    def __init__(self, plant_config_path=None, override_with_weather_file_location=False,
+    def __init__(self, plant_design, override_with_weather_file_location=False,
                  weather_file=None, preprocess_pysam=True, preprocess_pysam_on_init=True,
                  update_interval=datetime.timedelta(seconds=5), simulation_timestep=datetime.timedelta(minutes=5)):
         self.override_with_weather_file_location = override_with_weather_file_location
@@ -29,26 +29,25 @@ class Mediator:
         self.update_interval = update_interval
         self.simulation_timestep = simulation_timestep
 
-        if plant_config_path is None:
-            # Verify plant configuration in database
-            try:
-                data_validator.validate(Plant.GetPlantConfig(), data_validator.plant_config_schema)
-            except Exception as err:
-                raise(err)  # just re-raise for now
-        else:
-            # TODO: Change so it's triggered by the user instead of an automatic initialization
-            Plant.LoadPlantConfig(plant_config_path)
+        #TODO: reinstitute this validation
+        # Instantiate plant, first validating plant design
+        # try:
+        #     data_validator.validate(plant_design, data_validator.plant_config_schema)
+        # except Exception as err:
+        #     raise(err)  # just re-raise for now
+
+        self.plant = plant_.Plant(plant_design, plant_.plant_initial_state)
 
         if weather_file is not None and override_with_weather_file_location == True:
-            plant_location = GetLocationFromWeatherFile(weather_file)
-            Plant.LoadPlantLocation(plant_location)
+            self.plant.set_location(GetLocationFromWeatherFile(weather_file))
 
-        # TODO: remove plant_config parameter and get from database instead
+
         self.pysam_wrap = pysam_wrap.PysamWrap(model_name=self.default_pysam_model,
                                                load_defaults=True,
                                                weather_file=None,
                                                enable_preprocessing=self.preprocess_pysam,
                                                preprocess_on_init=self.preprocess_pysam_on_init)
+
     
     def RunOnce(self, datetime_start=None, datetime_end=None):
         """
@@ -115,11 +114,13 @@ class Mediator:
 
         # a. Set weather values and plant state for PySAM
         weather_dataframe = self.GetWeatherDataframe(datetime_start, datetime_end, tmy3_path=self.weather_file)
-        plant_state = Plant.GetPlantState(self.validated_outputs_prev, pysam_wrap=self.pysam_wrap)
         
         # b. Call PySAM using inputs
-        tech_outputs = self.pysam_wrap.Simulate(datetime_start, datetime_end, self.simulation_timestep, plant_state, weather_dataframe=weather_dataframe)
+        tech_outputs = self.pysam_wrap.Simulate(datetime_start, datetime_end, self.simulation_timestep, self.plant.state, weather_dataframe=weather_dataframe)
         print("Annual Energy [kWh]= ", tech_outputs["annual_energy"])
+
+        new_plant_state_vars = self.pysam_wrap.GetSimulatedPlantState(tech_outputs)      # for initializing next simulation from a prior one
+        self.plant.update_state(tech_outputs, new_plant_state_vars, self.simulation_timestep.seconds/3600)
 
         # c. Validate these data
         # wanted_keys = ['time_hr', 'e_ch_tes', 'eta_therm', 'eta_field', 'P_out_net', 'tou_value', 'gen', 'q_dot_rec_inc', 'q_sf_inc', 'pricing_mult', 'beam']
@@ -212,84 +213,6 @@ class Mediator:
         """put the weather forecast call here instead"""
         tmy3_path = kwargs.get('tmy3_path') if 'tmy3_path' in kwargs else None
         return Tmy3ToDataframe(tmy3_path, datetime_start, datetime_end)
-
-
-class Plant:
-    @staticmethod
-    def LoadPlantConfig(config_path):
-        ###
-        ### NOTE: This has been migrated to plant.Plant::set_design(), minus the db table, which is being removed
-        ###
-
-        """Reads a plant configuration from a JSON file or dict, validates the values, then loads them into the respective db table"""
-        # Read plant configuration from a JSON file
-        if isinstance(config_path, str) and os.path.isfile(config_path):
-            with open(config_path) as f:
-                plant_config = rapidjson.load(f)
-        else:
-            raise Exception('Plant configuration not found.')
-        
-        # Validate plant configuration values
-        validated_outputs = data_validator.validate(plant_config, data_validator.plant_config_schema)
-
-        # Load plant configuration into a Django db table
-        plant_config_table = PlantConfig()
-        plant_config_table.name = plant_config['name']
-        try:
-            plant_config_table.save()
-            Plant.LoadPlantLocation(plant_config['location'], validate=False)    # already validated above
-        except Exception as err:
-            if format(err) != "no such table: mediation_plantconfig":
-                raise(err)
-            else:
-                # Do nothing. The table hasn't been created yet because we are
-                # running this for the first time.
-                pass
-        del plant_config
-
-    @staticmethod
-    def LoadPlantLocation(plant_location, validate=True):
-        # TODO: Just remove this, as we're not using a db table for this any longer
-
-        """Optionally validates and then loads a plant configuration dict into the respective db table"""
-        if validate == True:
-            plant_location = data_validator.validate(plant_location, data_validator.plant_location_schema)
-
-        plant_config_table = PlantConfig()
-        plant_config_table.latitude = plant_location['latitude']
-        plant_config_table.longitude = plant_location['longitude']
-        plant_config_table.elevation = plant_location['elevation']
-        plant_config_table.timezone = plant_location['timezone']
-        plant_config_table.save()
-
-    @staticmethod
-    def GetPlantConfig():
-        # TODO: Just remove this, as we're not using a db table for this any longer
-
-        """Retrieves the plant configuration (dict) from the respective db table"""
-        result = list(PlantConfig.objects.filter(site_id=settings.SITE_ID).values())[0]
-        result['location'] = {}
-        result['location']['latitude'] = result.pop('latitude')
-        result['location']['longitude'] = result.pop('longitude')
-        result['location']['elevation'] = result.pop('elevation')
-        result['location']['timezone'] = result.pop('timezone')
-        return result
-
-    @staticmethod
-    def GetPlantState(validated_outputs_prev, **kwargs):
-        # TODO: remove this function, no longer needed
-
-
-        """
-        Extract the plant state from the simulated results and return as dict
-        -put virtual/real call here instead
-        """
-        assert 'pysam_wrap' in kwargs
-        pysam_wrap = kwargs.get('pysam_wrap')
-        plant_state = pysam_wrap.GetSimulatedPlantState(validated_outputs_prev)      # for initializing next simulation from a prior one
-        if plant_state is None:
-            plant_state = plant_.plant_initial_state
-        return plant_state    
 
 
 def MediateContinuously(update_interval=5):

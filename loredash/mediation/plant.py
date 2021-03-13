@@ -99,7 +99,8 @@ class Plant:
         return
     
     def set_heliostat_field(self, heliostat_field_file, delimiter=','):
-        heliostat_layout = np.genfromtxt(heliostat_field_file, delimiter = delimiter)
+        full_heliostat_field_file_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), heliostat_field_file)
+        heliostat_layout = np.genfromtxt(full_heliostat_field_file_path, delimiter = delimiter)
         self.design['N_hel'] = heliostat_layout.shape[0]
         self.design['helio_positions'] = [heliostat_layout[j,0:2].tolist() for j in range(self.design['N_hel'])]
         return
@@ -197,14 +198,14 @@ class Plant:
             previous_rec_state = self.state['rec_op_mode_initial']  # Receiver state before start of most recent set of simulation calls
             current_rec_state = new_plant_state_vars['rec_op_mode_initial']    # Receiver state at the end of the the most recent simulation call
             if current_rec_state== 2:     # On
-                is_rec_current = cycle_results['Q_thermal'] > 1.e-3
+                is_rec_current = np.array(cycle_results['Q_thermal']) > 1.e-3
             elif current_rec_state == 1:  # Startup
-                is_rec_current = cycle_results['q_startup']  > 1.e-3
+                is_rec_current = np.array(cycle_results['q_startup'])  > 1.e-3
             elif current_rec_state == 0:  # Off
-                is_rec_current = (cycle_results['Q_thermal'] + cycle_results['q_startup']) <= 1.e-3
+                is_rec_current = (np.array(cycle_results['Q_thermal']) + np.array(cycle_results['q_startup'])) <= 1.e-3
 
             n = len(cycle_results['Q_thermal'])
-            if np.abs(np.diff(is_rec_current)).max() == 0:  # Receiver did not change state over this simulation window:
+            if n == 1 or np.abs(np.diff(is_rec_current)).max() == 0:  # Receiver did not change state over this simulation window:
                 disp_rec_persist0 = n*ssc_time_step if previous_rec_state != current_rec_state else self.state['disp_rec_persist0'] + n*ssc_time_step
             else:
                 i = np.where(np.abs(np.diff(is_rec_current)) == 1)[0][-1]
@@ -214,7 +215,7 @@ class Plant:
         def disp_rec_off0():
             # Receiver state persistence disp_rec_off0
             current_rec_state = new_plant_state_vars['rec_op_mode_initial']    # Receiver state at the end of the the most recent simulation call
-            is_rec_not_on = cycle_results['Q_thermal'] <= 1.e-3  # Array of time points receiver is not generating thermal power
+            is_rec_not_on = np.array(cycle_results['Q_thermal']) <= 1.e-3  # Array of time points receiver is not generating thermal power
             n = len(cycle_results['Q_thermal'])
             if current_rec_state == 2:  # Receiver is on
                 disp_rec_off0 = 0.0
@@ -230,16 +231,16 @@ class Plant:
             previous_cycle_state = self.state['pc_op_mode_initial']   # Cycle state before start of most recent set of simulation calls
             current_cycle_state = new_plant_state_vars['pc_op_mode_initial']  # Cycle state at the end of the the most recent simulation call
             if current_cycle_state == 1: # On
-                is_pc_current = cycle_results['P_cycle'] > 1.e-3 
+                is_pc_current = np.array(cycle_results['P_cycle']) > 1.e-3 
             elif current_cycle_state == 2: # Standby
-                is_pc_current = np.logical_and(np.logical_and(cycle_results['P_cycle']<=1.e-3, cycle_results['q_pb']>= 1.e-3), cycle_results['q_dot_pc_startup']<=1.e-3)
+                is_pc_current = np.logical_and(np.logical_and(np.array(cycle_results['P_cycle'])<=1.e-3, np.array(cycle_results['q_pb'])>= 1.e-3), np.array(cycle_results['q_dot_pc_startup'])<=1.e-3)
             elif current_cycle_state == 0 or new_plant_state_vars['pc_op_mode_initial'] == 4: # Startup
-                is_pc_current = cycle_results['q_dot_pc_startup'] > 1.e-3
+                is_pc_current = np.array(cycle_results['q_dot_pc_startup']) > 1.e-3
             elif current_cycle_state == 3:  # Off
-                is_pc_current = (cycle_results['q_dot_pc_startup'] + cycle_results['q_pb']) <= 1.e-3
+                is_pc_current = (np.array(cycle_results['q_dot_pc_startup']) + np.array(cycle_results['q_pb'])) <= 1.e-3
 
             n = len(cycle_results['P_cycle'])
-            if np.abs(np.diff(is_pc_current)).max() == 0:  # Plant has not changed state over this simulation window:
+            if n == 1 or np.abs(np.diff(is_pc_current)).max() == 0:  # Plant has not changed state over this simulation window:
                 disp_pc_persist0 = n*ssc_time_step if previous_cycle_state != current_cycle_state else self.state['disp_pc_persist0'] + n*ssc_time_step
             else:
                 i = np.where(np.abs(np.diff(is_pc_current)) == 1)[0][-1]
@@ -249,7 +250,7 @@ class Plant:
         def disp_pc_off0():
             # Cycle state persistence disp_pc_off0
             current_cycle_state = new_plant_state_vars['pc_op_mode_initial']  # Cycle state at the end of the the most recent simulation call
-            is_pc_not_on = cycle_results['P_cycle'] <=1.e-3
+            is_pc_not_on = np.array(cycle_results['P_cycle']) <=1.e-3
             n = len(cycle_results['P_cycle'])
             if current_cycle_state == 1:  # Cycle is on
                 disp_pc_off0 = 0.0
@@ -271,6 +272,22 @@ class Plant:
         self.state.update(new_plant_state_vars)
 
         return
+
+
+    def get_location(self):
+        location = {
+            'latitude':     self.design['latitude'],
+            'longitude':    self.design['longitude'],
+            'elevation':    self.design['elevation'],
+            'timezone':     self.design['timezone'],
+        }
+        return location
+
+    def set_location(self, location):
+        self.design['latitude'] = location['latitude']
+        self.design['longitude'] = location['longitude']
+        self.design['elevation'] = location['elevation']
+        self.design['timezone'] = location['timezone']
 
 
 # Used just for case study
@@ -325,6 +342,14 @@ plant_initial_state = {
 
 
 plant_design = {
+    'name':                         "Crescent Dunes",
+
+    # Location
+    "latitude":                     38.23895540732931,
+    "longitude":                    -117.36368180656123,
+    "elevation":                    1524,
+    "timezone":                     -8,
+
     # System
     'T_htf_cold_des':               295.0,          # C
     'T_htf_hot_des':                565.0,          # C
@@ -336,7 +361,7 @@ plant_design = {
     'solarm':                       None,           # = self.Qrec * self.design_eff / self.P_ref
 
     # Solar field
-    'heliostat_field_file':         './input_files/CD_processed/Crescent_Dunes_heliostat_layout.csv',   # TODO: This the field layout with a fixed z-coordinate.
+    'heliostat_field_file':         '../../librtdispatch/input_files/CD_processed/Crescent_Dunes_heliostat_layout.csv',   # TODO: This the field layout with a fixed z-coordinate.
                                                                                                         # Could update to call through SolarPILOT API with actual z-coordinates?
                                                                                                         # (but model validation cases suggest this is not terribly important)
     'helio_positions':              [],

@@ -19,6 +19,7 @@ from django.conf import settings
 from django.conf.urls.static import static
 from pathlib import Path
 from mediation import mediator
+import mediation.plant as plant_
 import multiprocessing
 import datetime
 
@@ -26,9 +27,10 @@ import datetime
 # For testing, bypassing multiprocessing:
 parent_dir = str(Path(__file__).parents[1])
 default_weather_file = parent_dir+"/data/daggett_ca_34.865371_-116.783023_psmv3_60_tmy.csv"
-plant_config_path = parent_dir+"/data/plant_config.json"
+# plant_design = parent_dir+"/data/plant_config.json"
+plant_design = plant_.plant_design
 
-mediator = mediator.Mediator(plant_config_path=plant_config_path,
+mediator = mediator.Mediator(plant_design=plant_design,
                              override_with_weather_file_location=False,
                              weather_file=default_weather_file,
                              preprocess_pysam=True,
