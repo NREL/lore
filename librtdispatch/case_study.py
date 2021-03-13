@@ -497,17 +497,10 @@ if __name__ == '__main__':
         D2['time_stop'] = int(util.get_time_of_year(start_date)) + int(d_vars['dispatch_frequency']*3600)
         retvars = CaseStudy.default_ssc_return_vars()
         napply = int(ssc_time_steps_per_hour*d_vars['dispatch_frequency'])                   # Number of ssc time points accepted after each solution 
-        results, new_plant_state = ssc_wrapper.call_ssc(D2, retvars, plant_state_pt = napply-1, npts = napply)
+        results, new_plant_state_vars = ssc_wrapper.call_ssc(D2, retvars, plant_state_pt = napply-1, npts = napply)
         
         # Update saved plant state, post model run
-        persistance_vars = plant_.Plant.update_persistence(
-            plant.state,
-            results,
-            new_plant_state['rec_op_mode_initial'],
-            new_plant_state['pc_op_mode_initial'],
-            1./ssc_time_steps_per_hour)
-        new_plant_state.update(persistance_vars)
-        plant.state.update(new_plant_state)
+        plant.update_state(results, new_plant_state_vars, 1./ssc_time_steps_per_hour)
 
         if start_date == datetime.datetime(2018, 10, 14, 0, 0):
             assert math.isclose(plant.state['pc_startup_energy_remain_initial'], 29339.9, rel_tol=1e-4)

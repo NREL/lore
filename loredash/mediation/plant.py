@@ -164,42 +164,48 @@ class Plant:
         m_des = self.design['Qrec']*1.e6 / (cp_des * (self.design['T_htf_hot_des'] - self.design['T_htf_cold_des']))    # kg/s
         return m_des
 
-    # TODO: make this a non-static method so it updates self's state
-    # Update state persistence: S is a dictionary containing array outputs from ssc (Q_thermal, 'q_startup', 'P_cycle', 'q_pb', 'q_dot_pc_startup') with look-ahead points removed
-    # Should be called after plant state has been updated based on conditions at the end of the simulation
-    @staticmethod
-    def update_persistence(previous_state, S, rec_op_mode_initial, pc_op_mode_initial, ssc_time_step):
+
+    def update_state(self, cycle_results, new_plant_state_vars, ssc_time_step):
         """
         Inputs:
-            previous_state                      previous plant state
-            S                                   subset of ssc solution
-            rec_op_mode_initial
-            pc_op_mode_initial
+            self.state                          previous plant state
+                -rec_op_mode_initial
+                -pc_op_mode_initial
+                -disp_rec_persist0
+                -disp_rec_off0
+                -disp_pc_persist0
+                -disp_pc_off0
+            cycle_results                       subset of ssc solution
+                -Q_thermal
+                -q_startup
+                -P_cycle
+                -q_pb
+                -q_dot_pc_startup
+            new_plant_state_vars                gotten directly from the sim results
+                -rec_op_mode_initial
+                -pc_op_mode_initial
             ssc_time_step
 
         Outputs:
-            disp_rec_persist0
-            disp_rec_off0
-            disp_pc_persist0
-            disp_pc_off0
+            self.state
         """
         # TODO: note that this doesn't consider subdivision of time steps
-        
+
         def disp_rec_persist0():
             # Receiver state persistence disp_rec_persist0
             #  set the respective is_rec_current array values true if their state is the same as the final/current state
-            previous_rec_state = previous_state['rec_op_mode_initial']  # Receiver state before start of most recent set of simulation calls
-            current_rec_state = rec_op_mode_initial    # Receiver state at the end of the the most recent simulation call
+            previous_rec_state = self.state['rec_op_mode_initial']  # Receiver state before start of most recent set of simulation calls
+            current_rec_state = new_plant_state_vars['rec_op_mode_initial']    # Receiver state at the end of the the most recent simulation call
             if current_rec_state== 2:     # On
-                is_rec_current = S['Q_thermal'] > 1.e-3
+                is_rec_current = cycle_results['Q_thermal'] > 1.e-3
             elif current_rec_state == 1:  # Startup
-                is_rec_current = S['q_startup']  > 1.e-3
+                is_rec_current = cycle_results['q_startup']  > 1.e-3
             elif current_rec_state == 0:  # Off
-                is_rec_current = (S['Q_thermal'] + S['q_startup']) <= 1.e-3
+                is_rec_current = (cycle_results['Q_thermal'] + cycle_results['q_startup']) <= 1.e-3
 
-            n = len(S['Q_thermal'])
+            n = len(cycle_results['Q_thermal'])
             if np.abs(np.diff(is_rec_current)).max() == 0:  # Receiver did not change state over this simulation window:
-                disp_rec_persist0 = n*ssc_time_step if previous_rec_state != current_rec_state else previous_state['disp_rec_persist0'] + n*ssc_time_step
+                disp_rec_persist0 = n*ssc_time_step if previous_rec_state != current_rec_state else self.state['disp_rec_persist0'] + n*ssc_time_step
             else:
                 i = np.where(np.abs(np.diff(is_rec_current)) == 1)[0][-1]
                 disp_rec_persist0 = int(n-1-i)*ssc_time_step
@@ -207,13 +213,13 @@ class Plant:
         
         def disp_rec_off0():
             # Receiver state persistence disp_rec_off0
-            current_rec_state = rec_op_mode_initial    # Receiver state at the end of the the most recent simulation call
-            is_rec_not_on = S['Q_thermal'] <= 1.e-3  # Array of time points receiver is not generating thermal power
-            n = len(S['Q_thermal'])
+            current_rec_state = new_plant_state_vars['rec_op_mode_initial']    # Receiver state at the end of the the most recent simulation call
+            is_rec_not_on = cycle_results['Q_thermal'] <= 1.e-3  # Array of time points receiver is not generating thermal power
+            n = len(cycle_results['Q_thermal'])
             if current_rec_state == 2:  # Receiver is on
                 disp_rec_off0 = 0.0
             elif is_rec_not_on.min() == 1:  # Receiver was off for the full simulated horizon
-                disp_rec_off0 = previous_state['disp_rec_off0'] + n*ssc_time_step  
+                disp_rec_off0 = self.state['disp_rec_off0'] + n*ssc_time_step  
             else: # Receiver shut off sometime during the current horizon
                 i = np.where(np.abs(np.diff(is_rec_not_on)) == 1)[0][-1]
                 disp_rec_off0 = int(n-1-i)*ssc_time_step
@@ -221,20 +227,20 @@ class Plant:
             
         def disp_pc_persist0():
             # Cycle state persistence disp_pc_persist0
-            previous_cycle_state = previous_state['pc_op_mode_initial']   # Cycle state before start of most recent set of simulation calls
-            current_cycle_state = pc_op_mode_initial  # Cycle state at the end of the the most recent simulation call
+            previous_cycle_state = self.state['pc_op_mode_initial']   # Cycle state before start of most recent set of simulation calls
+            current_cycle_state = new_plant_state_vars['pc_op_mode_initial']  # Cycle state at the end of the the most recent simulation call
             if current_cycle_state == 1: # On
-                is_pc_current = S['P_cycle'] > 1.e-3 
+                is_pc_current = cycle_results['P_cycle'] > 1.e-3 
             elif current_cycle_state == 2: # Standby
-                is_pc_current = np.logical_and(np.logical_and(S['P_cycle']<=1.e-3, S['q_pb']>= 1.e-3), S['q_dot_pc_startup']<=1.e-3)
-            elif current_cycle_state == 0 or pc_op_mode_initial == 4: # Startup
-                is_pc_current = S['q_dot_pc_startup'] > 1.e-3
+                is_pc_current = np.logical_and(np.logical_and(cycle_results['P_cycle']<=1.e-3, cycle_results['q_pb']>= 1.e-3), cycle_results['q_dot_pc_startup']<=1.e-3)
+            elif current_cycle_state == 0 or new_plant_state_vars['pc_op_mode_initial'] == 4: # Startup
+                is_pc_current = cycle_results['q_dot_pc_startup'] > 1.e-3
             elif current_cycle_state == 3:  # Off
-                is_pc_current = (S['q_dot_pc_startup'] + S['q_pb']) <= 1.e-3
+                is_pc_current = (cycle_results['q_dot_pc_startup'] + cycle_results['q_pb']) <= 1.e-3
 
-            n = len(S['P_cycle'])
+            n = len(cycle_results['P_cycle'])
             if np.abs(np.diff(is_pc_current)).max() == 0:  # Plant has not changed state over this simulation window:
-                disp_pc_persist0 = n*ssc_time_step if previous_cycle_state != current_cycle_state else previous_state['disp_pc_persist0'] + n*ssc_time_step
+                disp_pc_persist0 = n*ssc_time_step if previous_cycle_state != current_cycle_state else self.state['disp_pc_persist0'] + n*ssc_time_step
             else:
                 i = np.where(np.abs(np.diff(is_pc_current)) == 1)[0][-1]
                 disp_pc_persist0 = int(n-1-i)*ssc_time_step
@@ -242,58 +248,29 @@ class Plant:
 
         def disp_pc_off0():
             # Cycle state persistence disp_pc_off0
-            current_cycle_state = pc_op_mode_initial  # Cycle state at the end of the the most recent simulation call
-            is_pc_not_on = S['P_cycle'] <=1.e-3
-            n = len(S['P_cycle'])
+            current_cycle_state = new_plant_state_vars['pc_op_mode_initial']  # Cycle state at the end of the the most recent simulation call
+            is_pc_not_on = cycle_results['P_cycle'] <=1.e-3
+            n = len(cycle_results['P_cycle'])
             if current_cycle_state == 1:  # Cycle is on
                 disp_pc_off0 = 0.0
             elif is_pc_not_on.min() == 1:  # Cycle was off for the full simulated horizon
-                disp_pc_off0 = previous_state['disp_pc_off0'] + n*ssc_time_step  
+                disp_pc_off0 = self.state['disp_pc_off0'] + n*ssc_time_step  
             else: # Cycle shut off sometime during the current horizon
                 i = np.where(np.abs(np.diff(is_pc_not_on)) == 1)[0][-1]
                 disp_pc_off0 = int(n-1-i)*ssc_time_step                        
             return disp_pc_off0
 
-        outputs = {
+        new_persistance_vars = {
             'disp_rec_persist0': disp_rec_persist0(),
             'disp_rec_off0': disp_rec_off0(),
             'disp_pc_persist0': disp_pc_persist0(),
             'disp_pc_off0': disp_pc_off0()
             }
-        return outputs
 
+        self.state.update(new_persistance_vars)
+        self.state.update(new_plant_state_vars)
 
-    #TODO: Change to PySAM and move to mediator.py
-    # Set plant state from ssc data structure using conditions at time index t (relative to start of simulation)
-    @staticmethod
-    def set_from_ssc(sscapi, sscdata, t):
-        # Plant state input/output variable name map (from pysam_wrap.py in LORE/loredash/mediation)
-        plant_state_io_map = { # Number Inputs                         # Arrays Outputs
-                            'pc_op_mode_initial':                   'pc_op_mode_final',
-                            'pc_startup_time_remain_init':          'pc_startup_time_remain_final',
-                            'pc_startup_energy_remain_initial':     'pc_startup_energy_remain_final',
-                            'is_field_tracking_init':               'is_field_tracking_final',
-                            'rec_op_mode_initial':                  'rec_op_mode_final',
-                            'rec_startup_time_remain_init':         'rec_startup_time_remain_final',
-                            'rec_startup_energy_remain_init':       'rec_startup_energy_remain_final',
-                            'T_tank_hot_init':                      'T_tes_hot',
-                            'T_tank_cold_init':                     'T_tes_cold',
-                            'csp_pt_tes_init_hot_htf_percent':      'hot_tank_htf_percent_final',       # in SSC this variable is named csp.pt.tes.init_hot_htf_percent
-                            
-                            # Variables for dispatch model (note these are not inputs for ssc)
-                            # Number Inputs for dispatch,            # Array outputs 
-                            'wdot0':                                 'P_cycle',  # TODO: Output arrays for P_cycle and q_pb aretime-step averages. Should create new output in ssc for value at end of timestep -  but not very important for short timesteps used here
-                            'qdot0':                                 'q_pb',
-                            }
-        
-        state = {}
-        for k in plant_state_io_map.keys():
-            kout = plant_state_io_map[k]
-            array = sscapi.data_get_array(sscdata, kout.encode('utf-8'))
-            # setattr(self, k, array[t])
-            state[k] = array[t]
-        
-        return state
+        return
 
 
 # Used just for case study
