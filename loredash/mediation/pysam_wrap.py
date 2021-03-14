@@ -6,8 +6,8 @@ import json
 import PySAM_DAOTk.TcsmoltenSalt as t
 #import PySAM_DAOTk.Grid as g
 import PySAM_DAOTk.Singleowner as s
-from mediation import data_validator
-from mediation import mediator
+
+from mediation import data_validator, mediator
 import mediation.plant as plant_
 
 class PysamWrap:

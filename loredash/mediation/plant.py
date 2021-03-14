@@ -713,7 +713,7 @@ class Revenue:
         }
         return outputs
 
-    
+
     @staticmethod
     def get_price_data(price_multiplier_file, avg_price, price_steps_per_hour, time_steps_per_hour):
 
@@ -734,3 +734,5 @@ class Revenue:
         pmavg = sum(price_multipliers)/len(price_multipliers)  
         price_data = [avg_price*p/pmavg  for p in price_multipliers]  # Electricity price at ssc time steps ($/MWh)
         return price_data
+
+

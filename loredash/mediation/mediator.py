@@ -7,10 +7,9 @@ from twisted.internet.task import LoopingCall
 from twisted.internet import reactor
 import PySAM_DAOTk.TcsmoltenSalt as pysam
 from pathlib import Path
-from mediation import data_validator, pysam_wrap, models
 import pandas as pd
-from mediation.models import PlantConfig
 import rapidjson
+from mediation import data_validator, pysam_wrap, models
 import mediation.plant as plant_
 # import models
 
@@ -387,3 +386,128 @@ def GetLocationFromWeatherFile(tmy3_path):
         'timezone': int(df_meta['Time Zone'][0]),
         'elevation': float(df_meta['Elevation'][0])
     }
+
+
+# This is duplicated in case_study.py
+mediator_params = {
+    # Control conditions
+	'time_steps_per_hour':			        60,			            # Simulation time resolution in ssc (1min)   DUPLICATED to: ssc_time_steps_per_hour
+	'is_dispatch':					        0,                      # Always disable dispatch optimization in ssc
+	'is_dispatch_targets':			        True,		            # True if (is_optimize or control_cycle == 'CD_data')
+    'is_optimize':					        True,                   # Use dispatch optimization
+	'control_field':				        'ssc',                  #'CD_data' = use CD data to control heliostats tracking, heliostats offline, and heliostat daily reflectivity.  Receiver startup time is set to zero so that simulated receiver starts when CD tracking begins
+                                                                    #'ssc' = allow ssc to control heliostat field operations, assuming all heliostats are available
+
+	'control_receiver':				        'ssc_clearsky',         #'CD_data' = use CD data to control receiver mass flow. Receiver startup time is set to zero so that simulated receiver starts when CD receiver finishes startup
+                                                                    #'ssc_clearsky' = use expected clearsky DNI to control receiver mass flow.  If field_control = 'ssc' then the historical median startup time from CD data will be used to control receiver startup
+                                                                    #'ssc_actual_dni' = use actual DNI to control receiver mass flow.  If field_control = 'ssc' then the historical median startup time from CD data will be used to control receiver startup   
+
+	'control_cycle':				        'ssc_heuristic',        # Only used if is_optimize = False
+                                                                    # 'CD_data' = use CD actual cycle operation to control cycle dispatch targets
+                                                                    # 'ssc_heuristic' = allow ssc heuristic (no consideration of TOD price) to control cycle dispatch
+
+    # Price
+    'price_multiplier_file':                'prices_flat.csv',
+	'ppa_multiplier_model':			        1,
+	'price_steps_per_hour':			        1,                      # Number of steps per hour in electricity price multipliers
+	'avg_price':					        138,                    # Average electricity price ($/MWh):  CD original PPA was $138/MWh
+    'avg_purchase_price':                   30,                     # Average electricity purchase price ($/MWh) (note, this isn't currently used in the dispatch model)
+    'avg_price_disp_storage_incentive':     0.0,                    # Average electricity price ($/MWh) used in dispatch model storage inventory incentive
+
+    # Field, receiver, and cycle simulation options
+    'ground_truth_weather_file':            './model-validation/input_files/weather_files/ssc_weatherfile_1min_2018.csv',   # Weather file derived from CD data: DNI, ambient temperature,
+                                                                                                                            #  wind speed, etc. are averaged over 4 CD weather stations,
+                                                                                                                            #  after filtering DNI readings for bad measurements. 
+    'clearsky_file':                        './model-validation/input_files/weather_files/clearsky_pvlib_ineichen_1min_2018.csv',   # Expected clear-sky DNI from Ineichen model (via pvlib). 
+    'CD_mflow_path1_file':                  './model-validation/input_files/mflow_path1_2018_1min.csv',  # File containing CD data for receiver path 1 mass flow rate (note, all values are zeros on days without data)
+    'CD_mflow_path2_file':                  './model-validation/input_files/mflow_path2_2018_1min.csv',  # File containing CD data for receiver path 2 mass flow rate (note, all values are zeros on days without data)
+    'CD_raw_data_direc':                    './input_files/CD_raw',                                      # Directory containing raw data files from CD
+    'CD_processed_data_direc':              './input_files/CD_processed',                                # Directory containing files with 1min data already extracted
+	'rec_control_per_path':			        True,
+	'field_model_type':				        3,
+	'eta_map_aod_format':			        False,
+	'is_rec_user_mflow':			        False,		            # or this should be unassigned, True if control_receiver == 'CD_data'
+	'rec_clearsky_fraction':		        1.0,
+    'rec_clearsky_model':                   0,
+    'rec_su_delay':                         0.,                     # = 0.01 if control_field == 'CD_data' or control_receiver == 'CD_data'  Set receiver start time and energy to near zero to enforce CD receiver startup timing
+    'rec_qf_delay':                         0.,                     # = 0.01 if control_field == 'CD_data' or control_receiver == 'CD_data'
+    'is_rec_to_coldtank_allowed':           True,
+    'use_CD_measured_reflectivity':	        False,                  # Use measured heliostat reflectivity from CD data
+    'fixed_soiling_loss':			        0.02,                   # Fixed soiling loss (if not using CD measured reflectivity) = 1 - (reflectivity / clean_reflectivity)
+	'is_rec_startup_trans':			        False,                  # TODO: Disabling transient startup -> ssc not yet configured to start/stop calculations in the middle of startup with this model
+	'is_rec_model_trans':			        False,                  # TODO: Disabling transient receiver model -> ssc not yet configured to store/retrieve receiver temperature profiles
+    'cycle_type':                           'user_defined',         # 'user-defined', 'sliding', or 'fixed'
+}
+
+
+def reupdate_ssc_constants(D, params, data):
+    D['solar_resource_data'] = data['solar_resource_data']
+    D['dispatch_factors_ts'] = data['dispatch_factors_ts']
+
+    D['ppa_multiplier_model'] = params['ppa_multiplier_model']
+    D['time_steps_per_hour'] = params['time_steps_per_hour']
+    D['is_rec_model_trans'] = params['is_rec_model_trans']
+    D['is_rec_startup_trans'] = params['is_rec_startup_trans']
+    D['rec_control_per_path'] = params['rec_control_per_path']
+    D['field_model_type'] = params['field_model_type']
+    D['eta_map_aod_format'] = params['eta_map_aod_format']
+    D['is_rec_to_coldtank_allowed'] = params['is_rec_to_coldtank_allowed']
+    D['is_dispatch'] = params['is_dispatch']
+    D['is_dispatch_targets'] = params['is_dispatch_targets']
+
+    #--- Set field control parameters
+    if params['control_field'] == 'CD_data':
+        D['rec_su_delay'] = params['rec_su_delay']
+        D['rec_qf_delay'] = params['rec_qf_delay']
+
+    #--- Set receiver control parameters
+    if params['control_receiver'] == 'CD_data':
+        D['is_rec_user_mflow'] = params['is_rec_user_mflow']
+        D['rec_su_delay'] = params['rec_su_delay']
+        D['rec_qf_delay'] = params['rec_qf_delay']
+    elif params['control_receiver'] == 'ssc_clearsky':
+        D['rec_clearsky_fraction'] = params['rec_clearsky_fraction']
+        D['rec_clearsky_model'] = params['rec_clearsky_model']
+        D['rec_clearsky_dni'] = data['clearsky_data'].tolist()
+    elif params['control_receiver'] == 'ssc_actual_dni':
+        D['rec_clearsky_fraction'] = params['rec_clearsky_fraction']
+
+    return
+
+
+def default_ssc_return_vars():
+    return ['beam', 'clearsky', 'tdry', 'wspd', 'solzen', 'solaz', 'pricing_mult',
+                'sf_adjust_out', 'q_sf_inc', 'eta_field', 'defocus', 
+                'q_dot_rec_inc', 'Q_thermal', 'm_dot_rec', 'q_startup', 'q_piping_losses', 'q_thermal_loss', 'eta_therm',
+                'T_rec_in', 'T_rec_out', 'T_panel_out',
+                'T_tes_hot', 'T_tes_cold', 'mass_tes_cold', 'mass_tes_hot', 'q_dc_tes', 'q_ch_tes', 'e_ch_tes', 'tank_losses', 'hot_tank_htf_percent_final',
+                'm_dot_cr_to_tes_hot', 'm_dot_tes_hot_out', 'm_dot_pc_to_tes_cold', 'm_dot_tes_cold_out', 'm_dot_field_to_cycle', 'm_dot_cycle_to_field',
+                'P_cycle','eta', 'T_pc_in', 'T_pc_out', 'q_pb', 'q_dot_pc_startup', 'P_out_net', 
+                'P_tower_pump', 'htf_pump_power', 'P_cooling_tower_tot', 'P_fixed', 'P_plant_balance_tot', 'P_rec_heattrace', 'q_heater', 'P_cycle_off_heat', 'pparasi',
+                'is_rec_su_allowed', 'is_pc_su_allowed', 'is_pc_sb_allowed',
+                'op_mode_1', 'op_mode_2', 'op_mode_3', 'q_dot_est_cr_on', 'q_dot_est_cr_su', 'q_dot_est_tes_dc', 'q_dot_est_tes_ch', 'q_dot_pc_target_on'
+                ]
+
+
+def default_disp_stored_vars():
+    return ['cycle_on', 'cycle_standby', 'cycle_startup', 'receiver_on', 'receiver_startup', 'receiver_standby', 
+            'receiver_power', 'thermal_input_to_cycle', 'electrical_output_from_cycle', 'net_electrical_output', 'tes_soc',
+            'yrsd', 'ursd']
+
+
+def get_user_flow_paths(flow_path1_file, flow_path2_file, time_steps_per_hour, helio_reflectance, use_measured_reflectivity,
+    soiling_avail=None, fixed_soiling_loss=None):
+    """Load user flow paths into the ssc input dict (D)"""
+    flow_path1_data = np.genfromtxt(flow_path1_file)
+    flow_path2_data = np.genfromtxt(flow_path2_file)
+    if time_steps_per_hour != 60:
+        flow_path1_data = np.array(util.translate_to_new_timestep(flow_path1_data, 1./60, 1./time_steps_per_hour))
+        flow_path2_data = np.array(util.translate_to_new_timestep(flow_path2_data, 1./60, 1./time_steps_per_hour))
+    mult = np.ones_like(flow_path1_data)
+    if not use_measured_reflectivity:                                                   # Scale mass flow based on simulated reflectivity vs. CD actual reflectivity
+        rho = (1-fixed_soiling_loss) * helio_reflectance                                # Simulated heliostat reflectivity
+        mult = rho*np.ones(365) / (soiling_avail*helio_reflectance)                     # Ratio of simulated / CD reflectivity
+        mult = np.repeat(mult, 24*time_steps_per_hour)                                  # Annual array at ssc resolution
+    rec_user_mflow_path_1 = (flow_path1_data * mult).tolist()                          # Note ssc path numbers are reversed relative to CD path numbers
+    rec_user_mflow_path_2 = (flow_path2_data * mult).tolist()
+    return rec_user_mflow_path_1, rec_user_mflow_path_2
