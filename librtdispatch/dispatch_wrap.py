@@ -9,7 +9,6 @@ from csv import reader
 import math
 
 import util
-import ssc_wrapper
 import dispatch_model
 
 
@@ -997,7 +996,7 @@ class DispatchWrap:
 
     #--- Run simulation
     def run(self, start_date, timestep_days, horizon, retvars, ursd_last, yrsd_last, current_forecast_weather_data, weather_data_for_dispatch,
-            schedules, current_day_schedule, next_day_schedule, initial_plant_state=None):
+            schedules, current_day_schedule, next_day_schedule, f_estimates_for_dispatch_model, initial_plant_state=None):
 
         if self.first_run == True:
             if ursd_last is None: ursd_last = self.ursd_last
@@ -1150,7 +1149,7 @@ class DispatchWrap:
 
             #--- Run ssc for dispatch estimates: (using weather forecast time resolution for weather data and specified ssc time step)
             npts_horizon = int(horizon/3600 * nph)
-            R_est = estimates_for_dispatch_model(
+            R_est = f_estimates_for_dispatch_model(
                 plant_design = D,
                 toy = toy,
                 horizon = horizon,
@@ -1427,29 +1426,6 @@ def update_dispatch_weather_data(weather_data, replacement_real_weather_data, re
                     weather_data[k][p+j] = replacement_forecast_weather_data[k][p+j]
 
         return weather_data
-
-
-def estimates_for_dispatch_model(plant_design, toy, horizon, weather_data, N_pts_horizon, clearsky_data, start_pt):
-    """
-    Outputs:
-        ssc_outputs         a 7-item dictionary of arrays, selected according to retvars
-    """
-
-    D_est = plant_design.copy()
-    D_est['time_stop'] = toy + horizon
-    D_est['is_dispatch_targets'] = False
-    D_est['tshours'] = 100                      # Inflate TES size so that there is always "somewhere" to put receiver output
-    D_est['solar_resource_data'] = weather_data
-    D_est['is_rec_startup_trans'] = False
-    D_est['rec_su_delay'] = 0.001               # Simulate with no start-up time to get total available solar energy
-    D_est['rec_qf_delay'] = 0.001
-    retvars = ['Q_thermal', 'm_dot_rec', 'beam', 'clearsky', 'tdry', 'P_tower_pump', 'pparasi']
-
-    ssc_outputs, new_state = ssc_wrapper.call_ssc(D_est, retvars, npts = N_pts_horizon)
-    if ssc_outputs['clearsky'].max() < 1.e-3:         # Clear-sky data wasn't passed through ssc (ssc controlled from actual DNI, or user-defined flow inputs)
-        ssc_outputs['clearsky'] = clearsky_data[start_pt : start_pt + N_pts_horizon]
-
-    return ssc_outputs
 
 
 def setup_dispatch_model(R_est, freq, horizon, include_day_ahead_in_dispatch,

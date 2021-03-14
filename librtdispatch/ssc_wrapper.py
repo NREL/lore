@@ -6,10 +6,7 @@ import copy
 import numpy as np
 import timeit
 
-import util
-import dispatch
 from mspt_2020_defaults import vartab as V
-import loredash.mediation.plant as plant
 
 
 #-------------------------------------------------------------------------
@@ -174,3 +171,26 @@ def simulate_flux_maps(plant_design, ssc_time_steps_per_hour, ground_truth_weath
         eta_map = R['eta_map_out']
         flux_maps = [x[2:] for x in R['flux_maps_for_import']]
         return {'A_sf_in': A_sf_in, 'eta_map': eta_map, 'flux_maps': flux_maps}
+
+
+def estimates_for_dispatch_model(plant_design, toy, horizon, weather_data, N_pts_horizon, clearsky_data, start_pt):
+    """
+    Outputs:
+        ssc_outputs         a 7-item dictionary of arrays, selected according to retvars
+    """
+
+    D_est = plant_design.copy()
+    D_est['time_stop'] = toy + horizon
+    D_est['is_dispatch_targets'] = False
+    D_est['tshours'] = 100                      # Inflate TES size so that there is always "somewhere" to put receiver output
+    D_est['solar_resource_data'] = weather_data
+    D_est['is_rec_startup_trans'] = False
+    D_est['rec_su_delay'] = 0.001               # Simulate with no start-up time to get total available solar energy
+    D_est['rec_qf_delay'] = 0.001
+    retvars = ['Q_thermal', 'm_dot_rec', 'beam', 'clearsky', 'tdry', 'P_tower_pump', 'pparasi']
+
+    ssc_outputs, new_state = call_ssc(D_est, retvars, npts = N_pts_horizon)
+    if ssc_outputs['clearsky'].max() < 1.e-3:         # Clear-sky data wasn't passed through ssc (ssc controlled from actual DNI, or user-defined flow inputs)
+        ssc_outputs['clearsky'] = clearsky_data[start_pt : start_pt + N_pts_horizon]
+
+    return ssc_outputs

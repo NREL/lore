@@ -10,8 +10,8 @@ import math
 import datetime
 
 import util
-import dispatch
-from dispatch import DispatchWrap
+import dispatch_wrap
+from dispatch_wrap import DispatchWrap
 import ssc_wrapper
 import loredash.mediation.plant as plant_
 from loredash.mediation.plant import Revenue
@@ -161,7 +161,7 @@ if __name__ == '__main__':
     start_date = datetime.datetime(2018, 10, 14)
     sim_days = 1
     m_vars = mediator_params.copy()
-    d_vars = dispatch.dispatch_wrap_params.copy()
+    d_vars = dispatch_wrap.dispatch_wrap_params.copy()
     params = m_vars.copy()
     params.update(d_vars)                   # combine mediator and dispatch params
     params['start_date'] = start_date       # needed for initializing schedules
@@ -250,6 +250,7 @@ if __name__ == '__main__':
             schedules=schedules,
             current_day_schedule=current_day_schedule,
             next_day_schedule=next_day_schedule,
+            f_estimates_for_dispatch_model=ssc_wrapper.estimates_for_dispatch_model,
             initial_plant_state=initial_plant_state
             )
 
