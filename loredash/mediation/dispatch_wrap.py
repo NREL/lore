@@ -857,7 +857,7 @@ class DispatchWrap:
         self.sim_days = None
         # self.plant = None                             # Plant design and operating properties
         
-        self.user_defined_cycle_input_file = 'udpc_noTamb_dependency.csv'  # Only required if cycle_type is user_defined
+        self.user_defined_cycle_input_file = '../../librtdispatch/udpc_noTamb_dependency.csv'  # Only required if cycle_type is user_defined
 
         ## DISPATCH PERSISTING INTERMEDIARIES ############################################################################################################
         self.first_run = True                           # Is this the first time run() is called?
