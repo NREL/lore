@@ -70,6 +70,7 @@ mediator_params = {
 
 class CaseStudy:   
 
+    # Also copied to mediator
     @staticmethod
     def reupdate_ssc_constants(D, params, data):
         D['solar_resource_data'] = data['solar_resource_data']
@@ -105,7 +106,7 @@ class CaseStudy:
 
         return
 
-
+    # Also copied to mediator
     @staticmethod
     def default_ssc_return_vars():
         return ['beam', 'clearsky', 'tdry', 'wspd', 'solzen', 'solaz', 'pricing_mult',
@@ -120,7 +121,7 @@ class CaseStudy:
                    'op_mode_1', 'op_mode_2', 'op_mode_3', 'q_dot_est_cr_on', 'q_dot_est_cr_su', 'q_dot_est_tes_dc', 'q_dot_est_tes_ch', 'q_dot_pc_target_on'
                    ]
 
-
+    # Also copied to mediator
     @staticmethod
     def default_disp_stored_vars():
         return ['cycle_on', 'cycle_standby', 'cycle_startup', 'receiver_on', 'receiver_startup', 'receiver_standby', 
@@ -128,6 +129,7 @@ class CaseStudy:
                'yrsd', 'ursd']
     
 
+    # Also copied to mediator
     @staticmethod
     def get_user_flow_paths(flow_path1_file, flow_path2_file, time_steps_per_hour, helio_reflectance, use_measured_reflectivity,
         soiling_avail=None, fixed_soiling_loss=None):
@@ -205,11 +207,7 @@ if __name__ == '__main__':
         )
 
     # Data - get prices
-    price_multipliers = np.genfromtxt(m_vars['price_multiplier_file'])
-    if m_vars['price_steps_per_hour'] != ssc_time_steps_per_hour:
-        price_multipliers = util.translate_to_new_timestep(price_multipliers, 1./m_vars['price_steps_per_hour'], 1./ssc_time_steps_per_hour)
-    pmavg = sum(price_multipliers)/len(price_multipliers)  
-    price_data = [m_vars['avg_price']*p/pmavg  for p in price_multipliers]  # Electricity price at ssc time steps ($/MWh)
+    price_data = Revenue.get_price_data(m_vars['price_multiplier_file'], m_vars['avg_price'], m_vars['price_steps_per_hour'], ssc_time_steps_per_hour)
 
     data = {
         'sf_adjust:hourly':                 sf_adjust_hourly,

@@ -760,3 +760,25 @@ class Revenue:
             'startup_ramping_penalty': startup_ramping_penalty
         }
         return outputs
+
+    
+    @staticmethod
+    def get_price_data(price_multiplier_file, avg_price, price_steps_per_hour, time_steps_per_hour):
+
+        def translate_to_new_timestep(data, old_timestep, new_timestep):
+            n = len(data)
+            if new_timestep > old_timestep:  # Average over consecutive timesteps
+                nperavg = int(new_timestep / old_timestep)
+                nnew = int(n/nperavg)
+                newdata = np.reshape(np.array(data), (nnew, nperavg)).mean(1)
+            else:  # Repeat consecutive timesteps
+                nrepeat = int(old_timestep / new_timestep)
+                newdata = np.repeat(data, nrepeat)
+            return newdata.tolist()
+
+        price_multipliers = np.genfromtxt(price_multiplier_file)
+        if price_steps_per_hour != time_steps_per_hour:
+            price_multipliers = translate_to_new_timestep(price_multipliers, 1./price_steps_per_hour, 1./time_steps_per_hour)
+        pmavg = sum(price_multipliers)/len(price_multipliers)  
+        price_data = [avg_price*p/pmavg  for p in price_multipliers]  # Electricity price at ssc time steps ($/MWh)
+        return price_data
