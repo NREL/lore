@@ -254,25 +254,27 @@ if __name__ == '__main__':
             initial_plant_state=initial_plant_state
             )
 
-        # Run ssc model:
+        # Setup ssc model run:
         D2 = plant.design.copy()            # Start compiling ssc input dict (D2)
         D2.update(plant.state)
         D2.update(plant.flux_maps)
         D2['time_start'] = int(util.get_time_of_year(start_date))
-        D2['time_stop'] = util.get_time_of_year(start_date.replace(hour=0, minute=0, second=0)) + timestep_days*24*3600
+        D2['time_stop'] = int(util.get_time_of_year(start_date)) + int(d_vars['dispatch_frequency']*3600)
         D2['sf_adjust:hourly'] = data['sf_adjust:hourly']
         CaseStudy.reupdate_ssc_constants(D2, m_vars, data)
         if m_vars['control_receiver'] == 'CD_data':
             D2['rec_user_mflow_path_1'] = data['rec_user_mflow_path_1']
             D2['rec_user_mflow_path_2'] = data['rec_user_mflow_path_2']
-
         if m_vars['is_optimize'] and dispatch_outputs['Rdisp'] is not None:
             D2.update(vars(dispatch_outputs['ssc_dispatch_targets']))
 
-        D2['time_stop'] = int(util.get_time_of_year(start_date)) + int(d_vars['dispatch_frequency']*3600)
-        retvars = CaseStudy.default_ssc_return_vars()
+        # Run ssc model:
         napply = int(ssc_time_steps_per_hour*d_vars['dispatch_frequency'])                   # Number of ssc time points accepted after each solution 
-        results, new_plant_state_vars = ssc_wrapper.call_ssc(D2, retvars, plant_state_pt = napply-1, npts = napply)
+        results, new_plant_state_vars = ssc_wrapper.call_ssc(
+            D=D2,
+            retvars=CaseStudy.default_ssc_return_vars(),
+            plant_state_pt = napply-1,
+            npts = napply)
         
         # Update saved plant state, post model run
         plant.update_state(results, new_plant_state_vars, 1./ssc_time_steps_per_hour)
