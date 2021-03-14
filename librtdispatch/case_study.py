@@ -10,9 +10,9 @@ import math
 import datetime
 
 import util
-import dispatch_wrap
-from dispatch_wrap import DispatchWrap
 import ssc_wrapper
+import loredash.mediation.dispatch_wrap as dispatch_wrap
+from loredash.mediation.dispatch_wrap import DispatchWrap
 import loredash.mediation.plant as plant_
 from loredash.mediation.plant import Revenue
 
