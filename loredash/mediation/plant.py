@@ -3,6 +3,8 @@ sys.path.insert(1, os.path.join(sys.path[0], '..'))
 
 from enum import Enum
 import numpy as np
+import datetime
+
 try:
     from mediation import data_validator
 except:
@@ -562,3 +564,199 @@ plant_design = {
 #     'W_cycle':                              'wdot0',                            # Cycle electricity generation (MWe)
 #     'Q_cycle':                              'qdot0'                             # Cycle thermal input (MWt)
 # }
+
+
+# This should really be in mediator (probably), but is here for the sake of case_study
+class Revenue:
+
+    @staticmethod
+    def calculate_revenue(start_date, sim_days, P_out_net, params, data):
+        """
+        Inputs:
+            start_date
+            sim_days
+            P_out_net
+            time_steps_per_hour     (ssc_time_steps_per_hour)
+            avg_price
+            avg_purchase_price
+            price_data
+
+        Outputs:
+            revenue
+        """
+        nph = int(params['time_steps_per_hour'])
+        ndays = sim_days
+        start = start_date
+        time_of_year = (start - datetime.datetime(start.year,1,1,0,0,0)).total_seconds()
+        startpt = int(time_of_year/3600) * nph   # First point in annual arrays         
+        price = np.array(data['dispatch_factors_ts'][startpt:int(startpt+ndays*24*nph)])
+        mult = price / price.mean()   # Pricing multipliers
+        
+        net_gen = P_out_net
+        inds_sell = np.where(net_gen > 0.0)[0]
+        inds_buy = np.where(net_gen < 0.0)[0]
+        rev = (net_gen[inds_sell] * mult[inds_sell] * params['avg_price']).sum() * (1./params['time_steps_per_hour'])   # Revenue from sales ($)
+        rev += (net_gen[inds_buy] * mult[inds_buy] * params['avg_purchase_price']).sum() * (1./params['time_steps_per_hour']) # Electricity purchases ($)
+        return rev
+
+    
+    # Calculate penalty for missing day-ahead schedule (assuming day-ahead schedule step is 1-hour for now)
+    @staticmethod
+    def calculate_day_ahead_penalty(sim_days, schedules, P_out_net, params, disp_soln_tracking=[], 
+        disp_params_tracking=[], disp_net_electrical_output=None):
+        """
+        Inputs:
+            sim_days
+            time_steps_per_hour                     ssc_time_steps_per_hour
+            schedules
+            P_out_net
+            disp_net_electrical_output
+            disp_soln_tracking
+            disp_params_tracking
+            day_ahead_diff
+            day_ahead_ignore_off
+            day_ahead_tol_plus
+            day_ahead_tol_minus
+            day_ahead_pen_plus
+            day_ahead_pen_minus
+
+        Outputs:
+            day_ahead_diff
+            day_ahead_penalty
+            day_ahead_diff_over_tol_plus
+            day_ahead_diff_over_tol_minus
+            day_ahead_diff_ssc_disp_gross
+            day_ahead_penalty_tot
+            day_ahead_diff_tot
+        """
+
+
+        ndays = max(1, sim_days)
+        nph = int(params['time_steps_per_hour'])
+
+        day_ahead_diff = {k:np.zeros((ndays, 24)) for k in ['ssc', 'disp', 'disp_raw']}
+        day_ahead_penalty = {k:np.zeros((ndays, 24)) for k in ['ssc', 'disp', 'disp_raw']}
+        day_ahead_diff_over_tol_plus = {k:0.0 for k in ['ssc', 'disp', 'disp_raw']}  
+        day_ahead_diff_over_tol_minus = {k:0.0 for k in ['ssc', 'disp', 'disp_raw']}
+        
+        day_ahead_diff_ssc_disp_gross = np.zeros((ndays, 24))
+                
+        # Calculate penalty from ssc or dispatch results (translated to ssc time steps)
+        for d in range(ndays):
+            if len(schedules) > d and schedules[d] is not None:  # Schedule exists
+                for j in range(24):  # Hours per day
+                    target = schedules[d][j]       # Target generation during the schedule step
+                    p = d*24*nph + j*nph                # First point in result arrays from ssc solutions
+                    
+                    wnet = {k:0.0 for k in ['ssc', 'disp', 'disp_raw']}
+                    wnet['ssc'] = P_out_net[p:p+nph].sum() * 1./nph                             # Total generation from ssc during the schedule step (MWhe)
+                    if disp_net_electrical_output is not None:
+                        wnet['disp'] = disp_net_electrical_output[p:p+nph].sum() * 1./nph * 1.e-3   # Total generation from dispatch solution during the schedule step (MWhe)
+                    
+                    day_ahead_diff_ssc_disp_gross[d,j] = wnet['ssc'] - wnet['disp']
+                    
+                    # Calculate generation directly from dispatch schedule before interpolation
+                    if len(disp_soln_tracking)>0:  # Dispatch solutions were saved
+                        i = d*24+j
+                        delta_e = disp_params_tracking[i].Delta_e
+                        delta = disp_params_tracking[i].Delta 
+                        wdisp = disp_soln_tracking[i].net_electrical_output/1000.  # Net energy sold to grid (MWe)
+                        inds = np.where(np.array(delta_e) <= 1.0)[0]
+                        wnet['disp_raw'] = sum([wdisp[i]*delta[i] for i in inds])  # MWhe cumulative generation 
+                        
+                    for k in day_ahead_diff.keys():
+                        day_ahead_diff[k][d,j] = wnet[k] - target
+                        
+                        if not params['day_ahead_ignore_off'] or target>0.0 or wnet[k]>0:  # Enforce penalties for missing schedule
+                            day_ahead_diff[k][d,j] = wnet[k] - target
+                            if day_ahead_diff[k][d,j] > params['day_ahead_tol_plus']:
+                                day_ahead_penalty[k][d,j] = day_ahead_diff[k][d,j] * params['day_ahead_pen_plus']
+                                day_ahead_diff_over_tol_plus[k] += day_ahead_diff[k][d,j]
+                            elif day_ahead_diff[k][d,j] < params['day_ahead_tol_minus']:
+                                day_ahead_penalty[k][d,j] = (-day_ahead_diff[k][d,j]) * params['day_ahead_pen_minus']
+                                day_ahead_diff_over_tol_minus[k] += day_ahead_diff[k][d,j]
+                                
+        day_ahead_penalty_tot = {k:day_ahead_penalty[k].sum() for k in day_ahead_diff.keys()}  # Total penalty ($)
+        day_ahead_diff_tot = {k:day_ahead_diff[k].sum() for k in day_ahead_diff.keys()}
+
+        outputs = {
+            'day_ahead_diff': day_ahead_diff,
+            'day_ahead_penalty': day_ahead_penalty,
+
+            'day_ahead_penalty_tot': day_ahead_penalty_tot,
+            'day_ahead_diff_tot': day_ahead_diff_tot,
+            'day_ahead_diff_over_tol_plus': day_ahead_diff_over_tol_plus,
+            'day_ahead_diff_over_tol_minus': day_ahead_diff_over_tol_minus
+        }
+        return outputs
+
+    
+    @staticmethod
+    def calculate_startup_ramping_penalty(plant_design, q_startup, Q_thermal, q_pb, P_cycle, q_dot_pc_startup, params):
+        """
+        Inputs:
+            q_startup
+            Q_thermal
+            q_pb
+            P_cycle
+            q_dot_pc_startup
+            Crsu
+            Ccsu
+            C_delta_w
+
+        Outputs:
+            n_starts_rec
+            n_starts_rec_attempted
+            n_starts_cycle
+            n_starts_cycle_attempted
+            cycle_ramp_up
+            cycle_ramp_down
+            startup_ramping_penalty
+        """
+
+        
+        def find_starts(q_start, q_on):
+            n = len(q_start)
+            n_starts, n_start_attempts_completed = [0, 0]
+            for j in range(1,n):
+                start_attempt_completed = False
+                if q_start[j] < 1. and q_start[j-1] >= 1.:
+                    start_attempt_completed = True
+                    n_start_attempts_completed +=1
+                
+                if start_attempt_completed and (q_on[j] > 1. and q_on[j-1] < 1.e-3):
+                    n_starts += 1
+                        
+            return n_starts, n_start_attempts_completed
+
+        n_starts_rec, n_starts_rec_attempted = find_starts(q_startup, Q_thermal)
+
+        qpb_on = q_pb   # Cycle thermal power includes startup
+        inds_off = np.where(P_cycle<1.e-3)[0]
+        qpb_on[inds_off] = 0.0
+        n_starts_cycle, n_starts_cycle_attempted = find_starts(q_dot_pc_startup, qpb_on)
+
+        n = len(P_cycle)
+        cycle_ramp_up = 0.0
+        cycle_ramp_down = 0.0
+        w = P_cycle
+        for j in range(1,n):
+            diff =  w[j] - w[j-1]
+            if diff > 0:
+                cycle_ramp_up += diff
+            elif diff < 0:
+                cycle_ramp_down += (-diff)
+        
+        startup_ramping_penalty = n_starts_rec*plant_design['Crsu'] + n_starts_cycle*plant_design['Ccsu'] 
+        startup_ramping_penalty += cycle_ramp_up*plant_design['C_delta_w']*1000 + cycle_ramp_down*plant_design['C_delta_w']*1000
+
+        outputs = {
+            'n_starts_rec': n_starts_rec,
+            'n_starts_rec_attempted': n_starts_rec_attempted,
+            'n_starts_cycle': n_starts_cycle,
+            'n_starts_cycle_attempted': n_starts_cycle_attempted,
+            'cycle_ramp_up': cycle_ramp_up,
+            'cycle_ramp_down': cycle_ramp_down,
+            'startup_ramping_penalty': startup_ramping_penalty
+        }
+        return outputs
