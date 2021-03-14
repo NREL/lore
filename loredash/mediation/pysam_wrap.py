@@ -167,7 +167,10 @@ class PysamWrap:
         }
 
     def SetWeatherData(self, tmy_file_path=None, solar_resource_data=None, weather_dataframe=None):
-        """solar_resource_data is used instead of the TMY file if solar_resource_data is assigned"""
+        """
+        Set the weather data, using either a TMY file, a solar resource data object, or a weather dataframe.
+        Note that solar_resource_data is used by SSC instead of the TMY file if solar_resource_data is assigned
+        """
 
         if isinstance(tmy_file_path, str) and os.path.isfile(tmy_file_path):
             self.tech_model.SolarResource.solar_resource_file = tmy_file_path

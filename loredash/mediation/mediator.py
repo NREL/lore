@@ -18,9 +18,10 @@ class Mediator:
     validated_outputs_prev = None
     default_pysam_model = "MSPTSingleOwner"
 
-    def __init__(self, plant_design, override_with_weather_file_location=False,
+    def __init__(self, params, plant_design, override_with_weather_file_location=False,
                  weather_file=None, preprocess_pysam=True, preprocess_pysam_on_init=True,
-                 update_interval=datetime.timedelta(seconds=5), simulation_timestep=datetime.timedelta(minutes=5)):
+                 update_interval=datetime.timedelta(seconds=5)):
+        self.params = params
         self.override_with_weather_file_location = override_with_weather_file_location
         self.weather_file = weather_file
         self.preprocess_pysam = preprocess_pysam

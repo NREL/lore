@@ -52,6 +52,26 @@ except Exception as err:
     pass
 
 
+# ===Initialization code, put here so the Bokeh server django.setup() call doesn't execute it
+# For testing, bypassing multiprocessing:
+parent_dir = str(Path(__file__).parents[1])
+default_weather_file = parent_dir+"/data/daggett_ca_34.865371_-116.783023_psmv3_60_tmy.csv"
+# plant_design = parent_dir+"/data/plant_config.json"
+plant_design = plant_.plant_design
+
+mediator = mediator.Mediator(
+    params=mediator.mediator_params,
+    plant_design=plant_design,
+    override_with_weather_file_location=False,
+    weather_file=default_weather_file,
+    preprocess_pysam=True,
+    preprocess_pysam_on_init=True,
+    update_interval=datetime.timedelta(seconds=5)
+    )
+
+result = mediator.ModelPreviousDayAndAddToDb()
+result = mediator.RunOnce()
+
 # This is the main production code where the mediator runs continuously
 # update_interval = 10     # seconds
 # p = multiprocessing.Process(target=mediator.MediateContinuously, args=(update_interval,))
