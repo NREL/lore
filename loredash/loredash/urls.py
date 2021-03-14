@@ -30,13 +30,15 @@ default_weather_file = parent_dir+"/data/daggett_ca_34.865371_-116.783023_psmv3_
 # plant_design = parent_dir+"/data/plant_config.json"
 plant_design = plant_.plant_design
 
-mediator = mediator.Mediator(plant_design=plant_design,
-                             override_with_weather_file_location=False,
-                             weather_file=default_weather_file,
-                             preprocess_pysam=True,
-                             preprocess_pysam_on_init=True,
-                             update_interval=datetime.timedelta(seconds=5),
-                             simulation_timestep=datetime.timedelta(minutes=5))
+mediator = mediator.Mediator(
+    params=mediator.mediator_params,
+    plant_design=plant_design,
+    override_with_weather_file_location=False,
+    weather_file=default_weather_file,
+    preprocess_pysam=True,
+    preprocess_pysam_on_init=True,
+    update_interval=datetime.timedelta(seconds=5)
+    )
 
 result = mediator.ModelPreviousDayAndAddToDb()
 result = mediator.RunOnce()
