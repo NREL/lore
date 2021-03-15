@@ -9,7 +9,10 @@ import zipfile
 import datetime
 from pvlib import solarposition
 
-import loredash.mediation.plant as plant
+try:
+    import mediation.plant as plant
+except:           # if called from case_study
+    import loredash.mediation.plant as plant
 
 def write_dict_as_csv(mydict, csv_path='./mydict.csv'):
     import csv
@@ -45,7 +48,7 @@ def is_dst(date):
     return dst
 
 def get_clearsky_data(clearsky_file, time_steps_per_hour):
-    clearsky_data = np.genfromtxt(clearsky_file)
+    clearsky_data = np.genfromtxt(os.path.join(os.path.dirname(__file__), clearsky_file))
     if time_steps_per_hour != 60:
         clearsky_data = np.array(translate_to_new_timestep(clearsky_data, 1./60, 1./time_steps_per_hour))
     return clearsky_data
@@ -202,7 +205,7 @@ def translate_to_fixed_timestep(data, dt_var, dt_fixed):
 # Read weather
 def read_weather_data(filename):
     weatherdata = get_weather_header(filename)
-    df = pd.read_csv(filename, sep=',', skiprows=2, header=0, skipinitialspace = True)  
+    df = pd.read_csv(os.path.join(os.path.dirname(__file__), filename), sep=',', skiprows=2, header=0, skipinitialspace = True)  
     weatherdata['year'] = list(df['Year'])
     weatherdata['month'] = list(df['Month'])
     weatherdata['day'] = list(df['Day'])
@@ -219,7 +222,8 @@ def read_weather_data(filename):
 
 
 def get_weather_header(filename):
-    df = pd.read_csv(filename, sep=',', header=0, nrows=1, skipinitialspace = True, engine = 'python')
+    # os.chdir(os.path.dirname(__file__))
+    df = pd.read_csv(os.path.join(os.path.dirname(__file__), filename), sep=',', header=0, nrows=1, skipinitialspace = True, engine = 'python')
     header = {}
     header['tz'] = int(df['Time Zone'][0])
     header['elev'] = float(df['Elevation'][0])
@@ -281,7 +285,7 @@ def interpret_user_defined_cycle_data(ud_ind_od):
 
 # Read weather forecast data starting at midnight (UTC), date is a datetime.date object 
 def read_weather_forecast(date, offset30 = True): 
-    path = 'weather forecasts/Request_for_Tonopah.zip'
+    path = os.path.join(os.path.dirname(__file__), 'weather forecasts/Request_for_Tonopah.zip')
     sday = '%d'%date.day if date.day>=10 else '0%d'%date.day
     smonth = '%d'%date.month if date.month>=10 else '0%d'%date.month
     filename = 'Request_for_Tonopah/%d/0000/%d%s%s_Tonopah.csv'%(date.year, date.year, smonth, sday)
