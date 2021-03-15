@@ -317,11 +317,23 @@ class PysamWrap:
             self.tech_model.HeliostatField.field_model_type = 3      # using user-defined flux and efficiency parameters
             return 0
 
-    def _SetTechModelParams(self, plant_state):
+    def _SetTechModelParams(self, param_dict):
+        for key,value in param_dict.items():
+            # print(key + ': ' + str(value))
+            key = key.replace('.', '_')
+            if value == []: value = [None]
         try:
-            for key in plant_state:
-                self.tech_model.value(key, plant_state[key])
-        except:
-            return 1
-        else:
+                self.tech_model.value(key, value)
+            except Exception as err:
+                # raise(err)  # just re-raise for now
+                pass            # ignore for now
             return 0
+
+    def _GetTechModelParam(self, key):
+        key = key.replace('.', '_')
+        try:
+            value = self.tech_model.value(key)
+        except Exception as err:
+            # raise(err)  # just re-raise for now
+            pass            # ignore for now
+        return value
