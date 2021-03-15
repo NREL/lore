@@ -44,6 +44,17 @@ def is_dst(date):
         dst = True
     return dst
 
+def get_clearsky_data(clearsky_file, time_steps_per_hour):
+    clearsky_data = np.genfromtxt(clearsky_file)
+    if time_steps_per_hour != 60:
+        clearsky_data = np.array(translate_to_new_timestep(clearsky_data, 1./60, 1./time_steps_per_hour))
+    return clearsky_data
+
+def get_ground_truth_weather_data(ground_truth_weather_file, time_steps_per_hour):
+    ground_truth_weather_data = read_weather_data(ground_truth_weather_file)
+    if time_steps_per_hour != 60:
+        ground_truth_weather_data = update_weather_timestep(ground_truth_weather_data, time_steps_per_hour)
+    return ground_truth_weather_data
 
 def get_field_availability_adjustment(steps_per_hour, year, control_field, use_CD_measured_reflectivity, plant_design, fixed_soiling_loss):
     """
