@@ -20,14 +20,35 @@ class PysamWrap:
     design_path = parent_dir+"/data/field_design.json"
     kMinOneHourSims = True        # circumvents SSC bug
 
-    def __init__(self, model_name="MSPTSingleOwner", load_defaults=True, weather_file=None,
-                 enable_preprocessing=True, preprocess_on_init=True):
+    def __init__(self, mediator_params, plant, dispatch_wrap_params, model_name="MSPTSingleOwner", load_defaults=False, weather_file=None,
+                 enable_preprocessing=True, preprocess_on_init=True, start_date_year=2018):
         if load_defaults == True:
             self.tech_model = t.default(model_name)
         else:
             self.tech_model = t.new(model_name)
+            # NOTE: order is important as earlier set parameters are overwritten:
+            self._SetTechModelParams(default_ssc_params)
+            self._SetTechModelParams(dispatch_wrap_params)
+            self._SetTechModelParams(plant.design)
+            self._SetTechModelParams(mediator_params)
+            self._SetTechModelParams({'sf_adjust:hourly': util.get_field_availability_adjustment(
+                mediator_params['time_steps_per_hour'], start_date_year, mediator_params['control_field'],
+                mediator_params['use_CD_measured_reflectivity'], plant.design, mediator_params['fixed_soiling_loss'])}
+            )
+            if all(key in plant.design for key in ('rec_user_mflow_path_1', 'rec_user_mflow_path_1')):
+                self._SetTechModelParams({'rec_user_mflow_path_1': rec_user_mflow_path_1})
+                self._SetTechModelParams({'rec_user_mflow_path_2': rec_user_mflow_path_2})
 
-        #TODO: load plant_config into tech_model and ensure there is a proper initial return value from GetSimulatedPlantState()
+            clearsky_data = util.get_clearsky_data(mediator_params['clearsky_file'], mediator_params['time_steps_per_hour'])
+            self._SetTechModelParams({'rec_clearsky_dni': clearsky_data.tolist()})
+
+            dispatch_factors_ts = plant_.Revenue.get_price_data(
+                price_multiplier_file=mediator_params['price_multiplier_file'],
+                avg_price=mediator_params['avg_price'],
+                price_steps_per_hour=mediator_params['price_steps_per_hour'],
+                time_steps_per_hour=mediator_params['time_steps_per_hour']
+                )
+            self._SetTechModelParams({'dispatch_factors_ts': dispatch_factors_ts})
 
         self.SetWeatherData(tmy_file_path=weather_file)
         self.enable_preprocessing = enable_preprocessing
@@ -216,16 +237,19 @@ class PysamWrap:
             return {
             # Last value in array output becomes number input?
             # Number Inputs                         # Arrays Outputs
-            'pc_op_mode_initial':                   'pc_op_mode_final',
-            'pc_startup_time_remain_init':          'pc_startup_time_remain_final',
-            'pc_startup_energy_remain_initial':     'pc_startup_energy_remain_final',
             'is_field_tracking_init':               'is_field_tracking_final',
             'rec_op_mode_initial':                  'rec_op_mode_final',
             'rec_startup_time_remain_init':         'rec_startup_time_remain_final',
             'rec_startup_energy_remain_init':       'rec_startup_energy_remain_final',
-            'T_tank_hot_init':                      'T_tes_hot',
+
             'T_tank_cold_init':                     'T_tes_cold',
+            'T_tank_hot_init':                      'T_tes_hot',
             'csp_pt_tes_init_hot_htf_percent':      'hot_tank_htf_percent_final',       # in SSC this variable is named csp.pt.tes.init_hot_htf_percent
+
+            'pc_op_mode_initial':                   'pc_op_mode_final',
+            'pc_startup_time_remain_init':          'pc_startup_time_remain_final',
+            'pc_startup_energy_remain_initial':     'pc_startup_energy_remain_final',
+
             'wdot0':                                'P_cycle',
             'qdot0':                                'q_pb',
             }
@@ -244,6 +268,52 @@ class PysamWrap:
         except:
             plant_state = None
         return plant_state
+
+
+    def estimates_for_dispatch_model(self, plant_design, toy, horizon, weather_data, N_pts_horizon, clearsky_data, start_pt):
+        """This is an interchangeable pysam version of ssc_wrapper.estimates_for_dispatch_model()"""
+
+        def time_of_year_to_datetime(year, seconds_since_newyears):
+            return datetime.datetime(int(year), 1, 1, 0, 0, 0) + datetime.timedelta(seconds=seconds_since_newyears)
+
+        # Backup parameters (to revert back after simulation)  ->  can I just copy self.tech_model and not have to backup and revert?
+        param_names = ['is_dispatch_targets', 'tshours', 'is_rec_startup_trans', 'rec_su_delay', 'rec_qf_delay']
+        original_params = {key:self._GetTechModelParam(key) for key in param_names}
+
+        # Set parameters
+        datetime_start = time_of_year_to_datetime(weather_data['year'][0], toy)
+        datetime_end = datetime_start + datetime.timedelta(seconds=horizon)     # horizon is in seconds
+        timestep = datetime.timedelta(hours=1/self._GetTechModelParam('time_steps_per_hour'))
+        plant_state = plant_design                                              # TODO: plant_design contains all parameters. Could filter.
+        solar_resource_data=weather_data
+        self._SetTechModelParams({
+            'is_dispatch_targets': False,
+            'tshours': 100,                                                     # Inflate TES size so that there is always "somewhere" to put receiver output
+            'is_rec_startup_trans': False,
+            'rec_su_delay': 0.001,                                              # Simulate with no start-up time to get total available solar energy
+            'rec_qf_delay': 0.001,
+
+            'q_pc_target_su_in': [0],
+            'q_pc_target_on_in': [0],
+            'q_pc_max_in': [0],
+            'is_rec_su_allowed_in': [0],
+            'is_rec_sb_allowed_in': [0],
+            'is_pc_su_allowed_in': [0],
+            'is_pc_sb_allowed_in': [0],
+            })
+
+        results = self.Simulate(datetime_start, datetime_end, timestep, plant_state=plant_state, solar_resource_data=solar_resource_data)
+        
+        # Revert back to original parameters
+        self._SetTechModelParams(original_params)
+
+        # Filter and adjust results
+        retvars = ['Q_thermal', 'm_dot_rec', 'beam', 'clearsky', 'tdry', 'P_tower_pump', 'pparasi']
+        if results['clearsky'].max() < 1.e-3:         # Clear-sky data wasn't passed through ssc (ssc controlled from actual DNI, or user-defined flow inputs)
+            results['clearsky'] = clearsky_data[start_pt : start_pt + N_pts_horizon]
+
+        return results
+
 
     def _WeatherFileIsSet(self):
         try:
@@ -321,12 +391,12 @@ class PysamWrap:
             # print(key + ': ' + str(value))
             key = key.replace('.', '_')
             if value == []: value = [None]
-        try:
+            try:
                 self.tech_model.value(key, value)
             except Exception as err:
                 # raise(err)  # just re-raise for now
                 pass            # ignore for now
-            return 0
+        return 0
 
     def _GetTechModelParam(self, key):
         key = key.replace('.', '_')
