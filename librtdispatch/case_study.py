@@ -70,7 +70,7 @@ mediator_params = {
 
 class CaseStudy:   
 
-    # Also copied to mediator
+    # Also copied to mediator (although it may not be needed there)
     @staticmethod
     def reupdate_ssc_constants(D, params, data):
         D['solar_resource_data'] = data['solar_resource_data']
@@ -170,9 +170,7 @@ if __name__ == '__main__':
 
 
     # Data - get historical weather
-    ground_truth_weather_data = util.read_weather_data(m_vars['ground_truth_weather_file'])
-    if ssc_time_steps_per_hour != 60:
-        ground_truth_weather_data = util.update_weather_timestep(ground_truth_weather_data, ssc_time_steps_per_hour)
+    ground_truth_weather_data = util.get_ground_truth_weather_data(m_vars['ground_truth_weather_file'], ssc_time_steps_per_hour)
 
     # Setup plant including calculating flux maps
     plant = plant_.Plant(design=plant_.plant_design, initial_state=plant_.plant_initial_state_CD)   # Default parameters contain best representation of CD plant and dispatch properties
@@ -190,10 +188,8 @@ if __name__ == '__main__':
     sf_adjust_hourly = util.get_field_availability_adjustment(ssc_time_steps_per_hour, start_date.year, m_vars['control_field'],
             m_vars['use_CD_measured_reflectivity'], plant.design, m_vars['fixed_soiling_loss'])
 
-    # Data - get clear-sky DNI annual arrays 
-    clearsky_data = np.genfromtxt(m_vars['clearsky_file'])
-    if ssc_time_steps_per_hour != 60:
-        clearsky_data = np.array(util.translate_to_new_timestep(clearsky_data, 1./60, 1./ssc_time_steps_per_hour))
+    # Data - get clear-sky DNI annual arrays
+    clearsky_data = util.get_clearsky_data(m_vars['clearsky_file'], ssc_time_steps_per_hour)
 
     # Data - get receiver mass flow annual arrays
     rec_user_mflow_path_1, rec_user_mflow_path_2 = CaseStudy.get_user_flow_paths(
