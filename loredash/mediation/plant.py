@@ -447,13 +447,13 @@ plant_design = {
     'pc_config':                    0,              # 0=Steam Rankine, 1=User-defined
     'ud_f_W_dot_cool_des':          0.58333,        # This is an estimate for the cooling system (700 kW) TODO: update user-defined cycle data with ambient variation
     'ud_m_dot_water_cool_des':      0.0,
-    'ud_ind_od':                    [],
+    'ud_ind_od':                    [0],
     'tech_type':                    1,              # 1=fixed, 3=sliding
     'P_boil':                       125,            # Boiler operating pressure [bar]
     'CT':                           2,              # 1=evaporative, 2=air*, 3=hybrid
     'T_amb_des':                    42.8,           #58   # C
     'P_cond_min':                   1.0,            #3.0  # inHg
-    'is_elec_heat_dur_off':         True,           # Use cycle electric heater parasitic when the cycle is off
+    'is_elec_heat_dur_off':         [True],         # Use cycle electric heater parasitic when the cycle is off
     'w_off_heat_frac':              0.045,          # Electric heaters when cycle is off state (CD data) [Accounts for Startup and Aux Boiler Electric Heaters (~5.4 MWe)]
     'pb_pump_coef':                 0.86,           # HTF pumping power through power block (kWe / kg/s) (CD data)   [Accounts for Hot Pumps]  
     'pb_fixed_par':                 0.010208,       # Constant losses in system, includes ACC power (CD data) -- [Accounts for SGS Heat Trace, WCT Fans & Pumps, Cond Pump, SGS Recir Pumps, Compressors]

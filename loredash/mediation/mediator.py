@@ -9,9 +9,10 @@ import PySAM_DAOTk.TcsmoltenSalt as pysam
 from pathlib import Path
 import pandas as pd
 import rapidjson
-from mediation import data_validator, pysam_wrap, models
+from mediation import data_validator, pysam_wrap, dispatch_wrap, models
 import mediation.plant as plant_
 import librtdispatch.util as util
+from mediation.plant import Revenue
 # import models
 
 class Mediator:
@@ -21,14 +22,14 @@ class Mediator:
 
     def __init__(self, params, plant_design, override_with_weather_file_location=False,
                  weather_file=None, preprocess_pysam=True, preprocess_pysam_on_init=True,
-                 update_interval=datetime.timedelta(seconds=5)):
+                 update_interval=datetime.timedelta(seconds=5), start_date_year=2018):
         self.params = params
         self.override_with_weather_file_location = override_with_weather_file_location
         self.weather_file = weather_file
         self.preprocess_pysam = preprocess_pysam
         self.preprocess_pysam_on_init = preprocess_pysam_on_init
         self.update_interval = update_interval
-        self.simulation_timestep = datetime.timedelta(hours=1/params['time_steps_per_hour'])
+        self.simulation_timestep = datetime.timedelta(hours=1/self.params['time_steps_per_hour'])
 
         #TODO: reinstitute this validation
         # Instantiate plant, first validating plant design
@@ -37,17 +38,70 @@ class Mediator:
         # except Exception as err:
         #     raise(err)  # just re-raise for now
 
-        self.plant = plant_.Plant(plant_design, plant_.plant_initial_state)
+        if self.params['control_receiver'] == 'CD_data':
+            plant_design['rec_user_mflow_path_1'], plant_design['rec_user_mflow_path_2'] = get_user_flow_paths(
+                flow_path1_file=self.params['CD_mflow_path2_file'],          # Note ssc path numbers are reversed relative to CD path numbers
+                flow_path2_file=self.params['CD_mflow_path1_file'],
+                time_steps_per_hour=self.params['time_steps_per_hour'],
+                helio_reflectance=plant_design['helio_reflectance'],
+                use_measured_reflectivity=self.params['use_CD_measured_reflectivity'],
+                soiling_avail=util.get_CD_soiling_availability(start_date_year, plant_design['helio_reflectance'] * 100), # CD soiled / clean reflectivity (daily array),
+                fixed_soiling_loss=self.params['fixed_soiling_loss']
+                )
+            plant_design['rec_user_mflow_path_1'] = rec_user_mflow_path_1
+            plant_design['rec_user_mflow_path_2'] = rec_user_mflow_path_2
+        else:
+            rec_user_mflow_path_1 = None
+            rec_user_mflow_path_2 = None
+
+
+        self.plant = plant_.Plant(
+            design=plant_design,
+            initial_state=plant_.plant_initial_state
+            )
 
         if weather_file is not None and override_with_weather_file_location == True:
             self.plant.set_location(GetLocationFromWeatherFile(weather_file))
 
+        self.pysam_wrap = pysam_wrap.PysamWrap(
+            mediator_params=self.params.copy(),
+            plant=self.plant,
+            dispatch_wrap_params=dispatch_wrap.dispatch_wrap_params.copy(),
+            model_name=self.default_pysam_model,
+            load_defaults=False,
+            weather_file=None,
+            enable_preprocessing=self.preprocess_pysam,
+            preprocess_on_init=self.preprocess_pysam_on_init
+            )
 
-        self.pysam_wrap = pysam_wrap.PysamWrap(model_name=self.default_pysam_model,
-                                               load_defaults=True,
-                                               weather_file=None,
-                                               enable_preprocessing=self.preprocess_pysam,
-                                               preprocess_on_init=self.preprocess_pysam_on_init)
+        # Setup dispatch_wrap
+        sf_adjust_hourly = util.get_field_availability_adjustment(self.params['time_steps_per_hour'], start_date_year, self.params['control_field'],
+            self.params['use_CD_measured_reflectivity'], self.plant.design, self.params['fixed_soiling_loss'])
+        price_data = Revenue.get_price_data(self.params['price_multiplier_file'], self.params['avg_price'], self.params['price_steps_per_hour'], self.params['time_steps_per_hour'])
+        clearsky_data = util.get_clearsky_data(self.params['clearsky_file'], self.params['time_steps_per_hour'])
+        ground_truth_weather_data = util.get_ground_truth_weather_data(self.params['ground_truth_weather_file'], self.params['time_steps_per_hour'])
+        dispatch_wrap_data = {
+            'sf_adjust:hourly':                 sf_adjust_hourly,
+            'dispatch_factors_ts':              price_data,
+            'clearsky_data':                    clearsky_data,
+            'solar_resource_data':              ground_truth_weather_data,
+            'rec_user_mflow_path_1':            rec_user_mflow_path_1,
+            'rec_user_mflow_path_2':            rec_user_mflow_path_2,
+        }
+        dispatch_wrap_params = dispatch_wrap.dispatch_wrap_params
+        dispatch_wrap_params.update(self.params)                                                    # include mediator params in with dispatch_wrap_params
+        dispatch_wrap_params['start_date'] = datetime.datetime(start_date_year, 1, 1, 8, 0, 0)      # needed for schedules TODO: fix spanning years (note the 8)
+        self.dispatch_wrap = dispatch_wrap.DispatchWrap(plant=self.plant, params=dispatch_wrap.dispatch_wrap_params, data=dispatch_wrap_data)
+        self.dispatch_inputs = {
+            'ursd_last':                        None,
+            'yrsd_last':                        None,
+            'weather_data_for_dispatch':        None,
+            'current_day_schedule':             None,
+            'next_day_schedule':                None,
+            'current_forecast_weather_data':    None,
+            'schedules':                        None,
+            'horizon':                          1/self.params['time_steps_per_hour']*3600,          # [s]
+        }
 
     
     def RunOnce(self, datetime_start=None, datetime_end=None):
@@ -116,7 +170,34 @@ class Mediator:
         # a. Set weather values and plant state for PySAM
         weather_dataframe = self.GetWeatherDataframe(datetime_start, datetime_end, tmy3_path=self.weather_file)
         
-        # b. Call PySAM using inputs
+        # b. Call dispatch model, (which includes a PySAM model run to get estimates) and update inputs for next call
+        dispatch_outputs = self.dispatch_wrap.run(
+            start_date=datetime_start,
+            timestep_days=self.simulation_timestep.seconds/(24*3600),
+            horizon=self.dispatch_inputs['horizon'],
+            retvars=default_disp_stored_vars(),
+            ursd_last=self.dispatch_inputs['ursd_last'],
+            yrsd_last=self.dispatch_inputs['yrsd_last'],
+            current_forecast_weather_data=self.dispatch_inputs['current_forecast_weather_data'],
+            weather_data_for_dispatch=self.dispatch_inputs['weather_data_for_dispatch'],
+            schedules=self.dispatch_inputs['schedules'],
+            current_day_schedule=self.dispatch_inputs['current_day_schedule'],
+            next_day_schedule=self.dispatch_inputs['next_day_schedule'],
+            f_estimates_for_dispatch_model=self.pysam_wrap.estimates_for_dispatch_model,
+            initial_plant_state=self.plant.state
+        )
+        self.dispatch_inputs['ursd_last'] = dispatch_outputs['ursd_last']
+        self.dispatch_inputs['yrsd_last'] = dispatch_outputs['yrsd_last']
+        self.dispatch_inputs['weather_data_for_dispatch'] = dispatch_outputs['weather_data_for_dispatch']
+        self.dispatch_inputs['current_day_schedule'] = dispatch_outputs['current_day_schedule']
+        self.dispatch_inputs['next_day_schedule'] = dispatch_outputs['next_day_schedule']
+        self.dispatch_inputs['current_forecast_weather_data'] = dispatch_outputs['current_forecast_weather_data']
+        self.dispatch_inputs['schedules'] = dispatch_outputs['schedules']
+        self.dispatch_inputs['horizon'] -= int(self.simulation_timestep.seconds)
+
+
+        # b. Call PySAM
+        self.pysam_wrap._SetTechModelParams(dispatch_outputs['ssc_dispatch_targets'])
         tech_outputs = self.pysam_wrap.Simulate(datetime_start, datetime_end, self.simulation_timestep, self.plant.state, weather_dataframe=weather_dataframe)
         print("Annual Energy [kWh]= ", tech_outputs["annual_energy"])
 
