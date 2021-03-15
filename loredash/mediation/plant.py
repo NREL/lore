@@ -776,7 +776,7 @@ class Revenue:
                 newdata = np.repeat(data, nrepeat)
             return newdata.tolist()
 
-        price_multipliers = np.genfromtxt(price_multiplier_file)
+        price_multipliers = np.genfromtxt(os.path.join(os.path.dirname(__file__), price_multiplier_file))
         if price_steps_per_hour != time_steps_per_hour:
             price_multipliers = translate_to_new_timestep(price_multipliers, 1./price_steps_per_hour, 1./time_steps_per_hour)
         pmavg = sum(price_multipliers)/len(price_multipliers)  

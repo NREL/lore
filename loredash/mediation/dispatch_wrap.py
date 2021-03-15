@@ -1,15 +1,21 @@
+import sys, os
+sys.path.insert(1, os.path.join(sys.path[0], '..'))
+
 from math import ceil, pi, log, isnan
 import numpy as np
 from copy import deepcopy
 import pyomo.environ as pe
 from pyomo.opt import TerminationCondition
 import datetime
-import os
 from csv import reader
 import math
 
-import util
-import dispatch_model
+try:
+    import librtdispatch.util as util
+    import librtdispatch.dispatch_model as dispatch_model
+except:     # if called from case_study
+    import util
+    import dispatch_model
 
 
 dispatch_wrap_params = {
@@ -978,6 +984,7 @@ class DispatchWrap:
         if int(util.get_time_of_day(self.start_date)) == 0 and self.use_day_ahead_schedule and self.day_ahead_schedule_from == 'calculated':
             self.schedules.append(None)
         
+        # TODO: Fix spanning years. The 'date' must be of the same year as the weather data, and not at the very end of year
         self.current_forecast_weather_data = DispatchWrap.update_forecast_weather_data(
                 date=self.start_date - datetime.timedelta(hours = 24-self.forecast_issue_time),
                 current_forecast_weather_data=util.create_empty_weather_data(self.ground_truth_weather_data, self.ssc_time_steps_per_hour),

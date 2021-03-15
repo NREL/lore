@@ -11,6 +11,7 @@ import pandas as pd
 import rapidjson
 from mediation import data_validator, pysam_wrap, models
 import mediation.plant as plant_
+import librtdispatch.util as util
 # import models
 
 class Mediator:
@@ -327,7 +328,7 @@ mediator_params = {
                                                                     # 'ssc_heuristic' = allow ssc heuristic (no consideration of TOD price) to control cycle dispatch
 
     # Price
-    'price_multiplier_file':                'prices_flat.csv',
+    'price_multiplier_file':                '../../librtdispatch/prices_flat.csv',
 	'ppa_multiplier_model':			        1,
 	'price_steps_per_hour':			        1,                      # Number of steps per hour in electricity price multipliers
 	'avg_price':					        138,                    # Average electricity price ($/MWh):  CD original PPA was $138/MWh
