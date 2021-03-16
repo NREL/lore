@@ -1,7 +1,10 @@
 import datetime
+import os
 import pandas
 from pvlib import forecast
 from pvlib import location
+
+from mediation.models import SolarForecastData
 
 class ForecastUncertainty:
     """
@@ -56,14 +59,13 @@ class SolarForecast:
     """
     plant_location = None
     forecast_uncertainty = None
-    
     def __init__(
         self,
         latitude,
         longitude,
         timezone,
         altitude,
-        uncertainty_bands = '../data/solar_forecast_bands.csv',
+        uncertainty_bands = ""
     ):
         """
         Parameters
@@ -85,10 +87,14 @@ class SolarForecast:
             timezone,
             altitude,
         )
+        if uncertainty_bands == "":
+            uncertainty_bands = os.path.join(
+                os.path.dirname(__file__), '../data/solar_forecast_bands.csv'
+            )
         self.forecast_uncertainty = ForecastUncertainty(uncertainty_bands)
         return
     
-    def _raw_data(self):
+    def _rawData(self):
         """Return a Pandas dataframe of the current DNI forecast and 
         corresponding  clear-sky DNI estimate.
     
@@ -109,36 +115,103 @@ class SolarForecast:
             how = 'clearsky_scaling',
         )[['dni']]
         data.index = pandas.to_datetime(data.index)
+        data['clear_sky'] = self.plant_location.get_clearsky(data.index)['dni']
+        # Drop any rows at which NDFD predicts essentially zero DNI, or the
+        # clear-sky is zero (e.g., night-time).
+        data = data[(data['dni'] > 5) & (data['clear_sky'] > 5)]
         # Map the values to a normalized dni/clear-sky ratio space to allow us
         # to convert the median estimate from NDFD to a probabilistic estimate.
-        data['clear_sky'] = self.plant_location.get_clearsky(data.index)['dni']
         data['ratio'] = data['dni'] / data['clear_sky']
-        # Clean up the ratio by imputing any NaNs that arose to the nearest 
-        # non-NaN value. This means we assume that the start of the day acts 
-        # like the earliest observation, and the end of the day looks like the 
+        return data
+    
+    def _toUTC(self, t):
+        "Convert a timezone-aware `t` to UTC and strip timezone info."
+        return t.astimezone('UTC').replace(tzinfo = None)
+
+    def _toLocal(self, t):
+        "Convert a timezone-naive `t` to local timezone-aware."
+        return t.tz_localize('UTC').astimezone(self.plant_location.tz)
+
+    def updateDatabase(self):
+        data = self._rawData()
+        current_time = self._toUTC(
+            pandas.Timestamp(
+                datetime.datetime.now(), tz = self.plant_location.tz,
+            )
+        )
+        instances = [
+            SolarForecastData(
+                # Note how these are now in UTC! Remember this when we get them
+                # back.
+                forecast_made = current_time,
+                forecast_for = self._toUTC(time),
+                clear_sky = row.clear_sky,
+                ratio = row.ratio,
+            )
+            # Okay, I know data.iterrows is slow. But the dataframe is never 
+            # very big.
+            for (time, row) in data.iterrows()
+        ]
+        SolarForecastData.objects.bulk_create(instances, ignore_conflicts=True)
+        return
+
+    def _hourDiff(self, t):
+        return (datetime.datetime.utcnow() - t).total_seconds() / 3600
+
+    def _updateLatestForecast(self, resolution):
+        self.updateDatabase()
+        return self.latestForecast(resolution = resolution)
+
+    def latestForecast(
+        self, 
+        resolution = '1h',
+        update_threshold = 3,
+    ):
+        """
+        Return the latest DNI forecast.
+
+        Parameters
+        ----------
+        resolution : str
+            The resolution passed to `pandas.ressample` for resampling the 
+            NDFD forecast into finer resolution. Defaults to `1h`.
+        update_threshold : int
+            If the latest forecast was retrieved more than `update_threshold` 
+            hours ago, refresh the database before returing the latest forecast.
+        """
+        # First, read latest forecast data from database, and convert it to the
+        # plant's timezone.
+        try:
+            latest = SolarForecastData.objects.latest('forecast_made').forecast_made
+        except SolarForecastData.DoesNotExist:
+            return self._updateLatestForecast(resolution = resolution)
+        if self._hourDiff(latest) >= update_threshold:
+            return self._updateLatestForecast(resolution = resolution)
+        raw_data = pandas.DataFrame(
+            SolarForecastData.objects.filter(forecast_made = latest).values()
+        )
+        raw_data.drop(columns = ['forecast_made', 'id'], inplace=True)
+        raw_data['forecast_for'] = \
+            raw_data['forecast_for'].map(lambda x: self._toLocal(x))
+        raw_data.set_index('forecast_for', inplace=True)
+        data = raw_data.resample(resolution).mean()
+        # Clean up the ratio by imputing any NaNs that arose to the nearest
+        # non-NaN value. This means we assume that the start of the day acts
+        # like the earliest observation, and the end of the day looks like the
         # last observation.
-        data.interpolate(method = 'nearest', inplace = True)
+        data.interpolate(method = 'linear', inplace = True)
         # However, nearest only works when there are non-NaN values either side.
         # For the first and last NaNs, use bfill and ffill:
         data.fillna(method = 'bfill', inplace = True)
         data.fillna(method = 'ffill', inplace = True)
-        return data
-    
-    def forecast(self, resolution = '5T'):
-        # Get the median estimate from NDFD, as well as the estimate in 
-        # ratio-space.
-        raw_data = self._raw_data()
         # For each row (level = 0), convert the median ratio estimate into a 
         # probabilistic ratio estimate.
-        quantile_data = raw_data.groupby(level = 0).apply(
+        data = data.groupby(level = 0).apply(
             lambda df: self.forecast_uncertainty.forecast(
                 (df.index[0] - raw_data.index[0]).seconds / 3_600,
                 df['ratio'][0],
             )
         )
-        # Then, resample these ratio estimates to the user-provided resolution.
-        data = quantile_data.resample(resolution).mean()
-        data.interpolate(method = 'nearest', inplace = True)
         # Get clear-sky estimates for the new time-points.
         data['clear_sky'] = self.plant_location.get_clearsky(data.index)['dni']
         # Convert the ratio estimates back to DNI-space by multiplying by the 
@@ -147,4 +220,5 @@ class SolarForecast:
             if k == 'clear_sky':
                 continue
             data[k] = data[k] * data['clear_sky']
+        data.rename(columns = {k: str(k) for k in data.keys()}, inplace=True)
         return data
