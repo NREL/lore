@@ -391,7 +391,8 @@ class PysamWrap:
         for key,value in param_dict.items():
             # print(key + ': ' + str(value))
             key = key.replace('.', '_')
-            if value == []: value = [None]
+            key = key.replace('adjust:', '')    # These set the values in tech_model.AdjustmentFactors
+            if value == []: value = [0]         # setting an empty list crashes PySAM
             try:
                 self.tech_model.value(key, value)
             except Exception as err:
