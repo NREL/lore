@@ -54,6 +54,7 @@ class Mediator:
             rec_user_mflow_path_1 = None
             rec_user_mflow_path_2 = None
 
+        plant_design['is_elec_heat_dur_off'] = [plant_design['is_elec_heat_dur_off']]       # NOTE: made this value a list as needed by PySAM, but needs to not be one for PySSC
 
         self.plant = plant_.Plant(
             design=plant_design,
