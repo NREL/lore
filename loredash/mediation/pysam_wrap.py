@@ -15,7 +15,7 @@ class PysamWrap:
     kMinOneHourSims = True        # circumvents SSC bug
 
     def __init__(self, model_name="MSPTSingleOwner", load_defaults=True, weather_file=None,
-                 enable_preprocessing=True, preprocess_on_init=True):
+                 enable_preprocessing=True, preprocess_on_init=True, plant_location=None):
         if load_defaults == True:
             self.tech_model = t.default(model_name)
         else:
@@ -25,6 +25,7 @@ class PysamWrap:
 
         self.SetWeatherData(tmy_file_path=weather_file)
         self.enable_preprocessing = enable_preprocessing
+        self.plant_location = plant_location
 
         if self.enable_preprocessing == True:
             design_not_set = True
@@ -36,7 +37,8 @@ class PysamWrap:
     def PreProcess(self):
         if not self._WeatherFileIsSet():
             solar_resource_data = PysamWrap.GetSolarResourceDataTemplate(
-                plant_location = mediator.Plant.GetPlantConfig()['location']
+                # plant_location = mediator.Plant.GetPlantConfig()['location']
+                self.plant_location
             )
         else:
             solar_resource_data = None
@@ -121,10 +123,10 @@ class PysamWrap:
         }
 
         if plant_location is not None:
-            solar_resource_data['tz'] = plant_location['Time Zone']
-            solar_resource_data['elev'] = plant_location['Elevation']
-            solar_resource_data['lat'] = plant_location['Latitude']
-            solar_resource_data['lon'] = plant_location['Longitude']
+            solar_resource_data['tz'] = plant_location['timezone']
+            solar_resource_data['elev'] = plant_location['elevation']
+            solar_resource_data['lat'] = plant_location['latitude']
+            solar_resource_data['lon'] = plant_location['longitude']
 
         return solar_resource_data
 

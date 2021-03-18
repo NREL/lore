@@ -21,6 +21,7 @@ class Mediator:
     def __init__(self, plant_config_path=None, override_with_weather_file_location=False,
                  weather_file=None, preprocess_pysam=True, preprocess_pysam_on_init=True,
                  update_interval=datetime.timedelta(seconds=5), simulation_timestep=datetime.timedelta(minutes=5)):
+        # self.plant_config_path = plant_config_path
         self.override_with_weather_file_location = override_with_weather_file_location
         self.weather_file = weather_file
         self.preprocess_pysam = preprocess_pysam
@@ -36,7 +37,32 @@ class Mediator:
                 raise(err)  # just re-raise for now
         else:
             # TODO: Change so it's triggered by the user instead of an automatic initialization
-            Plant.LoadPlantConfig(plant_config_path)
+            # Plant.LoadPlantConfig(plant_config_path)
+            if isinstance(plant_config_path, str) and os.path.isfile(plant_config_path):
+                with open(plant_config_path) as f:
+                    plant_config = rapidjson.load(f)
+            else:
+                raise Exception('Plant configuration file not found.')
+
+            validated_outputs = data_validator.validate(plant_config, data_validator.plant_config_schema)
+
+            plant_location = plant_config['location']
+            plant = Plant(plant_config, plant_location)
+            print(plant.plant_location)
+            
+            """ plant_config_table = PlantConfig()
+            print("PLANT", plant)
+            # plant_config_table.site_id = plant_config['site_id']
+            # print("SITE_ID:", plant_config_table.site_id)
+            plant_config_table.name = plant.plant_config['name']
+            print("PLANT NAME:", plant_config_table.name)
+            print("PLANT LOCATION:", plant.plant_location)
+            plant_config_table.latitude = plant.plant_location['latitude']
+            plant_config_table.longitude = plant.plant_location['longitude']
+            plant_config_table.elevation = plant.plant_location['elevation']
+            plant_config_table.timezone = plant.plant_location['timezone']
+            plant_config_table.timezone_string = plant.plant_location['timezone_string']
+            plant_config_table.save() """
 
         if weather_file is not None and override_with_weather_file_location == True:
             plant_location = GetLocationFromWeatherFile(weather_file)
@@ -47,7 +73,8 @@ class Mediator:
                                                load_defaults=True,
                                                weather_file=None,
                                                enable_preprocessing=self.preprocess_pysam,
-                                               preprocess_on_init=self.preprocess_pysam_on_init)
+                                               preprocess_on_init=self.preprocess_pysam_on_init,
+                                               plant_location=plant.plant_location)
     
     def RunOnce(self, datetime_start=None, datetime_end=None):
         """
@@ -214,6 +241,10 @@ class Mediator:
 
 
 class Plant:
+    def __init__(self, plant_config=None, plant_location=None):
+        self.plant_config = plant_config
+        self.plant_location = plant_location
+
     @staticmethod
     def LoadPlantConfig(config_path):
         if isinstance(config_path, str) and os.path.isfile(config_path):
@@ -244,6 +275,7 @@ class Plant:
             plant_location = data_validator.validate(plant_location, data_validator.plant_location_schema)
 
         plant_config_table = PlantConfig()
+        # plant_config_table.site_id = plant_location['side_id']
         plant_config_table.latitude = plant_location['latitude']
         plant_config_table.longitude = plant_location['longitude']
         plant_config_table.elevation = plant_location['elevation']
