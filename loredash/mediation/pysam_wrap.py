@@ -213,12 +213,13 @@ class PysamWrap:
 
             # the number of records must be a integer multiple of 8760
             # see: sam_dev/ssc/ssc/common.cpp, line 1272
-            N_to_pad = 8760 - len(validated_solar_resource_data['month']) % 8760
-            padding = [0]*N_to_pad
-            {k:(v.extend(padding) if isinstance(v, list) else v) for (k,v) in validated_solar_resource_data.items()}
-
+            diff = len(validated_solar_resource_data['dn']) % 8760
+            if diff > 0:
+                padding = [0] * (8760 - diff)
+                for v in validated_solar_resource_data.values():
+                    if isinstance(v, list):
+                        v.extend(padding)
             self.tech_model.SolarResource.solar_resource_data = validated_solar_resource_data
-
         return 0
 
     def GetSimulatedPlantState(self, model_outputs, **kwargs):
@@ -388,22 +389,19 @@ class PysamWrap:
 
     def _SetTechModelParams(self, param_dict):
         for key,value in param_dict.items():
-            # print(key + ': ' + str(value))
             key = key.replace('.', '_')
             key = key.replace('adjust:', '')    # These set the values in tech_model.AdjustmentFactors
             if value == []: value = [0]         # setting an empty list crashes PySAM
             try:
                 self.tech_model.value(key, value)
             except Exception as err:
-                # raise(err)  # just re-raise for now
+                print("Skipping setting param: %s" % key)
                 pass            # ignore for now
         return 0
 
     def _GetTechModelParam(self, key):
         key = key.replace('.', '_')
         try:
-            value = self.tech_model.value(key)
+            return self.tech_model.value(key)
         except Exception as err:
-            # raise(err)  # just re-raise for now
-            pass            # ignore for now
-        return value
+            raise(err)
