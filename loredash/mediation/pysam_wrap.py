@@ -40,7 +40,6 @@ class PysamWrap:
             )
         else:
             solar_resource_data = None
-
         self.tech_model.HeliostatField.field_model_type = 2                             # generate flux maps
         datetime_start = datetime.datetime(2018, 1, 1, 0, 0, 0)         
         datetime_end = datetime_start                                                   # run for just first hour of year
@@ -121,10 +120,10 @@ class PysamWrap:
         }
 
         if plant_location is not None:
-            solar_resource_data['tz'] = plant_location['Time Zone']
-            solar_resource_data['elev'] = plant_location['Elevation']
-            solar_resource_data['lat'] = plant_location['Latitude']
-            solar_resource_data['lon'] = plant_location['Longitude']
+            solar_resource_data['tz'] = plant_location['timezone']
+            solar_resource_data['elev'] = plant_location['elevation']
+            solar_resource_data['lat'] = plant_location['latitude']
+            solar_resource_data['lon'] = plant_location['longitude']
 
         return solar_resource_data
 
