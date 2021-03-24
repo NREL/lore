@@ -284,14 +284,8 @@ class Mediator:
             if error_string == "UNIQUE constraint failed: mediation_pysamdata.timestamp":
                 raise IntegrityError(error_string)      # just re-raise the exception for now
         except Exception as err:
-            error_string = format(err)
-            if error_string != "no such table: mediation_pysamdata":
-                raise(err)
-            else:
-                # Do nothing. The table hasn't been created yet because we are
-                # running this for the first time.
-                pass
-
+            raise(err)
+    
     def GetWeatherDataframe(self, datetime_start, datetime_end, **kwargs):
         """put the weather forecast call here instead"""
         tmy3_path = kwargs.get('tmy3_path') if 'tmy3_path' in kwargs else None
