@@ -285,7 +285,8 @@ class PysamWrap:
         datetime_start = time_of_year_to_datetime(weather_data['year'][0], toy)
         datetime_end = datetime_start + datetime.timedelta(seconds=horizon)     # horizon is in seconds
         timestep = datetime.timedelta(hours=1/self._GetTechModelParam('time_steps_per_hour'))
-        plant_state = plant_design                                              # TODO: plant_design contains all parameters. Could filter.
+        plant_state = plant_design                                        # TODO: plant_design contains all parameters. Could filter.
+        plant_state['is_dispatch_targets'] = False
         solar_resource_data=weather_data
         self._SetTechModelParams({
             'is_dispatch_targets': False,
@@ -302,17 +303,14 @@ class PysamWrap:
             'is_pc_su_allowed_in': [0],
             'is_pc_sb_allowed_in': [0],
             })
-
         results = self.Simulate(datetime_start, datetime_end, timestep, plant_state=plant_state, solar_resource_data=solar_resource_data)
-        
         # Revert back to original parameters
         self._SetTechModelParams(original_params)
 
         # Filter and adjust results
         retvars = ['Q_thermal', 'm_dot_rec', 'beam', 'clearsky', 'tdry', 'P_tower_pump', 'pparasi']
-        if results['clearsky'].max() < 1.e-3:         # Clear-sky data wasn't passed through ssc (ssc controlled from actual DNI, or user-defined flow inputs)
+        if results['clearsky'][0] < 1.e-3:         # Clear-sky data wasn't passed through ssc (ssc controlled from actual DNI, or user-defined flow inputs)
             results['clearsky'] = clearsky_data[start_pt : start_pt + N_pts_horizon]
-
         return results
 
 
@@ -395,7 +393,7 @@ class PysamWrap:
             try:
                 self.tech_model.value(key, value)
             except Exception as err:
-                print("Skipping setting param: %s" % key)
+                # print("Skipping setting param: %s" % key)
                 pass            # ignore for now
         return 0
 
