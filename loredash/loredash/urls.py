@@ -37,6 +37,7 @@ mediator = mediator.Mediator(plant_config_path=plant_config_path,
                              simulation_timestep=datetime.timedelta(minutes=5))
 
 result = mediator.ModelPreviousDayAndAddToDb()
+
 result = mediator.RunOnce()
 
 # This is the main production code where the mediator runs continuously

@@ -15,7 +15,7 @@ version: "3"
 services:
     # this is an 'app' from which a container is created. 'plots' is another app and will be another container
     dash:
-        image: matthewtboyd/lore
+        image: dquintan/lore
         networks:
             app_net:
                 ipv4_address: 10.10.10.10
@@ -32,7 +32,7 @@ services:
             - migration
             - plots
     plots:
-        image: matthewtboyd/lore
+        image: dquintan/lore
         networks:
             app_net:
                 ipv4_address: 10.10.10.11
@@ -62,7 +62,7 @@ services:
             - migration
     migration:
         build: .
-        image: matthewtboyd/lore
+        image: dquintan/lore
         networks:
             - app_net
         command: python manage.py migrate
