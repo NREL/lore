@@ -23,6 +23,7 @@ import multiprocessing
 import datetime
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 # ===Initialization code, put here so the Bokeh server django.setup() call doesn't execute it
 # For testing, bypassing multiprocessing:
 # parent_dir = str(Path(__file__).parents[1])
@@ -41,6 +42,8 @@ import datetime
 
 # result = mediator.RunOnce()
 =======
+=======
+>>>>>>> 0b6710c868357517db689b029d8084353ae0fc84
 # TODO(odow): the purpose of this code is to populate the database so we have
 # things to plot. But it shouldn't go here, because this gets run on a `migrate`
 # call, and initially, we don't have a database to store the results in! It
@@ -69,6 +72,9 @@ try:
 except Exception as err:
     print("Oops! Migration failed because we don't have a database yet. Try running that command again.")
     pass
+<<<<<<< HEAD
+>>>>>>> 0b6710c868357517db689b029d8084353ae0fc84
+=======
 >>>>>>> 0b6710c868357517db689b029d8084353ae0fc84
 
 # This is the main production code where the mediator runs continuously
