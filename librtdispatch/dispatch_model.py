@@ -1491,12 +1491,9 @@ class RealTimeDispatchModel(object):
 
     def solveModel(self, mipgap=0.001, solver='cbc', timelimit=60, tee=False, keepfiles=False):
         if solver == 'cbc':
-            try:  # Try to use Cbc on the user's path...
-                opt = pe.SolverFactory('cbc')
-            except:  # Otherwise use the copy in /solvers.
-                dir_path = os.path.dirname(os.path.realpath(__file__))
-                cbc_path = os.path.join(dir_path, 'solvers', 'cbc')
-                opt = pe.SolverFactory('cbc', executable = cbc_path)
+            dir_path = os.path.dirname(os.path.realpath(__file__))
+            cbc_path = os.path.join(dir_path, 'solvers', 'cbc')
+            opt = pe.SolverFactory('cbc', executable = cbc_path)
             opt.options["ratioGap"] = mipgap
             opt.options["seconds"] = timelimit
         elif solver == 'cplex':

@@ -199,7 +199,9 @@ class Mediator:
 
 
         # b. Call PySAM
-        self.pysam_wrap._SetTechModelParams(dispatch_outputs['ssc_dispatch_targets'])
+        self.pysam_wrap._SetTechModelParams(
+            dispatch_outputs['ssc_dispatch_targets'].target_for_pysamwrap()
+        )
         tech_outputs = self.pysam_wrap.Simulate(datetime_start, datetime_end, self.simulation_timestep, self.plant.state, weather_dataframe=weather_dataframe)
         print("Annual Energy [kWh]= ", tech_outputs["annual_energy"])
 

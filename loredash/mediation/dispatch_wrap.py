@@ -776,7 +776,14 @@ class DispatchSoln:
 
 
 class DispatchTargets:
-    def __init__(self, dispatch_soln=None, plant=None, dispatch_params=None, sscstep=None, horizon=None):
+    def __init__(
+        self,
+        dispatch_soln=None,
+        plant=None,
+        dispatch_params=None,
+        sscstep=None,  # Length of the SSC step [s]
+        horizon=None,  # Frequency of which the dispatch is updated [hr]
+    ):
         self.q_pc_target_su_in = []         # Target thermal power to cycle for startup (MWt)
         self.q_pc_target_on_in = []         # Target thermal power to cycle for operation (MWt)
         self.q_pc_max_in = []               # Max thermal power to cycle (MWt)
@@ -851,7 +858,16 @@ class DispatchTargets:
 
         return
 
-
+    def target_for_pysamwrap(self):
+        return {
+            'q_pc_target_su_in': self.q_pc_target_su_in,
+            'q_pc_target_on_in': self.q_pc_target_on_in,
+            'q_pc_max_in': self.q_pc_max_in,
+            'is_rec_su_allowed_in': self.is_rec_su_allowed_in,
+            'is_rec_sb_allowed_in': self.is_rec_sb_allowed_in,
+            'is_pc_su_allowed_in': self.is_pc_su_allowed_in,
+            'is_pc_sb_allowed_in': self.is_pc_sb_allowed_in,
+        }
 
 class DispatchWrap:
     def __init__(self, plant, params, data):
@@ -1212,9 +1228,7 @@ class DispatchWrap:
 
             include = {"pv": False, "battery": False, "persistence": False, "force_cycle": False, "op_assumptions": False,
                         "signal":include_day_ahead_in_dispatch, "simple_receiver": False}
-                
             dispatch_soln = run_dispatch_model(disp_in, include)
-
             if start_date == datetime.datetime(2018, 10, 14, 0, 0):
                 assert math.isclose(sum(list(dispatch_soln.cycle_on)), 16, rel_tol=1e-4)
                 assert math.isclose(sum(list(dispatch_soln.cycle_startup)), 2, rel_tol=1e-4)
@@ -1255,7 +1269,13 @@ class DispatchWrap:
                     self.weather_at_schedule.append(weather_at_day_ahead_schedule)  # Store weather used at the point in time the day ahead schedule was generated
 
                 #--- Set ssc dispatch targets
-                ssc_dispatch_targets = DispatchTargets(dispatch_soln, self.plant, self.dispatch_params, sscstep, freq/3600.)
+                ssc_dispatch_targets = DispatchTargets(
+                    dispatch_soln,
+                    self.plant,
+                    self.dispatch_params
+                    sscstep,
+                    freq / 3600.0,
+                )
 
                 if start_date == datetime.datetime(2018, 10, 14, 0, 0):
                     assert hash(tuple(ssc_dispatch_targets.is_pc_sb_allowed_in)) == -4965923453060612375
