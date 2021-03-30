@@ -254,7 +254,6 @@ class DispatchParams:
                 self.Delta[-1] -= (t - horizon)
                 self.Delta_e[-1] = horizon
                 break
-        
         n = len(self.Delta)
         self.T = n
         self.start = 1  
@@ -499,15 +498,20 @@ class DispatchParams:
         return
 
     # Set dispatch inputs from ssc estimates, S = dictionary containing selected ssc data
-    def set_estimates_from_ssc_data(self, design, S, sscstep, require_Qin_nonzero = True):
+    def set_estimates_from_ssc_data(
+        self,
+        design,
+        S,
+        sscstep,  # SSC simulation step [hr]
+        require_Qin_nonzero = True,
+    ):
         n = len(S['Q_thermal'])
-        Qin = S['Q_thermal']*1000
+        Qin = S['Q_thermal']
         if require_Qin_nonzero:
-            Qin = np.maximum(0.0, S['Q_thermal']*1000)
+            Qin = np.maximum(0.0, Qin)
         self.Qin = util.translate_to_variable_timestep(Qin, sscstep, self.Delta)
-        ratio = [0 if S['clearsky'][i] < 0.01 else min(1.0, S['beam'][i]/S['clearsky'][i]) for i in range(n)]   # Ratio of actual to clearsky DNI 
+        ratio = [0 if S['clearsky'][i] < 0.01 else min(1.0, S['beam'][i]/S['clearsky'][i]) for i in range(n)]   # Ratio of actual to clearsky DNI
         self.F = util.translate_to_variable_timestep(ratio, sscstep, self.Delta)
-        self.F = np.minimum(self.F, 1.0)
         self.Q_cls = self.Qin / np.maximum(1.e-6, self.F)
 
         n = len(self.Delta)
@@ -517,7 +521,8 @@ class DispatchParams:
             self.delta_rs[t] = min(1., max(self.Er / max(self.Qin[t]*self.Delta[t], 1.), self.Drsu/self.Delta[t]))
             self.delta_cs[t] = min(1., self.Ec/(self.Qc*self.Delta[t]) )
         
-        self.P_field_rec = util.translate_to_variable_timestep((S['P_tower_pump']+S['pparasi'])*1000, sscstep, self.Delta)
+        P_field_rec = [a + b for (a, b) in zip(S['P_tower_pump'], S['pparasi'])]
+        self.P_field_rec = util.translate_to_variable_timestep(P_field_rec, sscstep, self.Delta)
 
         # Set time-series ambient temperature corrections
         if design['pc_config'] == 1: # User-defined cycle
@@ -1272,7 +1277,7 @@ class DispatchWrap:
                 ssc_dispatch_targets = DispatchTargets(
                     dispatch_soln,
                     self.plant,
-                    self.dispatch_params
+                    self.dispatch_params,
                     sscstep,
                     freq / 3600.0,
                 )
@@ -1462,39 +1467,57 @@ def setup_dispatch_model(R_est, freq, horizon, include_day_ahead_in_dispatch,
     avg_purchase_price, day_ahead_tol_plus, day_ahead_tol_minus,
     tod, current_day_schedule, day_ahead_pen_plus, day_ahead_pen_minus,
     dispatch_horizon, night_clearsky_cutoff, ursd_last, yrsd_last):
-
     #--- Set dispatch optimization properties for this time horizon using ssc estimates
     ##########
     ##  There's already a lot of the dispatch_params member variables set here, which set_initial_state draws from
     ##########
     # Initialize dispatch model inputs
-    dispatch_params.set_dispatch_time_arrays(dispatch_steplength_array, dispatch_steplength_end_time,
-        dispatch_horizon, nonlinear_model_time, disp_time_weighting)
+    dispatch_params.set_dispatch_time_arrays(
+        dispatch_steplength_array,
+        dispatch_steplength_end_time,
+        dispatch_horizon,
+        nonlinear_model_time,
+        disp_time_weighting,
+    )
     dispatch_params.set_fixed_parameters_from_plant_design(plant)
     dispatch_params.set_default_grid_limits()
     dispatch_params.disp_time_weighting = disp_time_weighting
     dispatch_params.set_initial_state(plant)  # Set initial plant state for dispatch model
     
-    # Update approximate receiver shutdown state from previous dispatch solution (not returned from ssc)
-    dispatch_params.set_approximate_shutdown_state_parameters(plant.state, ursd = ursd_last, yrsd = yrsd_last)  # Set initial state parameters related to shutdown from dispatch model (because this cannot be derived from ssc)
+    # Update approximate receiver shutdown state from previous dispatch solution
+    # (not returned from ssc)
+    dispatch_params.set_approximate_shutdown_state_parameters(
+        plant.state, ursd = ursd_last, yrsd = yrsd_last
+    )
 
-    nonlinear_time = nonlinear_model_time # Time horizon for nonlinear model (hr)
-    if use_linear_dispatch_at_night:
-        endpt = int((toy + nonlinear_time*3600) / sscstep)  # Last point in annual arrays at ssc time step resolution corresponding to nonlinear portion of dispatch model
-        if clearsky_data[startpt:endpt].max() <= night_clearsky_cutoff:
-            nonlinear_time = 0.0
+    # nonlinear_time = nonlinear_model_time # Time horizon for nonlinear model (hr)
+    # if use_linear_dispatch_at_night:
+    #     endpt = int((toy + nonlinear_time*3600) / sscstep)  # Last point in annual arrays at ssc time step resolution corresponding to nonlinear portion of dispatch model
+    #     if clearsky_data[startpt:endpt].max() <= night_clearsky_cutoff:
+    #         nonlinear_time = 0.0
 
-    dispatch_params.set_dispatch_time_arrays(dispatch_steplength_array, dispatch_steplength_end_time, horizon/3600., nonlinear_time, disp_time_weighting)
-    dispatch_params.set_default_grid_limits()
-    dispatch_params.P = util.translate_to_variable_timestep([p/1000. for p in price], sscstep/3600., dispatch_params.Delta)  # $/kWh
+    # # TODO(odow): what is this.
+    # dispatch_params.set_dispatch_time_arrays(
+    #     dispatch_steplength_array,
+    #     dispatch_steplength_end_time,
+    #     horizon/3600.,
+    #     nonlinear_time,
+    #     disp_time_weighting,
+    # )
+    # dispatch_params.set_default_grid_limits()
+    assert( len(price) == 1)  # Constant prices for now.
+    dispatch_params.P = [price[0] / 1000 for d in dispatch_params.Delta]
     dispatch_params.avg_price = avg_price/1000.
     dispatch_params.avg_price_disp_storage_incentive = avg_price_disp_storage_incentive / 1000.  # $/kWh  # Only used in storage inventory incentive -> high values cause the solutions to max out storage rather than generate electricity
     dispatch_params.avg_purchase_price = avg_purchase_price/1000    # $/kWh 
     dispatch_params.day_ahead_tol_plus = day_ahead_tol_plus*1000    # kWhe
     dispatch_params.day_ahead_tol_minus = day_ahead_tol_minus*1000  # kWhe
 
-    dispatch_params.set_estimates_from_ssc_data(plant.design, R_est, sscstep/3600.) 
-    
+    dispatch_params.set_estimates_from_ssc_data(
+        plant.design,
+        R_est,
+        sscstep / 3600.0,
+    )
     
     #--- Set day-ahead schedule in dispatch parameters
     if include_day_ahead_in_dispatch:  

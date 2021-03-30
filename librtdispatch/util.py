@@ -147,6 +147,10 @@ def translate_to_new_timestep(data, old_timestep, new_timestep):
 # Translate arrays from a fixed timestep (dt_fixed) to variable timestep (dt_var)
 # Assumes that all variable timesteps are an integer multiple of the fixed timstep, or vice versa, and that end points of fixed and variable timesteps coincide
 def translate_to_variable_timestep(data, dt_fixed, dt_var):
+    if len(data) == 1:
+        # A length-one vector has been supplied. Assume constant throughout.
+        return [data[0] for _ in dt_var]
+
     n = len(dt_var)  
     dt_fixed_sec = int(ceil(dt_fixed*3600 - 0.0001))
     data_var = np.zeros(n)
