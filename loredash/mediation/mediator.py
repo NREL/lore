@@ -31,12 +31,12 @@ class Mediator:
         self.update_interval = update_interval
         self.simulation_timestep = datetime.timedelta(hours=1/self.params['time_steps_per_hour'])
 
-        #TODO: reinstitute this validation
-        # Instantiate plant, first validating plant design
-        # try:
-        #     data_validator.validate(plant_design, data_validator.plant_config_schema)
-        # except Exception as err:
-        #     raise(err)  # just re-raise for now
+          if plant_config_path is None:
+            # Verify plant configuration in database
+            try:
+                data_validator.validate(Plant.GetPlantConfig(), data_validator.plant_config_schema)
+            except Exception as err:
+                raise(err)  # just re-raise for now
 
         if self.params['control_receiver'] == 'CD_data':
             plant_design['rec_user_mflow_path_1'], plant_design['rec_user_mflow_path_2'] = get_user_flow_paths(
@@ -284,19 +284,63 @@ class Mediator:
             if error_string == "UNIQUE constraint failed: mediation_pysamdata.timestamp":
                 raise IntegrityError(error_string)      # just re-raise the exception for now
         except Exception as err:
-            error_string = format(err)
-            if error_string != "no such table: mediation_pysamdata":
-                raise(err)
-            else:
-                # Do nothing. The table hasn't been created yet because we are
-                # running this for the first time.
-                pass
-
+            raise(err)
+    
     def GetWeatherDataframe(self, datetime_start, datetime_end, **kwargs):
         """put the weather forecast call here instead"""
         tmy3_path = kwargs.get('tmy3_path') if 'tmy3_path' in kwargs else None
         return Tmy3ToDataframe(tmy3_path, datetime_start, datetime_end)
 
+class Plant:
+    @staticmethod
+    def LoadPlantConfig(config_path):
+        if isinstance(config_path, str) and os.path.isfile(config_path):
+            with open(config_path) as f:
+                plant_config = rapidjson.load(f)
+        else:
+            raise Exception('Plant configuration file not found.')
+            
+        validated_outputs = data_validator.validate(plant_config, data_validator.plant_config_schema)
+
+        plant_config_table = PlantConfig()
+        plant_config_table.name = plant_config['name']
+        plant_config_table.save()
+        Plant.LoadPlantLocation(plant_config['location'], validate=False)    # already validated above
+        del plant_config
+
+    @staticmethod
+    def LoadPlantLocation(plant_location, validate=True):
+        if validate == True:
+            plant_location = data_validator.validate(plant_location, data_validator.plant_location_schema)
+
+        plant_config_table = PlantConfig()
+        plant_config_table.latitude = plant_location['latitude']
+        plant_config_table.longitude = plant_location['longitude']
+        plant_config_table.elevation = plant_location['elevation']
+        plant_config_table.timezone = plant_location['timezone']
+        plant_config_table.timezone_string = plant_location['timezone_string']
+        plant_config_table.save()
+
+    @staticmethod
+    def GetPlantConfig():
+        result = list(PlantConfig.objects.filter(site_id=settings.SITE_ID).values())[0]
+        result['location'] = {}
+        result['location']['latitude'] = result.pop('latitude')
+        result['location']['longitude'] = result.pop('longitude')
+        result['location']['elevation'] = result.pop('elevation')
+        result['location']['timezone'] = result.pop('timezone')
+        result['location']['timezone_string'] = result.pop('timezone_string')
+        return result
+
+    @staticmethod
+    def GetPlantState(validated_outputs_prev, **kwargs):
+        """put virtual/real call here instead"""
+        assert 'pysam_wrap' in kwargs
+        pysam_wrap = kwargs.get('pysam_wrap')
+        plant_state = pysam_wrap.GetSimulatedPlantState(validated_outputs_prev)      # for initializing next simulation from a prior one
+        if plant_state is None:
+            plant_state = pysam_wrap.GetDefaultPlantState()
+        return plant_state    
 
 def MediateContinuously(update_interval=5):
     mediator = Mediator()
