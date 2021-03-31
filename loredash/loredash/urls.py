@@ -33,24 +33,24 @@ import datetime
 def _RunOnce():
     parent_dir = str(Path(__file__).parents[1])
     default_weather_file = parent_dir + "/data/daggett_ca_34.865371_-116.783023_psmv3_60_tmy.csv"
-    plant_config_path = parent_dir + "/data/plant_config.json"
+    plant_design = plant_.plant_design
     m = mediator.Mediator(
-        plant_config_path = plant_config_path,
+        params=mediator.mediator_params,
+        plant_design=plant_design,
         override_with_weather_file_location = False,
         weather_file = default_weather_file,
         preprocess_pysam = True,
         preprocess_pysam_on_init = True,
         update_interval = datetime.timedelta(seconds = 5),
-        simulation_timestep = datetime.timedelta(minutes = 5),
     )
     result = m.ModelPreviousDayAndAddToDb()
     result = m.RunOnce()
     return
-try:
-    _RunOnce()
-except Exception as err:
-    print("Oops! Migration failed because we don't have a database yet. Try running that command again.")
-    pass
+# try:
+_RunOnce()
+# except Exception as err:
+#     print("Oops! Migration failed because we don't have a database yet. Try running that command again.")
+#     pass
 
 # This is the main production code where the mediator runs continuously
 # update_interval = 10     # seconds

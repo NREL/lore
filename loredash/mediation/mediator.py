@@ -31,12 +31,13 @@ class Mediator:
         self.update_interval = update_interval
         self.simulation_timestep = datetime.timedelta(hours=1/self.params['time_steps_per_hour'])
 
-          if plant_config_path is None:
-            # Verify plant configuration in database
-            try:
-                data_validator.validate(Plant.GetPlantConfig(), data_validator.plant_config_schema)
-            except Exception as err:
-                raise(err)  # just re-raise for now
+        # TODO: reinstitute this validation.
+        # if plant_config_path is None:
+        #     # Verify plant configuration in database
+        #     try:
+        #         data_validator.validate(Plant.GetPlantConfig(), data_validator.plant_config_schema)
+        #     except Exception as err:
+        #         raise(err)  # just re-raise for now
 
         if self.params['control_receiver'] == 'CD_data':
             plant_design['rec_user_mflow_path_1'], plant_design['rec_user_mflow_path_2'] = get_user_flow_paths(
@@ -341,78 +342,6 @@ class Plant:
         if plant_state is None:
             plant_state = pysam_wrap.GetDefaultPlantState()
         return plant_state    
-
-class Plant:
-    @staticmethod
-    def LoadPlantConfig(config_path):
-        ###
-        ### NOTE: This has been migrated to plant.Plant::set_design(), minus the db table, which is being removed
-        ###
-
-        """Reads a plant configuration from a JSON file or dict, validates the values, then loads them into the respective db table"""
-        # Read plant configuration from a JSON file
-        if isinstance(config_path, str) and os.path.isfile(config_path):
-            with open(config_path) as f:
-                plant_config = rapidjson.load(f)
-        else:
-            raise Exception('Plant configuration not found.')
-        
-        # Validate plant configuration values
-        validated_outputs = data_validator.validate(plant_config, data_validator.plant_config_schema)
-
-        # Load plant configuration into a Django db table
-        plant_config_table = PlantConfig()
-        plant_config_table.name = plant_config['name']
-        plant_config_table.save()
-        Plant.LoadPlantLocation(plant_config['location'], validate=False)    # already validated above
-        del plant_config
-
-    @staticmethod
-    def LoadPlantLocation(plant_location, validate=True):
-        # TODO: Just remove this, as we're not using a db table for this any longer
-
-        """Optionally validates and then loads a plant configuration dict into the respective db table"""
-        if validate == True:
-            plant_location = data_validator.validate(plant_location, data_validator.plant_location_schema)
-
-        plant_config_table = PlantConfig()
-        plant_config_table.latitude = plant_location['latitude']
-        plant_config_table.longitude = plant_location['longitude']
-        plant_config_table.elevation = plant_location['elevation']
-        plant_config_table.timezone = plant_location['timezone']
-        plant_config_table.timezone_string = plant_location['timezone_string']
-        plant_config_table.save()
-
-    @staticmethod
-    def GetPlantConfig():
-        # TODO: Just remove this, as we're not using a db table for this any longer
-
-        """Retrieves the plant configuration (dict) from the respective db table"""
-        result = list(PlantConfig.objects.filter(site_id=settings.SITE_ID).values())[0]
-        result['location'] = {}
-        result['location']['latitude'] = result.pop('latitude')
-        result['location']['longitude'] = result.pop('longitude')
-        result['location']['elevation'] = result.pop('elevation')
-        result['location']['timezone'] = result.pop('timezone')
-        result['location']['timezone_string'] = result.pop('timezone_string')
-        return result
-
-    @staticmethod
-    def GetPlantState(validated_outputs_prev, **kwargs):
-        # TODO: remove this function, no longer needed
-
-
-        """
-        Extract the plant state from the simulated results and return as dict
-        -put virtual/real call here instead
-        """
-        assert 'pysam_wrap' in kwargs
-        pysam_wrap = kwargs.get('pysam_wrap')
-        plant_state = pysam_wrap.GetSimulatedPlantState(validated_outputs_prev)      # for initializing next simulation from a prior one
-        if plant_state is None:
-            plant_state = plant_.plant_initial_state
-        return plant_state    
-
 
 def MediateContinuously(update_interval=5):
     mediator = Mediator()
