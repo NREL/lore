@@ -92,7 +92,9 @@ class PysamWrap:
         returns tech_outputs, where:
             tech_outputs.time_hr = end of each timestep, given as hours since start of current year
         """
-
+        print("  Start = ", datetime_start)
+        print("  End   = ", datetime_end)
+        print("  Step  = ", timestep)
         if not self._DesignIsSet() or self.enable_preprocessing == False:
             self.tech_model.HeliostatField.field_model_type = 2
         else:
@@ -101,6 +103,15 @@ class PysamWrap:
 
         if plant_state is None:
             plant_state = plant_.plant_initial_state
+        print("  Plant state:")
+        for (k, v) in plant_state.items():
+            if isinstance(v, list):
+                print("    ", k, " => list with ", len(v), " entries")
+            elif isinstance(v, dict):
+                print("    ", k, " => dict")
+            else:
+                print("    ", k, " => ", v)
+
         result = self._SetTechModelParams(plant_state)
         print("Setting weather data")
         result = self.SetWeatherData(
@@ -288,8 +299,16 @@ class PysamWrap:
             return datetime.datetime(int(year), 1, 1, 0, 0, 0) + datetime.timedelta(seconds=seconds_since_newyears)
 
         # Backup parameters (to revert back after simulation)  ->  can I just copy self.tech_model and not have to backup and revert?
-        param_names = ['is_dispatch_targets', 'tshours', 'is_rec_startup_trans', 'rec_su_delay', 'rec_qf_delay']
-        original_params = {key:self._GetTechModelParam(key) for key in param_names}
+        param_names = [
+            'is_dispatch_targets', 
+            'tshours', 
+            'is_rec_startup_trans', 
+            'rec_su_delay', 
+            'rec_qf_delay',
+        ]
+        original_params = {
+            key: self._GetTechModelParam(key) for key in param_names
+        }
 
         # Set parameters
         datetime_start = time_of_year_to_datetime(weather_data['year'][0], toy)
@@ -305,18 +324,15 @@ class PysamWrap:
             'rec_su_delay': 0.001,                                              # Simulate with no start-up time to get total available solar energy
             'rec_qf_delay': 0.001,
 
-            'q_pc_target_su_in': [0],
-            'q_pc_target_on_in': [0],
-            'q_pc_max_in': [0],
-            'is_rec_su_allowed_in': [0],
-            'is_rec_sb_allowed_in': [0],
-            'is_pc_su_allowed_in': [0],
-            'is_pc_sb_allowed_in': [0],
+            # 'q_pc_target_su_in': [0],
+            # 'q_pc_target_on_in': [0],
+            # 'q_pc_max_in': [0],
+            # 'is_rec_su_allowed_in': [0],
+            # 'is_rec_sb_allowed_in': [0],
+            # 'is_pc_su_allowed_in': [0],
+            # 'is_pc_sb_allowed_in': [0],
             })
         print("Simulating plant to get collector availability")
-        print("   Start = ", datetime_start)
-        print("   End   = ", datetime_end)
-        print("   Step  = ", timestep)
         results = self.Simulate(datetime_start, datetime_end, timestep, plant_state=plant_state, solar_resource_data=solar_resource_data)
         # Revert back to original parameters
         self._SetTechModelParams(original_params)

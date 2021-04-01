@@ -203,12 +203,9 @@ class Mediator:
         print("Got targets from dispatch. Updating them for PySAM.")
         targets = dispatch_outputs['ssc_dispatch_targets'].target_for_pysamwrap(1440)
         for (k, v) in targets.items():
-            print(k, " has ", len(v), " entries")
+            print(k, " has ", len(v), " entries (sums to ", sum(v), ")")
         self.pysam_wrap._SetTechModelParams(targets)
         print("Running PySAM using the dispatch targets.")
-        print("  Start = ", datetime_start)
-        print("  End   = ", datetime_end)
-        print("  Step  = ", self.simulation_timestep)
         tech_outputs = self.pysam_wrap.Simulate(
             datetime_start, 
             datetime_end, 
