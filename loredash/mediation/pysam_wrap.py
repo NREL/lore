@@ -118,7 +118,12 @@ class PysamWrap:
         self.tech_model.SystemControl.time_stop = (datetime_end - datetime_newyears).total_seconds()        # time at end of last timestep, as
                                                                                                             #  seconds since start of current year
         self.tech_model.SystemControl.time_steps_per_hour = 3600 / timestep.seconds
-
+        print("Executing simulation:")
+        print("  time_start          = ", self.tech_model.SystemControl.time_start)
+        print("  time_stop           = ", self.tech_model.SystemControl.time_stop)
+        print("  time_steps_per_hour = ", self.tech_model.SystemControl.time_steps_per_hour)
+        npts = (self.tech_model.SystemControl.time_stop - self.tech_model.SystemControl.time_start) / 3600 * self.tech_model.SystemControl.time_steps_per_hour
+        print("  points              = ", npts)
         self.tech_model.execute(1)
         tech_outputs = self.tech_model.Outputs.export()
         # tech_attributes = self.tech_model.export()

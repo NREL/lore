@@ -170,15 +170,10 @@ class Mediator:
         print("Start datetime = {datetime}".format(datetime=datetime_start))
         print("End datetime = {datetime}".format(datetime=datetime_end))
 
-        # a. Set weather values and plant state for PySAM
-        print("Get weather data.")
-        weather_dataframe = self.GetWeatherDataframe(datetime_start, datetime_end, tmy3_path=self.weather_file)
-        weather_dataframe = weather_dataframe.resample('1min').interpolate()
-        weather_dataframe = weather_dataframe[weather_dataframe.index >= datetime_start]
-        weather_dataframe = weather_dataframe[weather_dataframe.index < datetime_end]
-        # b. Call dispatch model, (which includes a PySAM model run to get estimates) and update inputs for next call
+        # Call dispatch model, (which includes a PySAM model run to get 
+        # estimates) and update inputs for next call. This call also generates 
+        # the weather forecast, which we use in the next call to SAM.
         print("Run dispatch model over horizon ", self.dispatch_inputs['horizon'])
-        # TODO(odow): is dispatch using the same weather data?
         dispatch_outputs = self.dispatch_wrap.run(
             start_date=datetime_start,
             timestep_days=self.simulation_timestep.seconds/(24*3600),
@@ -208,7 +203,7 @@ class Mediator:
         print("Got targets from dispatch. Updating them for PySAM.")
         targets = dispatch_outputs['ssc_dispatch_targets'].target_for_pysamwrap(1440)
         for (k, v) in targets.items():
-            print(k, " = ", len(v))
+            print(k, " has ", len(v), " entries")
         self.pysam_wrap._SetTechModelParams(targets)
         print("Running PySAM using the dispatch targets.")
         print("  Start = ", datetime_start)
@@ -219,7 +214,9 @@ class Mediator:
             datetime_end, 
             self.simulation_timestep, 
             self.plant.state, 
-            weather_dataframe=weather_dataframe,
+            # The dispatch model need to generate the weather data. Use it 
+            # again.
+            solar_resource_data=self.dispatch_wrap.weather_data_for_dispatch,
         )
         print("Annual Energy [kWh]= ", tech_outputs["annual_energy"])
 
@@ -307,11 +304,6 @@ class Mediator:
         except Exception as err:
             raise(err)
     
-    def GetWeatherDataframe(self, datetime_start, datetime_end, **kwargs):
-        """put the weather forecast call here instead"""
-        tmy3_path = kwargs.get('tmy3_path') if 'tmy3_path' in kwargs else None
-        return Tmy3ToDataframe(tmy3_path, datetime_start, datetime_end)
-
 def MediateContinuously(update_interval=5):
     mediator = Mediator()
     mediator.RunContinuously(update_interval=update_interval)
