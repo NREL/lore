@@ -102,7 +102,11 @@ class PysamWrap:
         if plant_state is None:
             plant_state = plant_.plant_initial_state
         result = self._SetTechModelParams(plant_state)
-        result = self.SetWeatherData(weather_dataframe=weather_dataframe, solar_resource_data=solar_resource_data)
+        print("Setting weather data")
+        result = self.SetWeatherData(
+            weather_dataframe=weather_dataframe, 
+            solar_resource_data=solar_resource_data,
+        )
 
         # set times:
         if self.kMinOneHourSims == True:
@@ -210,15 +214,16 @@ class PysamWrap:
         if solar_resource_data_input is not None:
             weather_schema = data_validator.weather_schema      # validate
             validated_solar_resource_data = weather_schema(solar_resource_data_input)
-
             # the number of records must be a integer multiple of 8760
             # see: sam_dev/ssc/ssc/common.cpp, line 1272
-            diff = len(validated_solar_resource_data['dn']) % 8760
+            diff = len(validated_solar_resource_data['dn']) % 525600
             if diff > 0:
-                padding = [0] * (8760 - diff)
+                print("Resizing weather data. Old length: ", len(validated_solar_resource_data['dn']))
+                padding = [0] * (525600 - diff)
                 for v in validated_solar_resource_data.values():
                     if isinstance(v, list):
                         v.extend(padding)
+            print("Setting weather data with ", len(validated_solar_resource_data['dn']), " entries")
             self.tech_model.SolarResource.solar_resource_data = validated_solar_resource_data
         return 0
 
@@ -303,6 +308,10 @@ class PysamWrap:
             'is_pc_su_allowed_in': [0],
             'is_pc_sb_allowed_in': [0],
             })
+        print("Simulating plant to get collector availability")
+        print("   Start = ", datetime_start)
+        print("   End   = ", datetime_end)
+        print("   Step  = ", timestep)
         results = self.Simulate(datetime_start, datetime_end, timestep, plant_state=plant_state, solar_resource_data=solar_resource_data)
         # Revert back to original parameters
         self._SetTechModelParams(original_params)

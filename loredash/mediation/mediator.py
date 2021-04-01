@@ -102,7 +102,7 @@ class Mediator:
             'next_day_schedule':                None,
             'current_forecast_weather_data':    None,
             'schedules':                        None,
-            'horizon':                          1/self.params['time_steps_per_hour']*3600,          # [s]
+            'horizon':                          48 * 3600, # [s] / self.params['time_steps_per_hour']*3600,          # [s]
         }
 
     
@@ -165,14 +165,20 @@ class Mediator:
             datetime_start = RoundMinutes(datetime_now, 'down', self.simulation_timestep.seconds/60)    # the start of the time interval currently in
             datetime_end = datetime_start + self.simulation_timestep        # disregard a given datetime_end if there is no given datetime_start
         
+        print("---------------------------------------------------------------")
         print("Datetime now = {datetime}".format(datetime=datetime_now))
         print("Start datetime = {datetime}".format(datetime=datetime_start))
         print("End datetime = {datetime}".format(datetime=datetime_end))
 
         # a. Set weather values and plant state for PySAM
+        print("Get weather data.")
         weather_dataframe = self.GetWeatherDataframe(datetime_start, datetime_end, tmy3_path=self.weather_file)
-        
+        weather_dataframe = weather_dataframe.resample('1min').interpolate()
+        weather_dataframe = weather_dataframe[weather_dataframe.index >= datetime_start]
+        weather_dataframe = weather_dataframe[weather_dataframe.index < datetime_end]
         # b. Call dispatch model, (which includes a PySAM model run to get estimates) and update inputs for next call
+        print("Run dispatch model over horizon ", self.dispatch_inputs['horizon'])
+        # TODO(odow): is dispatch using the same weather data?
         dispatch_outputs = self.dispatch_wrap.run(
             start_date=datetime_start,
             timestep_days=self.simulation_timestep.seconds/(24*3600),
@@ -199,10 +205,22 @@ class Mediator:
 
 
         # b. Call PySAM
-        self.pysam_wrap._SetTechModelParams(
-            dispatch_outputs['ssc_dispatch_targets'].target_for_pysamwrap()
+        print("Got targets from dispatch. Updating them for PySAM.")
+        targets = dispatch_outputs['ssc_dispatch_targets'].target_for_pysamwrap(1440)
+        for (k, v) in targets.items():
+            print(k, " = ", len(v))
+        self.pysam_wrap._SetTechModelParams(targets)
+        print("Running PySAM using the dispatch targets.")
+        print("  Start = ", datetime_start)
+        print("  End   = ", datetime_end)
+        print("  Step  = ", self.simulation_timestep)
+        tech_outputs = self.pysam_wrap.Simulate(
+            datetime_start, 
+            datetime_end, 
+            self.simulation_timestep, 
+            self.plant.state, 
+            weather_dataframe=weather_dataframe,
         )
-        tech_outputs = self.pysam_wrap.Simulate(datetime_start, datetime_end, self.simulation_timestep, self.plant.state, weather_dataframe=weather_dataframe)
         print("Annual Energy [kWh]= ", tech_outputs["annual_energy"])
 
         new_plant_state_vars = self.pysam_wrap.GetSimulatedPlantState(tech_outputs)      # for initializing next simulation from a prior one

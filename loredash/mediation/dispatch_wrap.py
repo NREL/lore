@@ -863,16 +863,22 @@ class DispatchTargets:
 
         return
 
-    def target_for_pysamwrap(self):
-        return {
-            'q_pc_target_su_in': self.q_pc_target_su_in,
-            'q_pc_target_on_in': self.q_pc_target_on_in,
-            'q_pc_max_in': self.q_pc_max_in,
-            'is_rec_su_allowed_in': self.is_rec_su_allowed_in,
-            'is_rec_sb_allowed_in': self.is_rec_sb_allowed_in,
-            'is_pc_su_allowed_in': self.is_pc_su_allowed_in,
-            'is_pc_sb_allowed_in': self.is_pc_sb_allowed_in,
+    def target_for_pysamwrap(self, n_steps):
+        target = {
+            'q_pc_target_su_in': self.q_pc_target_su_in[0:n_steps],
+            'q_pc_target_on_in': self.q_pc_target_on_in[0:n_steps],
+            'q_pc_max_in': self.q_pc_max_in[0:n_steps],
+            'is_rec_su_allowed_in': self.is_rec_su_allowed_in[0:n_steps],
+            'is_rec_sb_allowed_in': self.is_rec_sb_allowed_in[0:n_steps],
+            'is_pc_su_allowed_in': self.is_pc_su_allowed_in[0:n_steps],
+            'is_pc_sb_allowed_in': self.is_pc_sb_allowed_in[0:n_steps],
         }
+        # diff = n_steps % 525600
+        # if diff > 0:
+        #     padding = [0] * (525600 - diff)
+        #     for v in target.values():
+        #         v.extend(padding)
+        return target
 
 class DispatchWrap:
     def __init__(self, plant, params, data):
@@ -1016,7 +1022,7 @@ class DispatchWrap:
                 day_ahead_schedule_time=self.day_ahead_schedule_time,
                 clearsky_data=self.clearsky_data
                 )
-
+        print("Weather forecast with ", len(self.current_forecast_weather_data['dn']), " entries") 
 
         self.is_initialized = True
         return
@@ -1075,12 +1081,12 @@ class DispatchWrap:
         nph = int(self.ssc_time_steps_per_hour)                     # Number of time steps per hour
         total_horizon = self.sim_days*24
         ntot = int(nph*total_horizon)                               # Total number of time points in full horizon
-        napply = int(nph*self.dispatch_frequency)                   # Number of ssc time points accepted after each solution 
-        nupdate = int(total_horizon / self.dispatch_frequency)      # Number of update intervals
+        # napply = int(nph*self.dispatch_frequency)                   # Number of ssc time points accepted after each solution 
+        # nupdate = int(total_horizon / self.dispatch_frequency)      # Number of update intervals
         startpt = int(start_hour*nph)                               # Start point in annual arrays
         sscstep = 3600/nph                                          # ssc time step (s)
-        nominal_horizon = int(self.dispatch_horizon*3600)  
-        horizon_update = int(self.dispatch_horizon_update*3600)
+        # nominal_horizon = int(self.dispatch_horizon*3600)  
+        # horizon_update = int(self.dispatch_horizon_update*3600)
         freq = int(self.dispatch_frequency*3600)                    # Frequency of rolling horizon update (s)
 
         #--- Update "forecasted" weather data (if relevant)
@@ -1176,7 +1182,10 @@ class DispatchWrap:
                 assert math.isclose(sum(list(self.weather_data_for_dispatch['tdry'])), 10737.5, rel_tol=1e-4)
 
             #--- Run ssc for dispatch estimates: (using weather forecast time resolution for weather data and specified ssc time step)
-            npts_horizon = int(horizon/3600 * nph)
+            npts_horizon = int(horizon) # int(horizon/3600 * nph)
+            print("Run PySAM to get collector availability for dispatch.")
+            print("  horizon = ", horizon)
+            print("  N pts   = ", npts_horizon)
             R_est = f_estimates_for_dispatch_model(
                 plant_design = D,
                 toy = toy,
@@ -1200,6 +1209,8 @@ class DispatchWrap:
                 assert math.isclose(sum(list(R_est["P_tower_pump"])), 2460.6, rel_tol=1e-4)
 
             #--- Set dispatch optimization properties for this time horizon using ssc estimates
+            print("Setting up dispatch model")
+            print("  Number of estimates from SSC : ", len(R_est['Q_thermal']))
             disp_in = setup_dispatch_model(
                 R_est = R_est,
                 freq = freq,
@@ -1233,6 +1244,7 @@ class DispatchWrap:
 
             include = {"pv": False, "battery": False, "persistence": False, "force_cycle": False, "op_assumptions": False,
                         "signal":include_day_ahead_in_dispatch, "simple_receiver": False}
+            print("Solving the dispatch model!")
             dispatch_soln = run_dispatch_model(disp_in, include)
             if start_date == datetime.datetime(2018, 10, 14, 0, 0):
                 assert math.isclose(sum(list(dispatch_soln.cycle_on)), 16, rel_tol=1e-4)
@@ -1274,12 +1286,15 @@ class DispatchWrap:
                     self.weather_at_schedule.append(weather_at_day_ahead_schedule)  # Store weather used at the point in time the day ahead schedule was generated
 
                 #--- Set ssc dispatch targets
+                print("Collating the dispatch targets")
+                print("  sscstep ", sscstep)
+                print("  freq    ", freq)
                 ssc_dispatch_targets = DispatchTargets(
                     dispatch_soln,
                     self.plant,
                     self.dispatch_params,
                     sscstep,
-                    freq / 3600.0,
+                    48, # freq / 3600.0,
                 )
 
                 if start_date == datetime.datetime(2018, 10, 14, 0, 0):
@@ -1505,14 +1520,15 @@ def setup_dispatch_model(R_est, freq, horizon, include_day_ahead_in_dispatch,
     #     disp_time_weighting,
     # )
     # dispatch_params.set_default_grid_limits()
-    assert( len(price) == 1)  # Constant prices for now.
     dispatch_params.P = [price[0] / 1000 for d in dispatch_params.Delta]
     dispatch_params.avg_price = avg_price/1000.
     dispatch_params.avg_price_disp_storage_incentive = avg_price_disp_storage_incentive / 1000.  # $/kWh  # Only used in storage inventory incentive -> high values cause the solutions to max out storage rather than generate electricity
     dispatch_params.avg_purchase_price = avg_purchase_price/1000    # $/kWh 
     dispatch_params.day_ahead_tol_plus = day_ahead_tol_plus*1000    # kWhe
     dispatch_params.day_ahead_tol_minus = day_ahead_tol_minus*1000  # kWhe
-
+    print("SSC estimates: ", len(R_est['Q_thermal']))
+    print("  sscstep: ", sscstep)
+    print("  delta  : ", dispatch_params.Delta)
     dispatch_params.set_estimates_from_ssc_data(
         plant.design,
         R_est,
