@@ -1,7 +1,7 @@
 # version of docker-compose to use
 version: "3"
 
-# Docker Hub username/path
+# Docker Hub username/path variable: <Docker Hub username>/lore
 x-var: &USER_PATH
     dquintan/lore
 
