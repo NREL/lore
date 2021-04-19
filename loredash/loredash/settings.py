@@ -26,10 +26,13 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # See https://docs.djangoproject.com/en/2.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = '924+#o@k3eo&$rsoqzn!0#p#)alfdy$zgyl%^#epa@77a=23%w'
+# SECRET_KEY = '924+#o@k3eo&$rsoqzn!0#p#)alfdy$zgyl%^#epa@77a=23%w'
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', '924+#o@k3eo&$rsoqzn!0#p#)alfdy$zgyl%^#epa@77a=23%w')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+#                   Run command: export DJANGO_DEBUG=False when in production
+# DEBUG = True
+DEBUG = os.environ.get('DJANGO_DEBUG', '') != 'False'
 
 ALLOWED_HOSTS = ['*']
 
@@ -127,7 +130,8 @@ USE_TZ = False
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/2.2/howto/static-files/
-
+# nginx for handling
+STATIC_ROOT = os.path.join(BASE_DIR, "static")
 STATIC_URL = '/static/'
 
 # for gaining access to the css, js, and img files
