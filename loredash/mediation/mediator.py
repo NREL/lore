@@ -155,20 +155,28 @@ class Mediator:
         # Step 3, Thread 1:
         # Normalize timesteps to even intervals, even if they are given
         datetime_now = datetime.datetime.now()
-        if isinstance(datetime_start, datetime.datetime):
-            datetime_start = RoundMinutes(datetime_start, 'down', self.simulation_timestep.seconds/60)
-            if isinstance(datetime_end, datetime.datetime):
-                datetime_end = RoundMinutes(datetime_end, 'up', self.simulation_timestep.seconds/60)
-            else:
-                datetime_end = datetime_start + self.simulation_timestep
-        else:
-            datetime_start = RoundMinutes(datetime_now, 'down', self.simulation_timestep.seconds/60)    # the start of the time interval currently in
-            datetime_end = datetime_start + self.simulation_timestep        # disregard a given datetime_end if there is no given datetime_start
+        if not isinstance(datetime_start, datetime.datetime):
+            datetime_start = datetime_now
+        datetime_start = RoundMinutes(
+            datetime_start, 
+            'down', 
+            self.simulation_timestep.seconds / 60,
+        )
+        if isinstance(datetime_end, datetime.datetime):
+            datetime_end = RoundMinutes(
+                datetime_end, 
+                'up', 
+                self.simulation_timestep.seconds / 60,
+            )
+        else:    
+            datetime_end = datetime_start + datetime.timedelta(
+                seconds = self.dispatch_inputs['horizon'],
+            )
         
         print("---------------------------------------------------------------")
-        print("Datetime now = {datetime}".format(datetime=datetime_now))
+        print("Datetime now   = {datetime}".format(datetime=datetime_now))
         print("Start datetime = {datetime}".format(datetime=datetime_start))
-        print("End datetime = {datetime}".format(datetime=datetime_end))
+        print("End datetime   = {datetime}".format(datetime=datetime_end))
 
         # Call dispatch model, (which includes a PySAM model run to get 
         # estimates) and update inputs for next call. This call also generates 
@@ -195,15 +203,14 @@ class Mediator:
         self.dispatch_inputs['next_day_schedule'] = dispatch_outputs['next_day_schedule']
         self.dispatch_inputs['current_forecast_weather_data'] = dispatch_outputs['current_forecast_weather_data']
         self.dispatch_inputs['schedules'] = dispatch_outputs['schedules']
-        self.dispatch_inputs['horizon'] -= int(self.simulation_timestep.seconds)
-
+        # TODO(odow): why do we want to do this?
+        # self.dispatch_inputs['horizon'] -= int(self.simulation_timestep.seconds)
 
         # b. Call PySAM
         print("Running PySAM using the dispatch targets...")
-        targets = dispatch_outputs['ssc_dispatch_targets'].target_for_pysamwrap(1440)
-        # for (k, v) in targets.items():
-        #     print(k, " has ", len(v), " entries (sums to ", sum(v), ")")
-        self.pysam_wrap._SetTechModelParams(targets)
+        self.pysam_wrap._SetTechModelParams(
+            dispatch_outputs['ssc_dispatch_targets'].target_for_pysamwrap(),
+        )
         tech_outputs = self.pysam_wrap.Simulate(
             datetime_start, 
             datetime_end, 
@@ -215,15 +222,19 @@ class Mediator:
         )
         print("Annual Energy [kWh]= ", tech_outputs["annual_energy"])
 
-        new_plant_state_vars = self.pysam_wrap.GetSimulatedPlantState(tech_outputs)      # for initializing next simulation from a prior one
-        self.plant.update_state(tech_outputs, new_plant_state_vars, self.simulation_timestep.seconds/3600)
+        # Update the plant state.
+        self.plant.update_state(
+            tech_outputs, 
+            self.pysam_wrap.GetSimulatedPlantState(tech_outputs), 
+            self.simulation_timestep.seconds / 3600,
+        )
 
         # c. Validate these data
-        # wanted_keys = ['time_hr', 'e_ch_tes', 'eta_therm', 'eta_field', 'P_out_net', 'tou_value', 'gen', 'q_dot_rec_inc', 'q_sf_inc', 'pricing_mult', 'beam']
-        # wanted_keys = list(set(tech_outputs.keys()))       # all keys are wanted
-        # wanted_outputs = dict((k, tech_outputs[k]) for k in wanted_keys if k in tech_outputs)
-        wanted_outputs = tech_outputs
-        wanted_outputs = {k:(list(v) if isinstance(v, tuple) else v) for (k,v) in wanted_outputs.items()}     # converts tuples to lists so they can be edited
+        # Convert tuples to lists so they can be edited
+        wanted_outputs = {
+            k: (list(v) if isinstance(v, tuple) else v) 
+            for (k, v) in tech_outputs.items()
+        }
         tic = time.process_time()
         validated_outputs = data_validator.validate(wanted_outputs, data_validator.pysam_schema)
         toc = time.process_time()
@@ -259,7 +270,7 @@ class Mediator:
         """
         datetime_now = datetime.datetime.now()
         datetime_now_rounded_down = RoundMinutes(datetime_now, 'down', self.simulation_timestep.seconds/60)    # the start of the time interval currently in
-        datetime_start_prev_day = datetime_now_rounded_down - datetime.timedelta(days=1)
+        datetime_start_prev_day = datetime_now_rounded_down - datetime.timedelta(days=2)
         datetime_end_current_day = datetime_now_rounded_down                   # end of the last timestep
                                                                             # (as noted for "time_stop" on line 1004 in cmod_tcsmolten_salt.cpp)
         self.RunOnce(datetime_start_prev_day, datetime_end_current_day)

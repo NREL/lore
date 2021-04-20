@@ -14,6 +14,7 @@ from mediation import data_validator, mediator
 from data.mspt_2020_defaults import default_ssc_params
 import mediation.plant as plant_
 import librtdispatch.util as util
+import time
 
 class PysamWrap:
     parent_dir = str(Path(__file__).parents[1])
@@ -124,30 +125,30 @@ class PysamWrap:
             datetime_end_original = datetime_end
             datetime_end = max(datetime_end, datetime_start + datetime.timedelta(hours=1))
         datetime_newyears = datetime.datetime(datetime_start.year, 1, 1, 0, 0, 0)
-        self.tech_model.SystemControl.time_start = (datetime_start - datetime_newyears).total_seconds()     # time at beginning of first timestep, as
-                                                                                                            #  seconds since start of current year
-        self.tech_model.SystemControl.time_stop = (datetime_end - datetime_newyears).total_seconds()        # time at end of last timestep, as
-                                                                                                            #  seconds since start of current year
-        self.tech_model.SystemControl.time_steps_per_hour = 3600 / timestep.seconds
+
+        SystemControl = self.tech_model.SystemControl
+        # time at beginning of first timestep, as seconds since start of current year
+        SystemControl.time_start = (datetime_start - datetime_newyears).total_seconds()
+        # time at end of last timestep, as seconds since start of current year
+        SystemControl.time_stop = (datetime_end - datetime_newyears).total_seconds()
+        SystemControl.time_steps_per_hour = 3600 / timestep.seconds
         print("Executing simulation:")
-        print("  time_start          = ", self.tech_model.SystemControl.time_start)
-        print("  time_stop           = ", self.tech_model.SystemControl.time_stop)
-        print("  time_steps_per_hour = ", self.tech_model.SystemControl.time_steps_per_hour)
-        npts = (self.tech_model.SystemControl.time_stop - self.tech_model.SystemControl.time_start) / 3600 * self.tech_model.SystemControl.time_steps_per_hour
+        print("  time_start          = ", SystemControl.time_start)
+        print("  time_stop           = ", SystemControl.time_stop)
+        print("  time_steps_per_hour = ", SystemControl.time_steps_per_hour)
+        npts = (SystemControl.time_stop - SystemControl.time_start) / 3600 * SystemControl.time_steps_per_hour
         print("  points              = ", npts)
         self.tech_model.execute(1)  # (1) is the verbosity.
         tech_outputs = self.tech_model.Outputs.export()
-        # tech_attributes = self.tech_model.export()
-
         # Strip trailing zeros or excess data from outputs
-        times = {'time_start': self.tech_model.SystemControl.time_start,
-                 'time_stop': self.tech_model.SystemControl.time_stop,
-                 'time_steps_per_hour': self.tech_model.SystemControl.time_steps_per_hour}
+        times = {
+            'time_start':          SystemControl.time_start,
+            'time_stop':           SystemControl.time_stop,
+            'time_steps_per_hour': SystemControl.time_steps_per_hour,
+        }
         if self.kMinOneHourSims == True:
             times['time_stop'] = (datetime_end_original - datetime_newyears).total_seconds()
-        tech_outputs = self._RemoveDataPadding(tech_outputs, times)
-
-        return tech_outputs
+        return self._RemoveDataPadding(tech_outputs, times)
 
     @staticmethod
     def GetSolarResourceDataTemplate(plant_location=None):
@@ -366,10 +367,14 @@ class PysamWrap:
             return True
 
     def _RemoveDataPadding(self, model_outputs, times):
+        """
+        This function takes the model outputs which are 1 year long, and 
+        extracts the first N elements of the lists, where N is the number of 
+        time points actually simulated.
+        """
         points_per_year = int(times['time_steps_per_hour'] * 24 * 365)
         points_in_simulation = int((times['time_stop']-times['time_start'])/ \
             3600 * times['time_steps_per_hour'])
-        import time
         tic = time.process_time()
         for k, v in model_outputs.items():
             if isinstance(v, (list, tuple)) and len(v) == points_per_year:

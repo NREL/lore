@@ -863,19 +863,19 @@ class DispatchTargets:
 
         return
 
-    def target_for_pysamwrap(self, n_steps):
+    def target_for_pysamwrap(self):
         target = {
-            'q_pc_target_su_in': self.q_pc_target_su_in[0:n_steps],
-            'q_pc_target_on_in': self.q_pc_target_on_in[0:n_steps],
-            'q_pc_max_in': self.q_pc_max_in[0:n_steps],
-            'is_rec_su_allowed_in': self.is_rec_su_allowed_in[0:n_steps],
-            # This thing doesn't exist.
-            # 'is_rec_sb_allowed_in': [1], # self.is_rec_sb_allowed_in,
-            'is_pc_su_allowed_in': self.is_pc_su_allowed_in[0:n_steps],
-            'is_pc_sb_allowed_in': self.is_pc_sb_allowed_in[0:n_steps],
+            'q_pc_target_su_in':    self.q_pc_target_su_in,
+            'q_pc_target_on_in':    self.q_pc_target_on_in,
+            'q_pc_max_in':          self.q_pc_max_in,
+            'is_rec_su_allowed_in': self.is_rec_su_allowed_in,
+            # This thing doesn't exist?
+            # 'is_rec_sb_allowed_in': self.is_rec_sb_allowed_in,
+            'is_pc_su_allowed_in':  self.is_pc_su_allowed_in,
+            'is_pc_sb_allowed_in':  self.is_pc_sb_allowed_in,
             # TODO(odow): remove this when SSC is updated to reflect Janna's
             # January 2021 changes.
-            "is_elec_heat_dur_off": [0] * n_steps,
+            "is_elec_heat_dur_off": [0] * len(self.q_pc_target_su_in),
         }
         return target
 

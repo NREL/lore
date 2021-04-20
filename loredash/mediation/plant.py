@@ -351,6 +351,7 @@ plant_design = {
     "longitude":                    -117.36368180656123,
     "elevation":                    1524,
     "timezone":                     -8,
+    "timezone_string":              'US/Pacific',
 
     # System
     'T_htf_cold_des':               295.0,          # C

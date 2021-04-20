@@ -27,9 +27,6 @@ import datetime
 # things to plot. But it shouldn't go here, because this gets run on a `migrate`
 # call, and initially, we don't have a database to store the results in! It
 # should probably just go somewhere so it gets run when the root site is hit.
-#
-# python manage.py migrate
-# python manage.py migrate
 def _RunOnce():
     parent_dir = str(Path(__file__).parents[1])
     default_weather_file = parent_dir + "/data/daggett_ca_34.865371_-116.783023_psmv3_60_tmy.csv"
@@ -43,7 +40,11 @@ def _RunOnce():
         preprocess_pysam_on_init = True,
         update_interval = datetime.timedelta(seconds = 5),
     )
+    print("===================================================================")
+    print("Running previous day...")
     result = m.ModelPreviousDayAndAddToDb()
+    print("===================================================================")
+    print("Runing now...")
     result = m.RunOnce()
     return
 # try:

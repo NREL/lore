@@ -9,6 +9,7 @@ import colorcet
 
 from mediation import forecasts
 from mediation import models
+from mediation import plant
 
 import queue 
 import threading
@@ -20,12 +21,12 @@ from theme import theme as _loredash_ui_theme
 LOREDASH_UI_THEME = _loredash_ui_theme.json
 
 def latestData(queue):
-    plant = models.PlantConfig.objects.get(pk = 1)
+    p = plant.plant_design
     forecaster = forecasts.SolarForecast(
-        plant.latitude,
-        plant.longitude,
-        plant.timezone_string,
-        plant.elevation,
+        p['latitude'],
+        p['longitude'],
+        p['timezone_string'],
+        p['elevation'],
     )
     data = forecaster.latestForecast().reset_index()
     queue.put(data)
