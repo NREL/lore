@@ -869,15 +869,14 @@ class DispatchTargets:
             'q_pc_target_on_in': self.q_pc_target_on_in[0:n_steps],
             'q_pc_max_in': self.q_pc_max_in[0:n_steps],
             'is_rec_su_allowed_in': self.is_rec_su_allowed_in[0:n_steps],
-            'is_rec_sb_allowed_in': self.is_rec_sb_allowed_in[0:n_steps],
+            # This thing doesn't exist.
+            # 'is_rec_sb_allowed_in': [1], # self.is_rec_sb_allowed_in,
             'is_pc_su_allowed_in': self.is_pc_su_allowed_in[0:n_steps],
             'is_pc_sb_allowed_in': self.is_pc_sb_allowed_in[0:n_steps],
+            # TODO(odow): remove this when SSC is updated to reflect Janna's
+            # January 2021 changes.
+            "is_elec_heat_dur_off": [0] * n_steps,
         }
-        # diff = n_steps % 525600
-        # if diff > 0:
-        #     padding = [0] * (525600 - diff)
-        #     for v in target.values():
-        #         v.extend(padding)
         return target
 
 class DispatchWrap:
@@ -1183,9 +1182,9 @@ class DispatchWrap:
 
             #--- Run ssc for dispatch estimates: (using weather forecast time resolution for weather data and specified ssc time step)
             npts_horizon = int(horizon) # int(horizon/3600 * nph)
-            print("Run PySAM to get collector availability for dispatch.")
-            print("  horizon = ", horizon)
-            print("  N pts   = ", npts_horizon)
+            # print("Run PySAM to get collector availability for dispatch.")
+            # print("  horizon = ", horizon)
+            # print("  N pts   = ", npts_horizon)
             R_est = f_estimates_for_dispatch_model(
                 plant_design = D,
                 toy = toy,
@@ -1244,7 +1243,7 @@ class DispatchWrap:
 
             include = {"pv": False, "battery": False, "persistence": False, "force_cycle": False, "op_assumptions": False,
                         "signal":include_day_ahead_in_dispatch, "simple_receiver": False}
-            print("Solving the dispatch model!")
+            print("Solving the dispatch model...")
             dispatch_soln = run_dispatch_model(disp_in, include)
             if start_date == datetime.datetime(2018, 10, 14, 0, 0):
                 assert math.isclose(sum(list(dispatch_soln.cycle_on)), 16, rel_tol=1e-4)
@@ -1526,9 +1525,9 @@ def setup_dispatch_model(R_est, freq, horizon, include_day_ahead_in_dispatch,
     dispatch_params.avg_purchase_price = avg_purchase_price/1000    # $/kWh 
     dispatch_params.day_ahead_tol_plus = day_ahead_tol_plus*1000    # kWhe
     dispatch_params.day_ahead_tol_minus = day_ahead_tol_minus*1000  # kWhe
-    print("SSC estimates: ", len(R_est['Q_thermal']))
-    print("  sscstep: ", sscstep)
-    print("  delta  : ", dispatch_params.Delta)
+    # print("SSC estimates: ", len(R_est['Q_thermal']))
+    # print("  sscstep: ", sscstep)
+    # print("  delta  : ", dispatch_params.Delta)
     dispatch_params.set_estimates_from_ssc_data(
         plant.design,
         R_est,

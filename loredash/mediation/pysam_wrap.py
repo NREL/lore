@@ -103,17 +103,17 @@ class PysamWrap:
 
         if plant_state is None:
             plant_state = plant_.plant_initial_state
-        print("  Plant state:")
-        for (k, v) in plant_state.items():
-            if isinstance(v, list):
-                print("    ", k, " => list with ", len(v), " entries")
-            elif isinstance(v, dict):
-                print("    ", k, " => dict")
-            else:
-                print("    ", k, " => ", v)
+        # Uncomment this for some useful debugging prints:
+        # print("  Plant state:")
+        # for (k, v) in plant_state.items():
+        #     if isinstance(v, list):
+        #         print("    ", k, " => list with ", len(v), " entries")
+        #     elif isinstance(v, dict):
+        #         print("    ", k, " => dict")
+        #     else:
+        #         print("    ", k, " => ", v)
 
         result = self._SetTechModelParams(plant_state)
-        print("Setting weather data")
         result = self.SetWeatherData(
             weather_dataframe=weather_dataframe, 
             solar_resource_data=solar_resource_data,
@@ -135,7 +135,7 @@ class PysamWrap:
         print("  time_steps_per_hour = ", self.tech_model.SystemControl.time_steps_per_hour)
         npts = (self.tech_model.SystemControl.time_stop - self.tech_model.SystemControl.time_start) / 3600 * self.tech_model.SystemControl.time_steps_per_hour
         print("  points              = ", npts)
-        self.tech_model.execute(1)
+        self.tech_model.execute(1)  # (1) is the verbosity.
         tech_outputs = self.tech_model.Outputs.export()
         # tech_attributes = self.tech_model.export()
 
