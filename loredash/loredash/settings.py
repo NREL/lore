@@ -131,7 +131,7 @@ USE_TZ = False
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/2.2/howto/static-files/
 # nginx for handling
-STATIC_ROOT = os.path.join(BASE_DIR, "static")
+# STATIC_ROOT = os.path.join(BASE_DIR, "static")    // uncomment this if you need to collect static files only, otherwise leave commented
 STATIC_URL = '/static/'
 
 # for gaining access to the css, js, and img files
