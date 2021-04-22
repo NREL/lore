@@ -869,8 +869,7 @@ class DispatchTargets:
             'q_pc_target_on_in':    self.q_pc_target_on_in,
             'q_pc_max_in':          self.q_pc_max_in,
             'is_rec_su_allowed_in': self.is_rec_su_allowed_in,
-            # This thing doesn't exist?
-            # 'is_rec_sb_allowed_in': self.is_rec_sb_allowed_in,
+            'is_rec_sb_allowed_in': self.is_rec_sb_allowed_in,
             'is_pc_su_allowed_in':  self.is_pc_su_allowed_in,
             'is_pc_sb_allowed_in':  self.is_pc_sb_allowed_in,
             # TODO(odow): remove this when SSC is updated to reflect Janna's
@@ -1181,10 +1180,7 @@ class DispatchWrap:
                 assert math.isclose(sum(list(self.weather_data_for_dispatch['tdry'])), 10737.5, rel_tol=1e-4)
 
             #--- Run ssc for dispatch estimates: (using weather forecast time resolution for weather data and specified ssc time step)
-            npts_horizon = int(horizon) # int(horizon/3600 * nph)
-            # print("Run PySAM to get collector availability for dispatch.")
-            # print("  horizon = ", horizon)
-            # print("  N pts   = ", npts_horizon)
+            npts_horizon = int(horizon/3600 * nph)
             R_est = f_estimates_for_dispatch_model(
                 plant_design = D,
                 toy = toy,
@@ -1209,7 +1205,8 @@ class DispatchWrap:
 
             #--- Set dispatch optimization properties for this time horizon using ssc estimates
             print("Setting up dispatch model")
-            print("  Number of estimates from SSC : ", len(R_est['Q_thermal']))
+            print("  # steps from SSC : ", len(R_est['Q_thermal']))
+            print("  Q_thermal total  : ", sum(R_est['Q_thermal']))
             disp_in = setup_dispatch_model(
                 R_est = R_est,
                 freq = freq,
@@ -1287,13 +1284,13 @@ class DispatchWrap:
                 #--- Set ssc dispatch targets
                 print("Collating the dispatch targets")
                 print("  sscstep ", sscstep)
-                print("  freq    ", freq)
+                print("  hours   ", horizon / 3600)
                 ssc_dispatch_targets = DispatchTargets(
                     dispatch_soln,
                     self.plant,
                     self.dispatch_params,
                     sscstep,
-                    48, # freq / 3600.0,
+                    horizon / 3600,
                 )
 
                 if start_date == datetime.datetime(2018, 10, 14, 0, 0):
@@ -1453,25 +1450,36 @@ def reupdate_ssc_constants(D, params, data):
 
 
 
-def update_dispatch_weather_data(weather_data, replacement_real_weather_data, replacement_forecast_weather_data, datetime, total_horizon, dispatch_horizon):
-        """
-        Replace select metrics in weather_data with those from the real and forecast weather data, depending on dispatch horizons
-        """
-        minutes_per_timestep = weather_data['minute'][1] - weather_data['minute'][0]
-        timesteps_per_hour = 1 / minutes_per_timestep * 60
+def update_dispatch_weather_data(
+    weather_data, 
+    replacement_real_weather_data, 
+    replacement_forecast_weather_data, 
+    datetime, 
+    total_horizon, 
+    dispatch_horizon,
+):
+    """
+    Replace select metrics in weather_data with those from the real and forecast weather data, depending on dispatch horizons
+    """
+    print("datetime = ", datetime)
+    print("total_horizon = ", total_horizon)
+    print("dispatch_horizon = ", dispatch_horizon)
+    dispatch_horizon = total_horizon
+    minutes_per_timestep = weather_data['minute'][1] - weather_data['minute'][0]
+    timesteps_per_hour = 1 / minutes_per_timestep * 60
 
-        t = int(util.get_time_of_year(datetime)/3600)        # Time of year (hr)
-        p = int(t*timesteps_per_hour)                        # First time index in weather arrays
-        n = int(total_horizon * timesteps_per_hour)                # Number of time indices in horizon (to replace)
-        for j in range(n):
-            for k in ['dn', 'wspd', 'tdry', 'rhum', 'pres']:
-                hr = j/timesteps_per_hour
-                if dispatch_horizon == -1 or hr < dispatch_horizon:
-                    weather_data[k][p+j] = replacement_real_weather_data[k][p+j]    
-                else:
-                    weather_data[k][p+j] = replacement_forecast_weather_data[k][p+j]
+    t = int(util.get_time_of_year(datetime)/3600)        # Time of year (hr)
+    p = int(t*timesteps_per_hour)                        # First time index in weather arrays
+    n = int(total_horizon * timesteps_per_hour)                # Number of time indices in horizon (to replace)
+    for j in range(n):
+        for k in ['dn', 'wspd', 'tdry', 'rhum', 'pres']:
+            hr = j/timesteps_per_hour
+            if dispatch_horizon == -1 or hr < dispatch_horizon:
+                weather_data[k][p+j] = replacement_real_weather_data[k][p+j]    
+            else:
+                weather_data[k][p+j] = replacement_forecast_weather_data[k][p+j]
 
-        return weather_data
+    return weather_data
 
 
 def setup_dispatch_model(R_est, freq, horizon, include_day_ahead_in_dispatch,
@@ -1525,9 +1533,6 @@ def setup_dispatch_model(R_est, freq, horizon, include_day_ahead_in_dispatch,
     dispatch_params.avg_purchase_price = avg_purchase_price/1000    # $/kWh 
     dispatch_params.day_ahead_tol_plus = day_ahead_tol_plus*1000    # kWhe
     dispatch_params.day_ahead_tol_minus = day_ahead_tol_minus*1000  # kWhe
-    # print("SSC estimates: ", len(R_est['Q_thermal']))
-    # print("  sscstep: ", sscstep)
-    # print("  delta  : ", dispatch_params.Delta)
     dispatch_params.set_estimates_from_ssc_data(
         plant.design,
         R_est,

@@ -233,10 +233,11 @@ class PysamWrap:
             validated_solar_resource_data = weather_schema(solar_resource_data_input)
             # the number of records must be a integer multiple of 8760
             # see: sam_dev/ssc/ssc/common.cpp, line 1272
-            diff = len(validated_solar_resource_data['dn']) % 525600
+            print("DNI input = ", sum(validated_solar_resource_data['dn']))
+            diff = len(validated_solar_resource_data['dn']) % 8760
             if diff > 0:
                 print("Resizing weather data. Old length: ", len(validated_solar_resource_data['dn']))
-                padding = [0] * (525600 - diff)
+                padding = [0] * (8760 - diff)
                 for v in validated_solar_resource_data.values():
                     if isinstance(v, list):
                         v.extend(padding)
@@ -293,7 +294,16 @@ class PysamWrap:
         return plant_state
 
 
-    def estimates_for_dispatch_model(self, plant_design, toy, horizon, weather_data, N_pts_horizon, clearsky_data, start_pt):
+    def estimates_for_dispatch_model(
+        self, 
+        plant_design, 
+        toy, 
+        horizon, 
+        weather_data, 
+        N_pts_horizon, 
+        clearsky_data, 
+        start_pt,
+    ):
         """This is an interchangeable pysam version of ssc_wrapper.estimates_for_dispatch_model()"""
 
         def time_of_year_to_datetime(year, seconds_since_newyears):
@@ -314,35 +324,47 @@ class PysamWrap:
         # Set parameters
         datetime_start = time_of_year_to_datetime(weather_data['year'][0], toy)
         datetime_end = datetime_start + datetime.timedelta(seconds=horizon)     # horizon is in seconds
-        timestep = datetime.timedelta(hours=1/self._GetTechModelParam('time_steps_per_hour'))
-        plant_state = plant_design                                        # TODO: plant_design contains all parameters. Could filter.
-        plant_state['is_dispatch_targets'] = False
-        solar_resource_data=weather_data
+        timestep = datetime.timedelta(
+            hours = 1 / self._GetTechModelParam('time_steps_per_hour'),
+        )         
+        # Okay: here's something annoying. Simulate below is going to call 
+        # _SetTechModelParams(plant_state), which will over-write the value if 
+        # we set it in the dictionary below. Modify the plant_state here 
+        # instead.
+        plant_design['is_dispatch_targets'] = False
         self._SetTechModelParams({
-            'is_dispatch_targets': False,
-            'tshours': 100,                                                     # Inflate TES size so that there is always "somewhere" to put receiver output
+            # Inflate TES size so that there is always "somewhere" to put 
+            # receiver output.
+            'tshours': 100,                                                     
             'is_rec_startup_trans': False,
-            'rec_su_delay': 0.001,                                              # Simulate with no start-up time to get total available solar energy
+            # Simulate with no start-up time to get total available solar 
+            # energy.
+            'rec_su_delay': 0.001,                                              
             'rec_qf_delay': 0.001,
-
-            # 'q_pc_target_su_in': [0],
-            # 'q_pc_target_on_in': [0],
-            # 'q_pc_max_in': [0],
-            # 'is_rec_su_allowed_in': [0],
-            # 'is_rec_sb_allowed_in': [0],
-            # 'is_pc_su_allowed_in': [0],
-            # 'is_pc_sb_allowed_in': [0],
-            })
+        })
         print("Simulating plant to get collector availability")
-        results = self.Simulate(datetime_start, datetime_end, timestep, plant_state=plant_state, solar_resource_data=solar_resource_data)
+        print("  Total DNI = ", sum(weather_data['dn']))
+        for i in range(365):
+            t = (i - 1) * 60 * 24
+            print(i, " = ", sum(weather_data['dn'][t:(t + 60 * 24)]))
+            
+        results = self.Simulate(
+            datetime_start, 
+            datetime_end, 
+            timestep, 
+            plant_state = plant_design,
+            solar_resource_data = weather_data,
+        )
+        print("  Total Q_thermal = ", sum(results['Q_thermal']))
         # Revert back to original parameters
         self._SetTechModelParams(original_params)
-
-        # Filter and adjust results
-        retvars = ['Q_thermal', 'm_dot_rec', 'beam', 'clearsky', 'tdry', 'P_tower_pump', 'pparasi']
-        if results['clearsky'][0] < 1.e-3:         # Clear-sky data wasn't passed through ssc (ssc controlled from actual DNI, or user-defined flow inputs)
+        if sum(results['clearsky']) < 1:
+            # Clear-sky data wasn't passed through ssc (ssc controlled from 
+            # actual DNI, or user-defined flow inputs)
             results['clearsky'] = clearsky_data[start_pt : start_pt + N_pts_horizon]
-        return results
+        # Only return needed results.
+        retvars = ['Q_thermal', 'm_dot_rec', 'beam', 'clearsky', 'tdry', 'P_tower_pump', 'pparasi']
+        return {k: results[k] for k in retvars}
 
 
     def _WeatherFileIsSet(self):

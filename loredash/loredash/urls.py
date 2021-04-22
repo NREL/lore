@@ -17,9 +17,13 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
+
 from pathlib import Path
+
 from mediation import mediator
-import mediation.plant as plant_
+from mediation import forecasts
+from mediation import plant
+
 import multiprocessing
 import datetime
 
@@ -30,7 +34,16 @@ import datetime
 def _RunOnce():
     parent_dir = str(Path(__file__).parents[1])
     default_weather_file = parent_dir + "/data/daggett_ca_34.865371_-116.783023_psmv3_60_tmy.csv"
-    plant_design = plant_.plant_design
+    plant_design = plant.plant_design
+    print("===================================================================")
+    print("Updating solar forecast...")
+    forecaster = forecasts.SolarForecast(
+        plant_design['latitude'],
+        plant_design['longitude'],
+        plant_design['timezone_string'],
+        plant_design['elevation'],
+    )
+    weather_data = forecaster.latestForecast().reset_index()
     m = mediator.Mediator(
         params=mediator.mediator_params,
         plant_design=plant_design,
@@ -44,8 +57,8 @@ def _RunOnce():
     print("Running previous day...")
     result = m.ModelPreviousDayAndAddToDb()
     print("===================================================================")
-    print("Runing now...")
-    result = m.RunOnce()
+    print("Runing current day...")
+    # result = m.RunOnce()
     return
 # try:
 _RunOnce()

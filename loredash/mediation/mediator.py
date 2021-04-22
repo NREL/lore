@@ -181,6 +181,7 @@ class Mediator:
         # Call dispatch model, (which includes a PySAM model run to get 
         # estimates) and update inputs for next call. This call also generates 
         # the weather forecast, which we use in the next call to SAM.
+        print("Weather = ", self.dispatch_inputs['weather_data_for_dispatch'])
         dispatch_outputs = self.dispatch_wrap.run(
             start_date=datetime_start,
             timestep_days=self.simulation_timestep.seconds/(24*3600),
@@ -208,9 +209,10 @@ class Mediator:
 
         # b. Call PySAM
         print("Running PySAM using the dispatch targets...")
-        self.pysam_wrap._SetTechModelParams(
-            dispatch_outputs['ssc_dispatch_targets'].target_for_pysamwrap(),
-        )
+        target = dispatch_outputs['ssc_dispatch_targets'].target_for_pysamwrap()
+        for (k, v) in target.items():
+            print(k, " : sums to : ", sum(v))
+        self.pysam_wrap._SetTechModelParams(target)
         tech_outputs = self.pysam_wrap.Simulate(
             datetime_start, 
             datetime_end, 
