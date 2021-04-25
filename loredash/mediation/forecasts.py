@@ -111,7 +111,7 @@ class SolarForecast:
             self.plant_location.latitude,
             self.plant_location.longitude,
             current_time,
-            current_time + pandas.Timedelta(hours = 48),
+            current_time + pandas.Timedelta(hours = 60),
             how = 'clearsky_scaling',
         )[['dni']]
         data.index = pandas.to_datetime(data.index)

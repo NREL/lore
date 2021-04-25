@@ -241,7 +241,7 @@ class PysamWrap:
                 for v in validated_solar_resource_data.values():
                     if isinstance(v, list):
                         v.extend(padding)
-            print("Setting weather data with ", len(validated_solar_resource_data['dn']), " entries")
+            print("Setting weather data with ", len(validated_solar_resource_data['dn']), " entries. Sums to ", sum(validated_solar_resource_data['dn']))
             self.tech_model.SolarResource.solar_resource_data = validated_solar_resource_data
         return 0
 

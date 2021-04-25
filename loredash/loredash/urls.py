@@ -55,10 +55,10 @@ def _RunOnce():
     )
     print("===================================================================")
     print("Running previous day...")
-    result = m.ModelPreviousDayAndAddToDb()
+    # result = m.ModelPreviousDayAndAddToDb()
     print("===================================================================")
     print("Runing current day...")
-    # result = m.RunOnce()
+    result = m.RunOnce()
     return
 # try:
 _RunOnce()

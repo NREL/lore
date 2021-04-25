@@ -10,6 +10,8 @@ import datetime
 from csv import reader
 import math
 
+from mediation import forecasts
+
 try:
     import librtdispatch.util as util
     import librtdispatch.dispatch_model as dispatch_model
@@ -1020,11 +1022,31 @@ class DispatchWrap:
                 day_ahead_schedule_time=self.day_ahead_schedule_time,
                 clearsky_data=self.clearsky_data
                 )
-        print("Weather forecast with ", len(self.current_forecast_weather_data['dn']), " entries") 
-
         self.is_initialized = True
         return
 
+    def _update_forecast(self):
+        """
+        Ideally, this will modify weather_data_for_dispatch and take a 
+        start_date. for now, just set the weather data as clear-sky.
+        """
+        forecaster = forecasts.SolarForecast(
+            self.plant.design['latitude'],
+            self.plant.design['longitude'],
+            self.plant.design['timezone_string'],
+            self.plant.design['elevation'],
+        )
+        dt = datetime.timedelta(hours = 1 /self.ssc_time_steps_per_hour)
+        weather_data = forecaster.latestForecast(resolution = dt)
+        assert( len(self.weather_data_for_dispatch['dn']) == 525600 )
+        for i in range(525600):
+            self.weather_data_for_dispatch['dn'][i] = self.clearsky_data[i]
+        # for (time, row) in weather_data.iterrows():
+        #     t = util.get_time_of_year(time.replace(tzinfo=None))
+        #     t = int(t / 3600 * self.ssc_time_steps_per_hour)
+        #     self.weather_data_for_dispatch['dn'][t] = row['0.5']
+        
+        return
 
     #--- Run simulation
     def run(self, start_date, timestep_days, horizon, retvars, ursd_last, yrsd_last, current_forecast_weather_data, weather_data_for_dispatch,
@@ -1087,7 +1109,7 @@ class DispatchWrap:
         # horizon_update = int(self.dispatch_horizon_update*3600)
         freq = int(self.dispatch_frequency*3600)                    # Frequency of rolling horizon update (s)
 
-        #--- Update "forecasted" weather data (if relevant)
+        #--- Update "forecasted" weather data (if relevant)        
         if self.is_optimize and (tod == self.forecast_issue_time*3600):
             self.current_forecast_weather_data = DispatchWrap.update_forecast_weather_data(
                 date=time,
@@ -1098,8 +1120,8 @@ class DispatchWrap:
                 forecast_issue_time=self.forecast_issue_time,
                 day_ahead_schedule_time=self.day_ahead_schedule_time,
                 clearsky_data=self.clearsky_data
-                )
-
+            )
+        
         #--- Update stored day-ahead generation schedule for current day (if relevant)
         if tod == 0 and self.use_day_ahead_schedule:
             self.next_day_schedule = [0 for s in self.next_day_schedule]
@@ -1158,7 +1180,7 @@ class DispatchWrap:
                 total_horizon = horizon/3600.,
                 dispatch_horizon = self.dispatch_weather_horizon
                 )
-
+            
             if start_date == datetime.datetime(2018, 10, 14, 0, 0):
                 assert math.isclose(self.weather_data_for_dispatch['tz'], -8, rel_tol=1e-4)
                 assert math.isclose(self.weather_data_for_dispatch['elev'], 1497.2, rel_tol=1e-4)
@@ -1179,6 +1201,7 @@ class DispatchWrap:
                 assert math.isclose(sum(list(self.weather_data_for_dispatch['gh'])), 0, rel_tol=1e-4)
                 assert math.isclose(sum(list(self.weather_data_for_dispatch['tdry'])), 10737.5, rel_tol=1e-4)
 
+            self._update_forecast()
             #--- Run ssc for dispatch estimates: (using weather forecast time resolution for weather data and specified ssc time step)
             npts_horizon = int(horizon/3600 * nph)
             R_est = f_estimates_for_dispatch_model(
@@ -1346,8 +1369,16 @@ class DispatchWrap:
 
 
     @staticmethod
-    def update_forecast_weather_data(date, current_forecast_weather_data, ssc_time_steps_per_hour, forecast_steps_per_hour, ground_truth_weather_data,
-                                        forecast_issue_time, day_ahead_schedule_time, clearsky_data):
+    def update_forecast_weather_data(
+        date, 
+        current_forecast_weather_data, 
+        ssc_time_steps_per_hour, 
+        forecast_steps_per_hour, 
+        ground_truth_weather_data,
+        forecast_issue_time, 
+        day_ahead_schedule_time, 
+        clearsky_data,
+    ):
         """
         Inputs:
             date
@@ -1362,9 +1393,8 @@ class DispatchWrap:
         Outputs:
             current_forecast_weather_data
         """
-
         offset30 = True
-        print ('Updating weather forecast:', date)
+        print('Updating weather forecast:', date)
         nextdate = date + datetime.timedelta(days = 1) # Forecasts issued at 4pm PST on a given day (PST) are labeled at midnight (UTC) on the next day 
         wfdata = util.read_weather_forecast(nextdate, offset30)
         t = int(util.get_time_of_year(date)/3600)   # Time of year (hr)
