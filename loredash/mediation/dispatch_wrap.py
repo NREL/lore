@@ -1039,8 +1039,13 @@ class DispatchWrap:
         dt = datetime.timedelta(hours = 1 /self.ssc_time_steps_per_hour)
         weather_data = forecaster.latestForecast(resolution = dt)
         assert( len(self.weather_data_for_dispatch['dn']) == 525600 )
+        print(self.weather_data_for_dispatch.keys())
         for i in range(525600):
+            # This vector gets passed to f_estimates_for_dispatch_model, but 
+            # changing it doesn't seem to have any effect on the output. Which 
+            # things do I need to set to adjust the weather?
             self.weather_data_for_dispatch['dn'][i] = self.clearsky_data[i]
+        # We would use this if we were using the weather forecast....
         # for (time, row) in weather_data.iterrows():
         #     t = util.get_time_of_year(time.replace(tzinfo=None))
         #     t = int(t / 3600 * self.ssc_time_steps_per_hour)

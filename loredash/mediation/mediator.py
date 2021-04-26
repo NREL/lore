@@ -178,6 +178,9 @@ class Mediator:
         print("Start datetime = {datetime}".format(datetime=datetime_start))
         print("End datetime   = {datetime}".format(datetime=datetime_end))
 
+        # tmy_weather = Tmy3ToDataframe(self.weather_file)
+        # print(tmy_weather)
+
         # Call dispatch model, (which includes a PySAM model run to get 
         # estimates) and update inputs for next call. This call also generates 
         # the weather forecast, which we use in the next call to SAM.
@@ -212,6 +215,7 @@ class Mediator:
         target = dispatch_outputs['ssc_dispatch_targets'].target_for_pysamwrap()
         for (k, v) in target.items():
             print(k, " : sums to : ", sum(v))
+            # target[k] = [0] * len(v)
         self.pysam_wrap._SetTechModelParams(target)
         tech_outputs = self.pysam_wrap.Simulate(
             datetime_start, 
@@ -222,6 +226,8 @@ class Mediator:
             # again.
             solar_resource_data=self.dispatch_wrap.weather_data_for_dispatch,
         )
+        print("  Total Q_thermal = ", sum(tech_outputs['Q_thermal']))
+        print("  Total q_sf_inc  = ", sum(tech_outputs['q_sf_inc']))
         print("Annual Energy [kWh]= ", tech_outputs["annual_energy"])
 
         # Update the plant state.

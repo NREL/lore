@@ -140,6 +140,7 @@ class PysamWrap:
         print("  points              = ", npts)
         self.tech_model.execute(1)  # (1) is the verbosity.
         tech_outputs = self.tech_model.Outputs.export()
+        print(sum(tech_outputs['Q_thermal']))
         # Strip trailing zeros or excess data from outputs
         times = {
             'time_start':          SystemControl.time_start,
@@ -343,10 +344,12 @@ class PysamWrap:
             'rec_qf_delay': 0.001,
         })
         print("Simulating plant to get collector availability")
-        print("  Total DNI = ", sum(weather_data['dn']))
+        print("  Total dn = ", sum(weather_data['dn']))
+        print("  Total df = ", sum(weather_data['df']))
+        print("  Total gh = ", sum(weather_data['gh']))
         for i in range(365):
             t = (i - 1) * 60 * 24
-            print(i, " = ", sum(weather_data['dn'][t:(t + 60 * 24)]))
+            # print(i, " = ", sum(weather_data['dn'][t:(t + 60 * 24)]))
             
         results = self.Simulate(
             datetime_start, 
@@ -356,6 +359,7 @@ class PysamWrap:
             solar_resource_data = weather_data,
         )
         print("  Total Q_thermal = ", sum(results['Q_thermal']))
+        print("  Total q_sf_inc  = ", sum(results['q_sf_inc']))
         # Revert back to original parameters
         self._SetTechModelParams(original_params)
         if sum(results['clearsky']) < 1:
