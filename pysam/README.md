@@ -98,13 +98,13 @@ conda activate pysam_daotk
 10. Update PySAM via a pull
 11. Delete the `.../sam_dev/pysam/build` directory if it exists
 12. Delete the contents of `.../sam_dev/pysam/dist/`
-13. Copy config.h to `.../sam-dev/ssc/nlopt` if the file does not exist
-14. Remove the contents of `.../sam_dev/build/` and run CMake in the `/build` directory to create the DAO-Tk solution ([step 7.4](https://github.com/NREL/SAM/wiki/Windows-Build-Instructions#7-run-cmake-to-generate-sam-vs-2019-project-files)). Omit the setting that disables the API, as shown in the commands below:
+13. Copy config.h to `.../sam_dev/ssc/nlopt` if the file does not exist
+14. Run the following commands in the `.../sam_dev` directory (e.g., in a .bat file) to delete the contents of `.../sam_dev/build` and run CMake in that directory to create the DAO-Tk code solution ([step 7.4](https://github.com/NREL/SAM/wiki/Windows-Build-Instructions#7-run-cmake-to-generate-sam-vs-2019-project-files)).
 	```
 	rmdir /Q/S build
 	mkdir build
 	cd build
-	cmake -G "Visual Studio 16 2019" -DCMAKE_CONFIGURATION_TYPES="Release" -DCMAKE_SYSTEM_VERSION=10.0 .. 
+	cmake -G "Visual Studio 16 2019" -DCMAKE_CONFIGURATION_TYPES="Release" -DCMAKE_SYSTEM_VERSION=10.0 -DSAMAPI_EXPORT=1 .. 
 	```
 15. Open `/build/system_advisor_model.sln` in Visual Studio and perform a batch-build of the Release configuration, but first unload the following projects:
 	* TCSConsole
