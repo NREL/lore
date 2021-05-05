@@ -329,7 +329,7 @@ def read_CD_data(date, raw_data_direc, processed_data_direc):
     else:
         print('Reading in CD data: ' + str(date))
         fname = 'CDS Daily Operations Report %s %s %s.xlsb'%(date.year, smonth, sday)
-        if fname not in os.listdir(raw_data_direc):
+        if not os.path.exists(raw_data_direc) or fname not in os.listdir(raw_data_direc):
             return None
         data = pd.read_excel(raw_data_direc + fname, sheet_name = 'Chart2', engine = 'pyxlsb', header = 3, skiprows=[4], nrows = 1440)
         bad_col_name = "Cold Salt Pmps Disch Flow"
