@@ -31,6 +31,10 @@ class PysamWrap:
             self._SetTechModelParams(dispatch_wrap_params)
             self._SetTechModelParams(plant.design)
             self._SetTechModelParams(mediator_params)
+            # Just for debugging:
+            sf_adjust_hourly = util.get_field_availability_adjustment(
+                mediator_params['time_steps_per_hour'], start_date_year, mediator_params['control_field'],
+                mediator_params['use_CD_measured_reflectivity'], plant.design, mediator_params['fixed_soiling_loss'])
             self._SetTechModelParams({'sf_adjust:hourly': util.get_field_availability_adjustment(
                 mediator_params['time_steps_per_hour'], start_date_year, mediator_params['control_field'],
                 mediator_params['use_CD_measured_reflectivity'], plant.design, mediator_params['fixed_soiling_loss'])}
