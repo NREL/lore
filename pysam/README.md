@@ -104,7 +104,7 @@ conda activate pysam_daotk
 	rmdir /Q/S build
 	mkdir build
 	cd build
-	cmake -G "Visual Studio 16 2019" -DCMAKE_CONFIGURATION_TYPES="Release" -DCMAKE_SYSTEM_VERSION=10.0 -DSAMAPI_EXPORT=1 .. 
+	cmake -G "Visual Studio 16 2019" -DCMAKE_CONFIGURATION_TYPES="Release" -DCMAKE_SYSTEM_VERSION=10.0 -DSAMAPI_EXPORT=1 -DSAM_SKIP_AUTOGEN=0 .. 
 	```
 15. Open `/build/system_advisor_model.sln` in Visual Studio and perform a batch-build of the Release configuration, but first unload the following projects:
 	* TCSConsole
@@ -168,3 +168,4 @@ conda activate pysam_daotk
 	git clean -fd
 	```
 29. Commit the changes to the RELEASE.md and the two version.py files and push to the lore repo
+30. **Note**: If there are issues with PySAM, check out previous correlated versions of [PySAM](https://github.com/NREL/pysam/tags) and [SAM](https://github.com/NREL/SAM/tags) from their respective repos for this custom PySAM build. Reference the repo tags to verify version correlation.
