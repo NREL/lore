@@ -232,7 +232,7 @@ def read_weather(weatherfile, calc_clearsky = True):
                 c = header.tolist().index(j)
                 weather[k] = data[:,c]
         if not found:
-           print 'Failed to find data for ' + k + ' in weather file' 
+           print('Failed to find data for ' + k + ' in weather file')
     
     if calc_clearsky:
         Npts = len(weather['dni'])     
@@ -305,26 +305,26 @@ def calc_metrics(weatherfile, Ndays = 2, ppa = None, sfavail = None, user_weight
     hourlydata['ppa'] = np.ones((npts))
     if ppa is None:
         if weights['avgppa']> 0:
-            print 'Warning: PPA price multipliers were not provided.  Weighting factor for PPA multiplier will be reset to zero'
+            print('Warning: PPA price multipliers were not provided.  Weighting factor for PPA multiplier will be reset to zero')
             weights['avgppa'] = 0.0
     else:
         if len(ppa) == npts:
             hourlydata['ppa'] = np.array(ppa)
         else:
-            print 'Warning: Specified ppa multiplier array and data in weather file have different lengths.  Weighting factor for PPA multiplier will be reset to zero'
+            print('Warning: Specified ppa multiplier array and data in weather file have different lengths.  Weighting factor for PPA multiplier will be reset to zero')
             weights['avgppa'] = 0.0
         
         
     hourlydata['sfavail'] = np.ones((npts))   
     if sfavail is None:
         if weights['avg_sfavail']>0:
-            print 'Warning: solar field availability was not provided.  Weighting factor for average solar field availability will be reset to zero'
+            print('Warning: solar field availability was not provided.  Weighting factor for average solar field availability will be reset to zero')
             weights['avg_sfavail'] = 0.0
     else:
         if len(sfavail) == npts:
             hourlydata['sfavail'] = np.array(sfavail)
         else:
-            print 'Warning: Specified solar field availability array and data in weather file have different lengths.  Weighting factor for average solar field availability will be reset to zero'
+            print('Warning: Specified solar field availability array and data in weather file have different lengths.  Weighting factor for average solar field availability will be reset to zero')
             weights['avg_sfavail'] = 0.0
                 
 
@@ -388,7 +388,7 @@ def calc_metrics(weatherfile, Ndays = 2, ppa = None, sfavail = None, user_weight
                     for h in range(len(pts[i])):    # Loop over hours which are at least partially contained in division i
                         if pts[i][h] == Npts:       # Hour falls outside of allowed number of hours in the day 
                             if  wts[i][h] > 0.0:
-                                print 'Error calculating weighted average for key ' + key + ' and division ' + str(i)
+                                print('Error calculating weighted average for key ' + key + ' and division ' + str(i))
                         else:
                             p = d*nptsday + p1 + pts[i][h]  # Point in yearly array
                             daily_metrics[key][d,i] += (hourlydata[datakeys[key]][p] * wts[i][h])
@@ -418,7 +418,7 @@ def calc_metrics(weatherfile, Ndays = 2, ppa = None, sfavail = None, user_weight
     data_first = None
     data_last = None
     if Ndays != 2:
-        print 'Extra classification metrics for first/last days are currently only defined for Ndays = 2'
+        print('Extra classification metrics for first/last days are currently only defined for Ndays = 2')
     else:
         data_firstlast = np.zeros((2,Nmetrics))
         for p in range(2):      # Metrics for first and last days
@@ -468,7 +468,7 @@ def create_clusters(data, cluster_inputs, verbose = False):
             cluster_inputs.afp_preference_mult = multiplier
             clusters = cluster_inputs.form_clusters(data)
             if verbose:
-                print 'Formed '+ str(clusters['Ncluster']) + ' clusters with preference multiplier = ' + str(multiplier)
+                print('Formed '+ str(clusters['Ncluster']) + ' clusters with preference multiplier = ' + str(multiplier))
                 
             if abs(clusters['Ncluster'] - Ntarget)<=tol or upperbound-lowerbound < multiplier_tolerance:
                 finished = True
@@ -484,15 +484,15 @@ def create_clusters(data, cluster_inputs, verbose = False):
   
             i+=1       
         if finished and abs(clusters['Ncluster']-Ntarget)>tol:
-            print 'Affinity propagation algorithm reached the specified multiplier tolerance without finding ' + str(Ntarget) + ' clusters.  The current number of clusters is ' + str(clusters['Ncluster'])
+            print('Affinity propagation algorithm reached the specified multiplier tolerance without finding ' + str(Ntarget) + ' clusters.  The current number of clusters is ' + str(clusters['Ncluster']))
         if i == maxiter and abs(clusters['Ncluster']-Ntarget)>tol:
-            print 'Maximum number of iterations reached without finding ' + str(Ntarget) + ' clusters.  The current number of clusters is ' + str(clusters['Ncluster'])
+            print('Maximum number of iterations reached without finding ' + str(Ntarget) + ' clusters.  The current number of clusters is ' + str(clusters['Ncluster']))
     
     else:
         clusters = cluster_inputs.form_clusters(data)
 
     if verbose:
-        print '    Created ' + str(clusters['Ncluster']) + ' clusters' 
+        print('    Created ' + str(clusters['Ncluster']) + ' clusters')
 
     # Sort clusters in order of lowest to highest exemplar points
     ngroup = data.shape[0]          # Number of data points 
@@ -533,7 +533,7 @@ def adjust_weighting_firstlast(data, data_first, data_last, clusters, Ndays = 2)
     '''
 
     if Ndays != 2:
-        print 'Cluster weighting factor adjustment to include first/last days is not currently defined for ' + str(Ndays) + 'consecutive simulation days.  Cluster weights will not include days excluded from original clustering algorithm'
+        print('Cluster weighting factor adjustment to include first/last days is not currently defined for ' + str(Ndays) + 'consecutive simulation days.  Cluster weights will not include days excluded from original clustering algorithm')
         clusters['weights_adjusted'] = clusters['weights']
         return [clusters, -1,-1]
     else:
@@ -698,7 +698,7 @@ def compute_annual_array_from_clusters(exemplardata, clusters, Ndays, adjust_wt 
     else:
         navg = 5
         if max(fulldata[0:24]) == 0:   # No data for first day of year
-            print 'First day of the year was not assigned to a cluster and will be assigned average generation profile from the next '+ str(navg) + ' days.'
+            print('First day of the year was not assigned to a cluster and will be assigned average generation profile from the next '+ str(navg) + ' days.')
             hourly_avg = np.zeros((nptsday))
             for d in range(1,navg+1):   
                 for h in range(24*nptshr):
@@ -709,7 +709,7 @@ def compute_annual_array_from_clusters(exemplardata, clusters, Ndays, adjust_wt 
         if nexclude>0:
             h1 = 8760*nptshr - nexclude*nptsday   # First excluded hour at the end of the year
             if max(fulldata[h1 : h1+nexclude*nptsday]) == 0:
-                print 'Last ' + str(nexclude) + ' days were not assigned to a cluster and will be assigned average generation profile from prior '+ str(navg) + ' days.'
+                print('Last ' + str(nexclude) + ' days were not assigned to a cluster and will be assigned average generation profile from prior '+ str(navg) + ' days.')
                 hourly_avg = np.zeros((nexclude*nptsday))
                 d1 = 365-nexclude-navg    # First day to include in average
                 for d in range(d1,d1+navg):   
