@@ -5,28 +5,39 @@
 FROM python:3.8-slim-buster
 LABEL maintainer="NREL - Thermal Sciences"
 
+# Set up the lore virtual environment
+ENV VIRTUAL_ENV=/opt/app/lore
+
+# Add a user named 'admin' for running applications only
+RUN useradd -ms /bin/bash admin
+
+# Set work directory
+RUN mkdir -p /loredash
+
+# Copy project
+COPY . /loredash
+
+# Where the code lives
+WORKDIR /loredash
+
+# Turn DEBUG mode off
+RUN export DJANGO_DEBUG=False
+
+# Set the new user as an owner of the folder in order to access the database
+# TODO: find a more secure way to do this while still being able to access the db
+RUN chown -R admin:admin /loredash
+RUN chmod 755 /loredash
+
+# Set environment variables
 ENV PYTHONUNBUFFERED 1
 
-# Replicate a virtualenv, see here for why:  https://pythonspeed.com/articles/activate-virtualenv-dockerfile/
-# ENV VIRTUAL_ENV=/loredash
-# RUN python -m venv $VIRTUAL_ENV
-# ENV PATH="$VIRTUAL_ENV:$PATH"
-
-# Copy local requirements file to container and install those requirements there
-COPY ./requirements.txt /requirements.txt
+# Install dependencies
+RUN pip install --upgrade pip
 RUN apt-get -qq update
 RUN apt-get -qq install gcc
-RUN pip install -r /requirements.txt
+RUN pip install -r requirements.txt
 
-# Create a folder in the image called 'loredash', make that the working directory in the image, and copy everything
-#  into that image folder
-# RUN mkdir /loredash
-WORKDIR /loredash
-COPY . /loredash
-# RUN chmod 777 /loredash/db.sqlite3
+# Switch to the newly created user
+USER admin
 
-# Add a user named 'user' for running applications only and switch to it
-#  This makes the default user have no root privileges for security reasons
-RUN useradd -s /bin/bash user
-USER user
-# RUN chown -R user:user /loredash/db.sqlite3
+CMD ["/bin/bash"]
