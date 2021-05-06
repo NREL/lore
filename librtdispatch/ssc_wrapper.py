@@ -75,8 +75,12 @@ def call_ssc(D, retvars = ['gen'], plant_state_pt = -1, npts = None):
     """
 
     ssc = api.PySSC()
+    print('Process ID = ', os.getpid())
+    # print ('Current folder = ' + os.getcwd() )
+    # print ('SSC Version = ', ssc.version())
+    # print ('SSC Build Information = ', ssc.build_info().decode("utf - 8"))
     dat = ssc.data_create()
-    mspt = ssc.module_create("tcsmolten_salt".encode("utf-8"))	
+    mspt = ssc.module_create("tcsmolten_salt".encode("utf-8"))
        
     update_bad_names(D)  # Update keys in D that were changed from ssc variable names
     Vt = copy.deepcopy(V)
