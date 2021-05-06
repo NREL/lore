@@ -3,7 +3,7 @@
 *Before starting:*
 
 1. Navigate to the docker-compose.yml file located in the root loredash directory
-2. In either VS Code or a text editor, navigate to the top of the file's contents change the x-var named USER_PATH to your Docker Hub username before the /lore
+2. In either VS Code or a text editor, navigate to the top of the file's contents change the x-var named USER_PATH to your Docker Hub username before the /lore.
 	The result should look something like this:
 	```
 	x-var: &USER_PATH
