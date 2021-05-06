@@ -1,7 +1,7 @@
 # version of docker-compose to use
 version: "3"
 
-# Docker Hub username/path variable: <Docker Hub username>/lore
+# Image name variable: <Docker Hub username>/lore
 x-var: &USER_PATH
     dquintan/lore
 
@@ -17,13 +17,24 @@ x-var: &USER_PATH
 #  the bokeh server at 127.0.0.1:5006 (which gets mapped to 10.10.10.11:5006 once back in the container).
 
 services:
+    nginx:
+        build: ./loredash/nginx
+        ports:
+          - 1300:80
+        volumes:
+          - static_volume:/opt/app/lore/loredash/static
+        depends_on:
+          - dash
+          - migration
+        restart: "on-failure"
     # this is an 'app' from which a container is created. 'plots' is another app and will be another container
     dash:
         image: *USER_PATH
         networks:
             app_net:
                 ipv4_address: 10.10.10.10
-        command: python manage.py runserver 0.0.0.0:8000
+        command: sh -c "python manage.py collectstatic --noinput &&
+                        gunicorn loredash.wsgi:application --bind 0.0.0.0:8000"
         container_name: dashboard
         # Mapping to a volume may be causing a problematic local dependency on manage.py
         # volumes:
@@ -31,6 +42,8 @@ services:
         ports:
             # HOST_PORT:CONTAINER_PORT ('host' is the computer hosting the container)
             - "8000:8000"
+        expose:
+            - "8000"
         # depends_on makes sure commands are executed in the correct order
         depends_on:
             - migration
@@ -74,6 +87,9 @@ services:
         # Mapping to a volume may be causing a problematic local dependency on manage.py
         # volumes:
         #     - .:/loredash
+
+volumes:
+    static_volume:
 
 networks:
     app_net:
