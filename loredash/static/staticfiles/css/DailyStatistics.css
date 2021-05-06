@@ -1,0 +1,30 @@
+.tile_count .tile_stats_count span {
+    font-size: 13px;
+}
+
+*, *:before, *:after {
+    box-sizing: border-box;
+}
+
+.tile_count .tile_stats_count {
+    padding: 0 10px 0 20px;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    white-space: nowrap;
+    position: relative;
+    float: left;
+}
+
+.tile_count .tile_stats_count .count {
+    font-size: 30px;
+    line-height: 47px;
+    font-weight: 600;
+}
+
+.green {
+    color: #1ABB9C;
+}
+
+.red {
+    color: #E74C3C;
+}
