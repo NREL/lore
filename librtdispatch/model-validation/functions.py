@@ -84,7 +84,7 @@ class properties:
         self.startup_ramp_time = 0.29   # Combined historical median Operate and Track (to near 100% or point in time tracking stops changing)
 
         # Power cycle parasitics
-        self.w_off_heat_frac = 0.034*2    # Electric heaters when cycle is off state (CD data)
+        self.W_off_heat_frac = 0.034*2    # Electric heaters when cycle is off state (CD data)
         self.pb_pump_coef = 1.1*4         # HTF pumping power through power block (CD data)   *4 to include FW and cond. pumps   
         self.pb_fixed_par = 0.015       # Constant losses in system, includes ACC power (CD data)
 

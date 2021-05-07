@@ -180,7 +180,7 @@ class PlantProperties:
         
         # Power cycle parasitics
         self.is_elec_heat_dur_off = True  # Use cycle electric heater parasitic when the cycle is off
-        self.w_off_heat_frac = 0.045      # Electric heaters when cycle is off state (CD data) [Accounts for Startup and Aux Boiler Electric Heaters (~5.4 MWe)]
+        self.W_off_heat_frac = 0.045      # Electric heaters when cycle is off state (CD data) [Accounts for Startup and Aux Boiler Electric Heaters (~5.4 MWe)]
         self.pb_pump_coef = 0.86          # HTF pumping power through power block (kWe / kg/s) (CD data)   [Accounts for Hot Pumps]  
         self.pb_fixed_par = 0.010208      # Constant losses in system, includes ACC power (CD data) -- [Accounts for SGS Heat Trace, WCT Fans & Pumps, Cond Pump, SGS Recir Pumps, Compressors]
         self.aux_par = 0.0                # Aux heater, boiler parasitic - Off"           
