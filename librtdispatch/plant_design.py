@@ -176,9 +176,9 @@ class PlantProperties:
         # Power cycle parasitics
         self.is_elec_heat_dur_off = True  # Use cycle electric heater parasitic when the cycle is off
         self.W_off_heat_frac = 0.05      # TODO SAM default for this? # Electric heaters when cycle is off state
-        self.pb_pump_coef = 0.55          # HTF pumping power through power block (kWe / kg/s) (CD data)   [Accounts for Hot Pumps]
-        self.pb_fixed_par = 0.0055        # Constant losses in system, includes ACC power (CD data) -- [Accounts for SGS Heat Trace, WCT Fans & Pumps, Cond Pump, SGS Recir Pumps, Compressors]
-        self.aux_par = 0.023              # Aux heater, boiler parasitic - Off"
+        self.pb_pump_coef = 0.55          # HTF pumping power through power block (kWe / kg/s) [Accounts for Hot Pumps]
+        self.pb_fixed_par = 0.0055        # Constant losses in system, includes ACC power -- [Accounts for SGS Heat Trace, WCT Fans & Pumps, Cond Pump, SGS Recir Pumps, Compressors]
+        self.aux_par = 0.023              # Aux heater, boiler parasitic"
         self.bop_par = 0.0                # Balance of plant parasitic power fraction ----- [Accounts for Feedwater pump power]
         self.bop_par_f = 1                # Balance of plant parasitic power fraction - mult frac
         self.bop_par_0 = 0                # Balance of plant parasitic power fraction - const coeff
