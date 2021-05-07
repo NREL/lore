@@ -57,3 +57,9 @@ python manage.py deploy --checklist
 
 Another possible change that could be made is to create a .env file that contains important variables that involve the server or database. A few examples of these would be variables for
 the port of the app, the port number of the bokeh server, ALLOWED_HOSTS, and the database host and/or port. 
+
+*Running as a non-root user*
+The links below demonstrate two different methods to run the application as a non-root user:
+http://www.djangocurrent.com/2018/02/docker-run-as-non-root-user.html
+https://medium.com/@DahlitzF/run-python-applications-as-non-root-user-in-docker-containers-by-example-cba46a0ff384
+
