@@ -22,6 +22,11 @@ class PysamWrap:
 
     def __init__(self, mediator_params, plant, dispatch_wrap_params, model_name="MSPTSingleOwner", load_defaults=False, weather_file=None,
                  enable_preprocessing=True, preprocess_on_init=True, start_date_year=2018):
+        print('Process ID = ', os.getpid())
+        # print ('Current folder = ' + os.getcwd() )
+        # print ('SSC Version = ', ssc.version())
+        # print ('SSC Build Information = ', ssc.build_info().decode("utf - 8"))
+        
         if load_defaults == True:
             self.tech_model = t.default(model_name)
         else:
