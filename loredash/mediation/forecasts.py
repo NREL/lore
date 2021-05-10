@@ -1,6 +1,7 @@
 import datetime
 import os
 import pandas
+import pytz
 from pvlib import forecast
 from pvlib import location
 
@@ -94,7 +95,11 @@ class SolarForecast:
         self.forecast_uncertainty = ForecastUncertainty(uncertainty_bands)
         return
     
-    def _rawData(self):
+    def _rawData(
+        self,
+        datetime_start,
+        datetime_end = None,
+    ):
         """Return a Pandas dataframe of the current DNI forecast and 
         corresponding  clear-sky DNI estimate.
     
@@ -103,15 +108,13 @@ class SolarForecast:
         resolution : str, optional
             The temporal resolution to use when getting forecast.
         """
-        current_time = pandas.Timestamp(
-            datetime.datetime.now(),
-            tz = self.plant_location.tz,
-        )
+        if datetime_end is None:
+            datetime_end = datetime_start + pandas.Timedelta(hours = 60)
         data = forecast.NDFD().get_processed_data(
             self.plant_location.latitude,
             self.plant_location.longitude,
-            current_time,
-            current_time + pandas.Timedelta(hours = 60),
+            datetime_start,
+            datetime_end,
             how = 'clearsky_scaling',
         )[['dni']]
         data.index = pandas.to_datetime(data.index)
@@ -132,11 +135,11 @@ class SolarForecast:
         "Convert a timezone-naive `t` to local timezone-aware."
         return t.tz_localize('UTC').astimezone(self.plant_location.tz)
 
-    def updateDatabase(self):
-        data = self._rawData()
+    def updateDatabase(self, datetime_start):
+        data = self._rawData(datetime_start)
         current_time = self._toUTC(
             pandas.Timestamp(
-                datetime.datetime.now(), tz = self.plant_location.tz,
+                datetime.datetime.now(pytz.timezone(self.plant_location.tz)),
             )
         )
         instances = [
@@ -159,8 +162,52 @@ class SolarForecast:
         return (datetime.datetime.utcnow() - t).total_seconds() / 3600
 
     def _updateLatestForecast(self, resolution):
-        self.updateDatabase()
+        self.updateDatabase(
+            datetime_start = pandas.Timestamp(
+                datetime.datetime.now(pytz.timezone(self.plant_location.tz)),
+            )
+        )
         return self.latestForecast(resolution = resolution)
+
+    def _processData(self, raw_data, resolution):
+        data = raw_data.resample(resolution).mean()
+        # Clean up the ratio by imputing any NaNs that arose to the nearest
+        # non-NaN value. This means we assume that the start of the day acts
+        # like the earliest observation, and the end of the day looks like the
+        # last observation.
+        data.interpolate(method = 'linear', inplace = True)
+        # However, nearest only works when there are non-NaN values either side.
+        # For the first and last NaNs, use bfill and ffill:
+        data.fillna(method = 'bfill', inplace = True)
+        data.fillna(method = 'ffill', inplace = True)
+        # For each row (level = 0), convert the median ratio estimate into a
+        # probabilistic ratio estimate.
+        data = data.groupby(level = 0).apply(
+            lambda df: self.forecast_uncertainty.forecast(
+                (df.index[0] - raw_data.index[0]).seconds / 3_600,
+                df['ratio'][0],
+            )
+        )
+        # Get clear-sky estimates for the new time-points.
+        data['clear_sky'] = self.plant_location.get_clearsky(data.index)['dni']
+        # Convert the ratio estimates back to DNI-space by multiplying by the
+        # clear-sky.
+        for k in data.keys():
+            if k == 'clear_sky':
+                continue
+            data[k] = data[k] * data['clear_sky']
+        data.rename(columns = {k: str(k) for k in data.keys()}, inplace=True)
+        return data
+
+    def getForecast(
+        self,
+        datetime_start,
+        datetime_end,
+        time_step,
+    ):
+        raw_data = self._rawData(datetime_start, datetime_end)
+
+        return self._processData(raw_data, time_step)
 
     def latestForecast(
         self, 
@@ -194,31 +241,4 @@ class SolarForecast:
         raw_data['forecast_for'] = \
             raw_data['forecast_for'].map(lambda x: self._toLocal(x))
         raw_data.set_index('forecast_for', inplace=True)
-        data = raw_data.resample(resolution).mean()
-        # Clean up the ratio by imputing any NaNs that arose to the nearest
-        # non-NaN value. This means we assume that the start of the day acts
-        # like the earliest observation, and the end of the day looks like the
-        # last observation.
-        data.interpolate(method = 'linear', inplace = True)
-        # However, nearest only works when there are non-NaN values either side.
-        # For the first and last NaNs, use bfill and ffill:
-        data.fillna(method = 'bfill', inplace = True)
-        data.fillna(method = 'ffill', inplace = True)
-        # For each row (level = 0), convert the median ratio estimate into a 
-        # probabilistic ratio estimate.
-        data = data.groupby(level = 0).apply(
-            lambda df: self.forecast_uncertainty.forecast(
-                (df.index[0] - raw_data.index[0]).seconds / 3_600,
-                df['ratio'][0],
-            )
-        )
-        # Get clear-sky estimates for the new time-points.
-        data['clear_sky'] = self.plant_location.get_clearsky(data.index)['dni']
-        # Convert the ratio estimates back to DNI-space by multiplying by the 
-        # clear-sky.
-        for k in data.keys():
-            if k == 'clear_sky':
-                continue
-            data[k] = data[k] * data['clear_sky']
-        data.rename(columns = {k: str(k) for k in data.keys()}, inplace=True)
-        return data
+        return self._processData(raw_data, resolution)
