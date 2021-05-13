@@ -61,7 +61,7 @@ class PySSC:
 		f = open(fn, 'rb'); 
 		data = []; 
 		for line in f : 
-			data.extend([n for n in map(double, line.split(b','))])
+			data.extend([n for n in map(float, line.split(b','))])
 		f.close(); 
 		return self.data_set_array(p_data, name, data); 
 	def data_set_matrix(self,p_data,name,mat):
@@ -79,7 +79,7 @@ class PySSC:
 		f = open(fn, 'rb'); 
 		data = []; 
 		for line in f : 
-			lst = ([n for n in map(double, line.split(b','))])
+			lst = ([n for n in map(float, line.split(b','))])
 			data.append(lst);
 		f.close(); 
 		return self.data_set_matrix(p_data, name, data); 
