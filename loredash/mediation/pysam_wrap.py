@@ -45,8 +45,8 @@ class PysamWrap:
                 mediator_params['use_CD_measured_reflectivity'], plant.design, mediator_params['fixed_soiling_loss'])}
             )
             if all(key in plant.design for key in ('rec_user_mflow_path_1', 'rec_user_mflow_path_1')):
-                self._SetTechModelParams({'rec_user_mflow_path_1': rec_user_mflow_path_1})
-                self._SetTechModelParams({'rec_user_mflow_path_2': rec_user_mflow_path_2})
+                self._SetTechModelParams({'rec_user_mflow_path_1': plant.design['rec_user_mflow_path_1']})
+                self._SetTechModelParams({'rec_user_mflow_path_2': plant.design['rec_user_mflow_path_2']})
 
             clearsky_data = util.get_clearsky_data(mediator_params['clearsky_file'], mediator_params['time_steps_per_hour'])
             self._SetTechModelParams({'rec_clearsky_dni': clearsky_data.tolist()})
@@ -186,20 +186,6 @@ class PysamWrap:
         solar_resource_data['tdry'] = list(weather_dataframe['Temperature'])
 
         return solar_resource_data
-
-    @staticmethod
-    # NOTE: not currently used. See dispatch.DispatchTargets, which is used instead. Not sure if this mapping is still useful.
-    def GetPlantSchedulesIoMap():
-        return {
-        # Array Inputs                          # Array Outputs
-        'q_pc_target_su_in':                    'q_dot_pc_target_su',
-        'q_pc_target_on_in':                    'q_dot_pc_target_on',
-        'q_pc_max_in':                          'q_dot_pc_max',
-        'is_rec_su_allowed_in':                 'is_rec_su_allowed',
-        'is_rec_sb_allowed_in':                 '?',    # what is this one?
-        'is_pc_su_allowed_in':                  'is_pc_su_allowed',
-        'is_pc_sb_allowed_in':                  'is_pc_sb_allowed',
-        }
 
     def SetWeatherData(self, tmy_file_path=None, solar_resource_data=None, weather_dataframe=None):
         """
@@ -414,3 +400,18 @@ class PysamWrap:
             return self.tech_model.value(key)
         except Exception as err:
             raise(err)
+
+    
+    # NOTE: not currently used. See dispatch.DispatchTargets, which is used instead. Not sure if this mapping is still useful.
+    # @staticmethod
+    # def _GetPlantSchedulesIoMap():
+    #     return {
+    #     # Array Inputs                          # Array Outputs
+    #     'q_pc_target_su_in':                    'q_dot_pc_target_su',
+    #     'q_pc_target_on_in':                    'q_dot_pc_target_on',
+    #     'q_pc_max_in':                          'q_dot_pc_max',
+    #     'is_rec_su_allowed_in':                 'is_rec_su_allowed',
+    #     'is_rec_sb_allowed_in':                 '?',    # what is this one?
+    #     'is_pc_su_allowed_in':                  'is_pc_su_allowed',
+    #     'is_pc_sb_allowed_in':                  'is_pc_sb_allowed',
+    #     }
