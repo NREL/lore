@@ -1,3 +1,4 @@
+from math import ceil
 import sys, os
 sys.path.insert(1, os.path.join(sys.path[0], '..'))
 
@@ -6,91 +7,57 @@ from pathlib import Path
 import datetime
 import os
 import json
-import PySAM_DAOTk.TcsmoltenSalt as t
-#import PySAM_DAOTk.Grid as g
-import PySAM_DAOTk.Singleowner as s
-
-from mediation import data_validator, mediator
-from data.mspt_2020_defaults import default_ssc_params
+from mediation import data_validator, mediator, ssc_wrap
 import mediation.plant as plant_
 import librtdispatch.util as util
 
 class PysamWrap:
     parent_dir = str(Path(__file__).parents[1])
-    design_path = parent_dir+"/data/field_design.json"
-    kMinOneHourSims = True        # circumvents SSC bug
+    design_path = parent_dir+"/data/field_design_debugging_only.json"
+    MIN_ONE_HOUR_SIMS = True        # used to circumvent SSC bug
+    REUSE_FLUXMAPS = True
 
-    def __init__(self, mediator_params, plant, dispatch_wrap_params, model_name="MSPTSingleOwner", load_defaults=False, weather_file=None,
-                 enable_preprocessing=True, preprocess_on_init=True, start_date_year=2018):
-        print('Process ID = ', os.getpid())
-        # print ('Current folder = ' + os.getcwd() )
-        # print ('SSC Version = ', ssc.version())
-        # print ('SSC Build Information = ', ssc.build_info().decode("utf - 8"))
-        
-        if load_defaults == True:
-            self.tech_model = t.default(model_name)
-        else:
-            self.tech_model = t.new(model_name)
-            # NOTE: order is important as earlier set parameters are overwritten:
-            self._SetTechModelParams(default_ssc_params)
-            self._SetTechModelParams(dispatch_wrap_params)
-            self._SetTechModelParams(plant.design)
-            self._SetTechModelParams(mediator_params)
-            # Just for debugging:
-            sf_adjust_hourly = util.get_field_availability_adjustment(
-                mediator_params['time_steps_per_hour'], start_date_year, mediator_params['control_field'],
-                mediator_params['use_CD_measured_reflectivity'], plant.design, mediator_params['fixed_soiling_loss'])
-            self._SetTechModelParams({'sf_adjust:hourly': util.get_field_availability_adjustment(
-                mediator_params['time_steps_per_hour'], start_date_year, mediator_params['control_field'],
-                mediator_params['use_CD_measured_reflectivity'], plant.design, mediator_params['fixed_soiling_loss'])}
-            )
-            if all(key in plant.design for key in ('rec_user_mflow_path_1', 'rec_user_mflow_path_1')):
-                self._SetTechModelParams({'rec_user_mflow_path_1': plant.design['rec_user_mflow_path_1']})
-                self._SetTechModelParams({'rec_user_mflow_path_2': plant.design['rec_user_mflow_path_2']})
+    def __init__(self, mediator_params, plant, dispatch_wrap_params, weather_file=None, start_date_year=2018):
+        self.ssc = ssc_wrap.ssc_wrap(wrapper='pyssc', tech_name='tcsmolten_salt', financial_name=None, defaults_name='MSPTSingleOwner') # defaults_name not used for pyssc
+        # NOTE: order is important as earlier set parameters are overwritten:
+        self.ssc.set(dispatch_wrap_params)
+        if not 'solar_resource_data' in plant.design:       # solar_resource_data is where location info is set in ssc
+            plant.design['solar_resource_data'] = PysamWrap.create_solar_resource_data_var(plant.design)
+        self.ssc.set(plant.design)
+        self.ssc.set(mediator_params)       # what are these exactly?
+        self.set_weather_data(tmy_file_path=weather_file)
 
-            clearsky_data = util.get_clearsky_data(mediator_params['clearsky_file'], mediator_params['time_steps_per_hour'])
-            self._SetTechModelParams({'rec_clearsky_dni': clearsky_data.tolist()})
+        self.ssc.set({'sf_adjust:hourly': util.get_field_availability_adjustment(
+            mediator_params['time_steps_per_hour'], start_date_year, mediator_params['control_field'],
+            mediator_params['use_CD_measured_reflectivity'], plant.design, mediator_params['fixed_soiling_loss'])}
+        )
+        if all(key in plant.design for key in ('rec_user_mflow_path_1', 'rec_user_mflow_path_1')):
+            self.ssc.set({'rec_user_mflow_path_1': plant.design['rec_user_mflow_path_1']})
+            self.ssc.set({'rec_user_mflow_path_2': plant.design['rec_user_mflow_path_2']})
 
-            dispatch_factors_ts = plant_.Revenue.get_price_data(
-                price_multiplier_file=mediator_params['price_multiplier_file'],
-                avg_price=mediator_params['avg_price'],
-                price_steps_per_hour=mediator_params['price_steps_per_hour'],
-                time_steps_per_hour=mediator_params['time_steps_per_hour']
-                )
-            self._SetTechModelParams({'dispatch_factors_ts': dispatch_factors_ts})
+        if (__name__ == "__main__" or settings.DEBUG) == True:
+            self._set_design_from_file(self.design_path)            # only used for debugging to avoid recalculating flux maps
 
-        self.SetWeatherData(tmy_file_path=weather_file)
-        self.enable_preprocessing = enable_preprocessing
-
-        if self.enable_preprocessing == True:
-            design_not_set = True
-            if (__name__ == "__main__" or settings.DEBUG) == True:
-                design_not_set = self._SetDesign(self.design_path)   # _SetDesign() only used for debugging
-            if design_not_set and preprocess_on_init:
-                self.PreProcess()                                   # do this now so no simulation delay later
-
-    def PreProcess(self):
-        """Compute the flux maps and assign them to the pysam model parameters, first getting the needed solar resource data"""
-
-        if not self._WeatherFileIsSet():
-            solar_resource_data = PysamWrap.GetSolarResourceDataTemplate(
-                plant_location = mediator.plant.get_location()
-            )
-        else:
-            solar_resource_data = None
-        self.tech_model.HeliostatField.field_model_type = 2                             # generate flux maps
-        datetime_start = datetime.datetime(2018, 1, 1, 0, 0, 0)         
-        datetime_end = datetime_start                                                   # run for just first hour of year
-        timestep = datetime.timedelta(hours=1)
-        tech_outputs = self.Simulate(datetime_start, datetime_end, timestep, solar_resource_data=solar_resource_data)
-        self.tech_model.HeliostatField.eta_map = tech_outputs["eta_map_out"]            # get maps and set for subsequent runs
-        self.tech_model.HeliostatField.flux_maps = [r[2:] for r in tech_outputs['flux_maps_for_import']]    # Don't include first two columns
-        self.tech_model.HeliostatField.A_sf_in = tech_outputs["A_sf"]
+    def calc_flux_eta_maps(self, weather_dataframe):
+        """Compute the flux and eta maps and assign them to the ssc model parameters, first getting the needed solar resource data"""
+        self.ssc.set({'field_model_type': 2})                                   # generate flux and eta maps but don't optimize field or tower
+        datetime_start = datetime.datetime(2018, 1, 1, 0, 0, 0)
+        datetime_end = datetime_start                                           # run for just first timestep of year
+        # datetime_end = datetime.datetime(2018, 1, 1, 1, 0, 0)
+        # timestep = datetime.timedelta(hours=1)
+        tech_outputs = self.Simulate(datetime_start, datetime_end, weather_dataframe=weather_dataframe)
+        eta_map = tech_outputs["eta_map_out"]                                   # get maps and set for subsequent runs
+        flux_maps = [r[2:] for r in tech_outputs['flux_maps_for_import']]       # Don't include first two columns
+        A_sf_in = tech_outputs["A_sf"]
+        flux_eta_maps = {'eta_map': eta_map, 'flux_maps': flux_maps, 'A_sf_in': A_sf_in}
+        self.ssc.set(flux_eta_maps)
 
         if __name__ == "__main__" or settings.DEBUG is True:
-            self._SaveDesign()
+            self._save_design_to_file()
 
-    def Simulate(self, datetime_start, datetime_end, timestep, plant_state=None, weather_dataframe=None, solar_resource_data=None):
+        return flux_eta_maps
+
+    def Simulate(self, datetime_start, datetime_end, timestep=None, plant_state=None, weather_dataframe=None, solar_resource_data=None):
         """
         datetime_start = beginning of first timestep
         datetime_end = end of last timestep
@@ -102,44 +69,68 @@ class PysamWrap:
             tech_outputs.time_hr = end of each timestep, given as hours since start of current year
         """
 
-        if not self._DesignIsSet() or self.enable_preprocessing == False:
-            self.tech_model.HeliostatField.field_model_type = 2
+        #NOTE: field_model_type values: 0=optimize field and tower; 1=optimize just field based on tower;
+        #                               2=no field nor tower optimization; 3=use provided flux and eta maps (don't calculate)
+        if not self._DesignIsSet() or self.REUSE_FLUXMAPS == False:
+            self.ssc.set({'field_model_type': 2})           # calculate flux and eta maps at simulation start
         else:
-            self.tech_model.HeliostatField.field_model_type = 3         # use preprocessed maps
-            self.tech_model.HeliostatField.eta_map_aod_format = False
+            self.ssc.set({'field_model_type': 3})           # use the provided flux and eta map inputs
+            self.ssc.set({'eta_map_aod_format': False})     # false = eta map not in 3D AOD format
 
         if plant_state is None:
             plant_state = plant_.plant_initial_state
-        result = self._SetTechModelParams(plant_state)
-        result = self.SetWeatherData(weather_dataframe=weather_dataframe, solar_resource_data=solar_resource_data)
+        self.ssc.set(plant_state)
+        self.set_weather_data(weather_dataframe=weather_dataframe, solar_resource_data=solar_resource_data)
 
         # set times:
-        if self.kMinOneHourSims == True:
+        if self.MIN_ONE_HOUR_SIMS == True:
             datetime_end_original = datetime_end
             datetime_end = max(datetime_end, datetime_start + datetime.timedelta(hours=1))
         datetime_newyears = datetime.datetime(datetime_start.year, 1, 1, 0, 0, 0)
-        self.tech_model.SystemControl.time_start = (datetime_start - datetime_newyears).total_seconds()     # time at beginning of first timestep, as
-                                                                                                            #  seconds since start of current year
-        self.tech_model.SystemControl.time_stop = (datetime_end - datetime_newyears).total_seconds()        # time at end of last timestep, as
-                                                                                                            #  seconds since start of current year
-        self.tech_model.SystemControl.time_steps_per_hour = 3600 / timestep.seconds
+        self.ssc.set({'time_start': (datetime_start - datetime_newyears).total_seconds()})      # time at beginning of first timestep, as
+                                                                                                #  seconds since start of current year
+        self.ssc.set({'time_stop': (datetime_end - datetime_newyears).total_seconds()})         # time at end of last timestep, as
+                                                                                                #  seconds since start of current year
+        if timestep is not None:
+            self.ssc.set({'time_steps_per_hour': 3600 / timestep.seconds})                      # otherwise its using already set value
 
-        self.tech_model.execute(1)
-        tech_outputs = self.tech_model.Outputs.export()
-        # tech_attributes = self.tech_model.export()
+        # TODO: do this trimming better and properly ##############################################
+        N_weather_vals = len(self.ssc.get('solar_resource_data')['year'])
+        self.ssc.set({'sf_adjust:hourly': self.ssc.get('sf_adjust:hourly')[0:N_weather_vals]})
+        self.ssc.set({'rec_clearsky_dni': self.ssc.get('rec_clearsky_dni')[0:N_weather_vals]})
+
+        def resize_list(_list, total_elements):
+            if len(_list) < total_elements:
+                _list.extend((total_elements - len(_list))*[_list[-1]])
+                return _list
+            else:
+                return _list[0:total_elements]
+        N_timesteps = ceil((self.ssc.get('time_stop') - self.ssc.get('time_start')) / 3600. * self.ssc.get('time_steps_per_hour'))
+        self.ssc.set({'q_pc_target_su_in': resize_list(self.ssc.get('q_pc_target_su_in'), N_timesteps)})
+        self.ssc.set({'q_pc_target_on_in': resize_list(self.ssc.get('q_pc_target_on_in'), N_timesteps)})
+        self.ssc.set({'q_pc_max_in': resize_list(self.ssc.get('q_pc_max_in'), N_timesteps)})
+        self.ssc.set({'is_rec_su_allowed_in': resize_list(self.ssc.get('is_rec_su_allowed_in'), N_timesteps)})
+        self.ssc.set({'is_rec_sb_allowed_in': resize_list(self.ssc.get('is_rec_sb_allowed_in'), N_timesteps)})
+        self.ssc.set({'is_pc_su_allowed_in': resize_list(self.ssc.get('is_pc_su_allowed_in'), N_timesteps)})
+        self.ssc.set({'is_pc_sb_allowed_in': resize_list(self.ssc.get('is_pc_sb_allowed_in'), N_timesteps)})
+        # self.ssc.set({'is_ignore_elec_heat_dur_off': resize_list(self.ssc.get('is_ignore_elec_heat_dur_off'), N_timesteps)})    # NOT SET
+
+        ###########################################################################################
+
+        tech_outputs = self.ssc.execute()
 
         # Strip trailing zeros or excess data from outputs
-        times = {'time_start': self.tech_model.SystemControl.time_start,
-                 'time_stop': self.tech_model.SystemControl.time_stop,
-                 'time_steps_per_hour': self.tech_model.SystemControl.time_steps_per_hour}
-        if self.kMinOneHourSims == True:
+        times = {'time_start': tech_outputs['time_start'],
+                 'time_stop': tech_outputs['time_stop'],
+                 'time_steps_per_hour': tech_outputs['time_steps_per_hour']}
+        if self.MIN_ONE_HOUR_SIMS == True:
             times['time_stop'] = (datetime_end_original - datetime_newyears).total_seconds()
         tech_outputs = self._RemoveDataPadding(tech_outputs, times)
 
         return tech_outputs
 
     @staticmethod
-    def GetSolarResourceDataTemplate(plant_location=None):
+    def create_solar_resource_data_var(plant_location=None):
         solar_resource_data = {
             'tz':       None,       # [hr]      timezone
             'elev':     None,       # [m]       elevation
@@ -168,7 +159,7 @@ class PysamWrap:
     @staticmethod
     def WeatherDataframeToPysamFormat(weather_dataframe):
         """solar_resource_data can be directly passed to PySAM, after lists are padded to an 8760 length"""
-        solar_resource_data = PysamWrap.GetSolarResourceDataTemplate()
+        solar_resource_data = PysamWrap.create_solar_resource_data_var()
 
         solar_resource_data['tz'] = weather_dataframe.attrs['timezone']
         solar_resource_data['elev'] = weather_dataframe.attrs['elevation']
@@ -187,14 +178,14 @@ class PysamWrap:
 
         return solar_resource_data
 
-    def SetWeatherData(self, tmy_file_path=None, solar_resource_data=None, weather_dataframe=None):
+    def set_weather_data(self, tmy_file_path=None, solar_resource_data=None, weather_dataframe=None):
         """
         Set the weather data, using either a TMY file, a solar resource data object, or a weather dataframe.
         Note that solar_resource_data is used by SSC instead of the TMY file if solar_resource_data is assigned
         """
 
         if isinstance(tmy_file_path, str) and os.path.isfile(tmy_file_path):
-            self.tech_model.SolarResource.solar_resource_file = tmy_file_path
+            self.ssc.set({'solar_resource_file': tmy_file_path})
 
         solar_resource_data_input = None
         if weather_dataframe is not None and solar_resource_data is None:
@@ -214,7 +205,7 @@ class PysamWrap:
                 for v in validated_solar_resource_data.values():
                     if isinstance(v, list):
                         v.extend(padding)
-            self.tech_model.SolarResource.solar_resource_data = validated_solar_resource_data
+            self.ssc.set({'solar_resource_data': validated_solar_resource_data})
         return 0
 
     def GetSimulatedPlantState(self, model_outputs, **kwargs):
@@ -274,15 +265,15 @@ class PysamWrap:
 
         # Backup parameters (to revert back after simulation)  ->  can I just copy self.tech_model and not have to backup and revert?
         param_names = ['is_dispatch_targets', 'tshours', 'is_rec_startup_trans', 'rec_su_delay', 'rec_qf_delay']
-        original_params = {key:self._GetTechModelParam(key) for key in param_names}
+        original_params = {key:self.ssc.get(key) for key in param_names}
 
         # Set parameters
         datetime_start = time_of_year_to_datetime(weather_data['year'][0], toy)
         datetime_end = datetime_start + datetime.timedelta(seconds=horizon)     # horizon is in seconds
-        timestep = datetime.timedelta(hours=1/self._GetTechModelParam('time_steps_per_hour'))
+        timestep = datetime.timedelta(hours=1/self.ssc.get('time_steps_per_hour'))
         plant_state = plant_design                                              # TODO: plant_design contains all parameters. Could filter.
         solar_resource_data=weather_data
-        self._SetTechModelParams({
+        self.ssc.set({
             'is_dispatch_targets': False,
             'tshours': 100,                                                     # Inflate TES size so that there is always "somewhere" to put receiver output
             'is_rec_startup_trans': False,
@@ -301,7 +292,7 @@ class PysamWrap:
         results = self.Simulate(datetime_start, datetime_end, timestep, plant_state=plant_state, solar_resource_data=solar_resource_data)
         
         # Revert back to original parameters
-        self._SetTechModelParams(original_params)
+        self.ssc.set(original_params)
 
         # Filter and adjust results
         retvars = ['Q_thermal', 'm_dot_rec', 'beam', 'clearsky', 'tdry', 'P_tower_pump', 'pparasi']
@@ -313,7 +304,7 @@ class PysamWrap:
 
     def _WeatherFileIsSet(self):
         try:
-            solar_resource_file = self.tech_model.SolarResource.solar_resource_file   # check if assigned
+            solar_resource_file = self.ssc.get('solar_resource_file')   # check if assigned
         except:
             return False
 
@@ -324,9 +315,9 @@ class PysamWrap:
 
     def _DesignIsSet(self):
         try:
-            self.tech_model.HeliostatField.eta_map      # check if assigned
-            self.tech_model.HeliostatField.flux_maps    # check if assigned
-            self.tech_model.HeliostatField.A_sf_in      # check if assigned
+            self.ssc.get('eta_map')      # check if assigned
+            self.ssc.get('flux_maps')    # check if assigned
+            self.ssc.get('A_sf_in')      # check if assigned
         except:
             return False
         else:
@@ -345,16 +336,16 @@ class PysamWrap:
         print("Stripping zeroes took {seconds:.2f} seconds".format(seconds=toc-tic))
         return model_outputs
 
-    def _SaveDesign(self):
+    def _save_design_to_file(self):
         """Saves the applicable plant design parameters, to a json file, from when the flux maps were calculated"""
         try:
             design = {
-                'eta_map' : self.tech_model.Outputs.eta_map_out,
-                'flux_maps' : self.tech_model.Outputs.flux_maps_for_import,  
-                'A_sf' : self.tech_model.Outputs.A_sf,
-                'rec_height' : self.tech_model.TowerAndReceiver.rec_height,
-                'D_rec' : self.tech_model.TowerAndReceiver.D_rec,
-                'h_tower' : self.tech_model.TowerAndReceiver.h_tower,
+                'eta_map' : self.ssc.get('eta_map_out'),
+                'flux_maps' : [r[2:] for r in self.ssc.get('flux_maps_for_import')],
+                'A_sf_in' : self.ssc.get('A_sf'),
+                'rec_height' : self.ssc.get('rec_height'),
+                'D_rec' : self.ssc.get('D_rec'),
+                'h_tower' : self.ssc.get('h_tower'),
             }
             with open(self.design_path, 'w') as design_file:
                 json.dump(design, design_file)
@@ -363,7 +354,7 @@ class PysamWrap:
         else:
             return 0
 
-    def _SetDesign(self, file_path):
+    def _set_design_from_file(self, file_path):
         """Sets the applicable plant design parameters, from a json file, from when the flux maps were calculated"""
         try:
             with open(file_path, 'r') as design_file:
@@ -372,35 +363,15 @@ class PysamWrap:
             return 1
         else:
             # Verify if these are valid?
-            self.tech_model.HeliostatField.eta_map = design['eta_map']
-            self.tech_model.HeliostatField.flux_maps = [r[2:] for r in design['flux_maps']]    # Don't include first two columns
-            self.tech_model.HeliostatField.A_sf_in = design['A_sf']
-            self.tech_model.TowerAndReceiver.rec_height = design['rec_height']
-            self.tech_model.TowerAndReceiver.D_rec = design['D_rec']
-            self.tech_model.TowerAndReceiver.h_tower = design['h_tower']
-            self.tech_model.HeliostatField.eta_map_aod_format = False
-            self.tech_model.HeliostatField.field_model_type = 3      # using user-defined flux and efficiency parameters
+            self.ssc.set({'eta_map': design['eta_map']})
+            self.ssc.set({'flux_maps': design['flux_maps']})
+            self.ssc.set({'A_sf_in': design['A_sf_in']})
+            self.ssc.set({'rec_height': design['rec_height']})
+            self.ssc.set({'D_rec': design['D_rec']})
+            self.ssc.set({'h_tower': design['h_tower']})
+            self.ssc.set({'eta_map_aod_format': False})                         # false = eta map not in 3D AOD format
+            self.ssc.set({'field_model_type': 3})                               # use the provided flux and eta map inputs
             return 0
-
-    def _SetTechModelParams(self, param_dict):
-        for key,value in param_dict.items():
-            key = key.replace('.', '_')
-            key = key.replace('adjust:', '')    # These set the values in tech_model.AdjustmentFactors
-            if value == []: value = [0]         # setting an empty list crashes PySAM
-            try:
-                self.tech_model.value(key, value)
-            except Exception as err:
-                print("Skipping setting param: %s" % key)
-                pass            # ignore for now
-        return 0
-
-    def _GetTechModelParam(self, key):
-        key = key.replace('.', '_')
-        try:
-            return self.tech_model.value(key)
-        except Exception as err:
-            raise(err)
-
     
     # NOTE: not currently used. See dispatch.DispatchTargets, which is used instead. Not sure if this mapping is still useful.
     # @staticmethod

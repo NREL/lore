@@ -279,7 +279,7 @@ def test_tmy_to_dataframe():
 
 #---Solar Resource Data--------------------------------------------------------------------------------------------------
 def test_weather_data_validation():
-    weather_data = pysam_wrap.PysamWrap.GetSolarResourceDataTemplate()
+    weather_data = pysam_wrap.PysamWrap.create_solar_resource_data_var()
     weather_data['tz'] = -8.        # [hr]      timezone
     weather_data['elev']= 561.      # [m]       elevation
     weather_data['lat'] = 34.85     # [deg]     latitude
@@ -316,7 +316,7 @@ def test_weather_data_validation():
         validated_data = weather_schema(weather_data)
 
     # Missing values should cause exception
-    weather_data = pysam_wrap.PysamWrap.GetSolarResourceDataTemplate()
+    weather_data = pysam_wrap.PysamWrap.create_solar_resource_data_var()
     weather_data['tz'] = -8.        # [hr]      timezone
     weather_data['elev']= 561.      # [m]       elevation
     weather_data['lat'] = 34.85     # [deg]     latitude
@@ -327,7 +327,7 @@ def test_weather_data_validation():
     assert "required key not provided" in str(excinfo.value)
 
     # Unequal list lengths should cause exception
-    weather_data = pysam_wrap.PysamWrap.GetSolarResourceDataTemplate()
+    weather_data = pysam_wrap.PysamWrap.create_solar_resource_data_var()
     weather_data['tz'] = -8.        # [hr]      timezone
     weather_data['elev']= 561.      # [m]       elevation
     weather_data['lat'] = 34.85     # [deg]     latitude

@@ -13,34 +13,25 @@ from mediation import data_validator, pysam_wrap, dispatch_wrap, models
 import mediation.plant as plant_
 import librtdispatch.util as util
 from mediation.plant import Revenue
+from data.mspt_2020_defaults import default_ssc_params
 # import models
 
 class Mediator:
     pysam_wrap = None
     validated_outputs_prev = None
-    default_pysam_model = "MSPTSingleOwner"
 
-    def __init__(self, params, plant_config_path, plant_design, override_with_weather_file_location=False,
-                 weather_file=None, preprocess_pysam=True, preprocess_pysam_on_init=True,
+    def __init__(self, params, plant_config_path, plant_design, weather_file=None,
                  update_interval=datetime.timedelta(seconds=5), start_date_year=2018):
         self.params = params
-        self.override_with_weather_file_location = override_with_weather_file_location
         self.weather_file = weather_file
-        self.preprocess_pysam = preprocess_pysam
-        self.preprocess_pysam_on_init = preprocess_pysam_on_init
         self.update_interval = update_interval
         self.simulation_timestep = datetime.timedelta(hours=1/self.params['time_steps_per_hour'])
 
-        # TODO: reinstitute this validation.
-        # if plant_config_path is None:
-        #     # Verify plant configuration in database
-        #     try:
-        #         data_validator.validate(Plant.GetPlantConfig(), data_validator.plant_config_schema)
-        #     except Exception as err:
-        #         raise(err)  # just re-raise for now
-
+        # TODO  ##############################################################################################################
+        #  What are these receiver flow paths, and why do they depend on the simulation timestep (time_steps_per_hour)?
+        #  ->  Either move this to Plant::set_design or into dispatch_wrap if not really a plant attribute. Anonymize first.
         if self.params['control_receiver'] == 'CD_data':
-            plant_design['rec_user_mflow_path_1'], plant_design['rec_user_mflow_path_2'] = get_user_flow_paths(
+            rec_user_mflow_path_1, rec_user_mflow_path_2 = get_user_flow_paths(
                 flow_path1_file=self.params['CD_mflow_path2_file'],          # Note ssc path numbers are reversed relative to CD path numbers
                 flow_path2_file=self.params['CD_mflow_path1_file'],
                 time_steps_per_hour=self.params['time_steps_per_hour'],
@@ -51,49 +42,56 @@ class Mediator:
                 )
             plant_design['rec_user_mflow_path_1'] = rec_user_mflow_path_1
             plant_design['rec_user_mflow_path_2'] = rec_user_mflow_path_2
-        else:
-            rec_user_mflow_path_1 = None
-            rec_user_mflow_path_2 = None
+        # else:
+        #     rec_user_mflow_path_1 = None
+        #     rec_user_mflow_path_2 = None
+        # /TODO ##############################################################################################################
 
-        plant_design['is_elec_heat_dur_off'] = [plant_design['is_elec_heat_dur_off']]       # NOTE: made this value a list as needed by PySAM, but needs to not be one for PySSC
 
         self.plant = plant_.Plant(
             design=plant_design,
-            initial_state=plant_.plant_initial_state
+            initial_state=plant_.plant_initial_state,
             )
 
-        if weather_file is not None and override_with_weather_file_location == True:
-            self.plant.set_location(GetLocationFromWeatherFile(weather_file))
+        clearsky_data = util.get_clearsky_data(self.params['clearsky_file'], self.params['time_steps_per_hour'])
+        self.params['rec_clearsky_dni'] = clearsky_data.tolist()
+        self.params['dispatch_factors_ts'] = Revenue.get_price_data(self.params['price_multiplier_file'], self.params['avg_price'],
+            self.params['price_steps_per_hour'], self.params['time_steps_per_hour'])
 
+        default_ssc_params.update(self.params)
         self.pysam_wrap = pysam_wrap.PysamWrap(
-            mediator_params=self.params.copy(),
-            plant=self.plant,
-            dispatch_wrap_params=dispatch_wrap.dispatch_wrap_params.copy(),
-            model_name=self.default_pysam_model,
-            load_defaults=False,
-            weather_file=None,
-            enable_preprocessing=self.preprocess_pysam,
-            preprocess_on_init=self.preprocess_pysam_on_init
+            mediator_params=default_ssc_params,                                 # already a copy so pysam_wrap cannot edit
+            plant=copy.deepcopy(self.plant),                                    # copy so pysam_wrap cannot edit
+            dispatch_wrap_params=dispatch_wrap.dispatch_wrap_params.copy(),     # copy so pysam_wrap cannot edit
+            weather_file=None
             )
+
+        #TODO: Fix GetWeatherDataframe() as it returns a full 8760
+        #TODO: Add a function to pysam_wrap that creates a generic weather_dataframe and don't pass a weather_dataframe here
+        weather_dataframe = self.GetWeatherDataframe(
+            datetime.datetime(start_date_year, 1, 1),
+            datetime.datetime(start_date_year, 1, 1),
+            tmy3_path=self.weather_file
+            )
+        self.plant.update_design(self.pysam_wrap.calc_flux_eta_maps(weather_dataframe=weather_dataframe))
 
         # Setup dispatch_wrap
-        sf_adjust_hourly = util.get_field_availability_adjustment(self.params['time_steps_per_hour'], start_date_year, self.params['control_field'],
-            self.params['use_CD_measured_reflectivity'], self.plant.design, self.params['fixed_soiling_loss'])
-        price_data = Revenue.get_price_data(self.params['price_multiplier_file'], self.params['avg_price'], self.params['price_steps_per_hour'], self.params['time_steps_per_hour'])
-        clearsky_data = util.get_clearsky_data(self.params['clearsky_file'], self.params['time_steps_per_hour'])
-        ground_truth_weather_data = util.get_ground_truth_weather_data(self.params['ground_truth_weather_file'], self.params['time_steps_per_hour'])
-        dispatch_wrap_data = {
-            'sf_adjust:hourly':                 sf_adjust_hourly,
-            'dispatch_factors_ts':              price_data,
-            'clearsky_data':                    clearsky_data,
-            'solar_resource_data':              ground_truth_weather_data,
-            'rec_user_mflow_path_1':            rec_user_mflow_path_1,
-            'rec_user_mflow_path_2':            rec_user_mflow_path_2,
-        }
+        # sf_adjust_hourly = util.get_field_availability_adjustment(self.params['time_steps_per_hour'], start_date_year, self.params['control_field'],
+        #     self.params['use_CD_measured_reflectivity'], self.plant.design, self.params['fixed_soiling_loss'])
+        # ground_truth_weather_data = util.get_ground_truth_weather_data(self.params['ground_truth_weather_file'], self.params['time_steps_per_hour'])
+        # dispatch_wrap_data = {
+            # 'sf_adjust:hourly':                 sf_adjust_hourly,
+            # 'dispatch_factors_ts':              price_data,
+            # 'solar_resource_data':              ground_truth_weather_data,
+            # 'clearsky_data':                    clearsky_data,
+            # 'rec_user_mflow_path_1':            rec_user_mflow_path_1,
+            # 'rec_user_mflow_path_2':            rec_user_mflow_path_2,
+        # }
         dispatch_wrap_params = dispatch_wrap.dispatch_wrap_params
+        dispatch_wrap_params['clearsky_data'] = clearsky_data
         dispatch_wrap_params.update(self.params)                                                    # include mediator params in with dispatch_wrap_params
         dispatch_wrap_params['start_date'] = datetime.datetime(start_date_year, 1, 1, 8, 0, 0)      # needed for schedules TODO: fix spanning years (note the 8)
-        self.dispatch_wrap = dispatch_wrap.DispatchWrap(plant=self.plant, params=dispatch_wrap.dispatch_wrap_params, data=dispatch_wrap_data)
+        self.dispatch_wrap = dispatch_wrap.DispatchWrap(plant=self.plant, params=dispatch_wrap.dispatch_wrap_params)
         self.dispatch_inputs = {
             'ursd_last':                        None,
             'yrsd_last':                        None,
@@ -360,7 +358,7 @@ def Tmy3ToDataframe(tmy3_path, datetime_start=None, datetime_end=None):
     timestamp_start_query = pd.Timestamp(datetime_start_adj.replace(year=df.index[0].year))        # align the years and convert to Timestamp
     timestamp_end_query = pd.Timestamp(datetime_end_adj.replace(year=df.index[0].year))
 
-    if timestamp_end_query > timestamp_start_query:     # if dates aren't in different years
+    if timestamp_end_query >= timestamp_start_query:     # if dates aren't in different years
         df_out = df[timestamp_start_query:timestamp_end_query]
         df_out.index = df_out.index.map(lambda t: t.replace(year=datetime_start_adj.year))
     else:
@@ -392,6 +390,13 @@ mediator_params = {
 	'is_dispatch':					        0,                      # Always disable dispatch optimization in ssc
 	'is_dispatch_targets':			        True,		            # True if (is_optimize or control_cycle == 'CD_data')
     'is_optimize':					        True,                   # Use dispatch optimization
+    'q_pc_target_su_in':                    [0],
+    'q_pc_target_on_in':                    [0],
+    'q_pc_max_in':                          [0],
+    'is_rec_su_allowed_in':                 [0],
+    'is_rec_sb_allowed_in':                 [0],
+    'is_pc_su_allowed_in':                  [0],
+    'is_pc_sb_allowed_in':                  [0],
 	'control_field':				        'ssc',                  #'CD_data' = use CD data to control heliostats tracking, heliostats offline, and heliostat daily reflectivity.  Receiver startup time is set to zero so that simulated receiver starts when CD tracking begins
                                                                     #'ssc' = allow ssc to control heliostat field operations, assuming all heliostats are available
 
@@ -412,9 +417,6 @@ mediator_params = {
     'avg_price_disp_storage_incentive':     0.0,                    # Average electricity price ($/MWh) used in dispatch model storage inventory incentive
 
     # Field, receiver, and cycle simulation options
-    'ground_truth_weather_file':            './model-validation/input_files/weather_files/ssc_weatherfile_1min_2018.csv',   # Weather file derived from CD data: DNI, ambient temperature,
-                                                                                                                            #  wind speed, etc. are averaged over 4 CD weather stations,
-                                                                                                                            #  after filtering DNI readings for bad measurements. 
     'clearsky_file':                        './model-validation/input_files/weather_files/clearsky_pvlib_ineichen_1min_2018.csv',   # Expected clear-sky DNI from Ineichen model (via pvlib). 
     'CD_mflow_path1_file':                  './model-validation/input_files/mflow_path1_2018_1min.csv',  # File containing CD data for receiver path 1 mass flow rate (note, all values are zeros on days without data)
     'CD_mflow_path2_file':                  './model-validation/input_files/mflow_path2_2018_1min.csv',  # File containing CD data for receiver path 2 mass flow rate (note, all values are zeros on days without data)
@@ -435,41 +437,6 @@ mediator_params = {
 	'is_rec_model_trans':			        False,                  # TODO: Disabling transient receiver model -> ssc not yet configured to store/retrieve receiver temperature profiles
     'cycle_type':                           'user_defined',         # 'user-defined', 'sliding', or 'fixed'
 }
-
-
-def reupdate_ssc_constants(D, params, data):
-    D['solar_resource_data'] = data['solar_resource_data']
-    D['dispatch_factors_ts'] = data['dispatch_factors_ts']
-
-    D['ppa_multiplier_model'] = params['ppa_multiplier_model']
-    D['time_steps_per_hour'] = params['time_steps_per_hour']
-    D['is_rec_model_trans'] = params['is_rec_model_trans']
-    D['is_rec_startup_trans'] = params['is_rec_startup_trans']
-    D['rec_control_per_path'] = params['rec_control_per_path']
-    D['field_model_type'] = params['field_model_type']
-    D['eta_map_aod_format'] = params['eta_map_aod_format']
-    D['is_rec_to_coldtank_allowed'] = params['is_rec_to_coldtank_allowed']
-    D['is_dispatch'] = params['is_dispatch']
-    D['is_dispatch_targets'] = params['is_dispatch_targets']
-
-    #--- Set field control parameters
-    if params['control_field'] == 'CD_data':
-        D['rec_su_delay'] = params['rec_su_delay']
-        D['rec_qf_delay'] = params['rec_qf_delay']
-
-    #--- Set receiver control parameters
-    if params['control_receiver'] == 'CD_data':
-        D['is_rec_user_mflow'] = params['is_rec_user_mflow']
-        D['rec_su_delay'] = params['rec_su_delay']
-        D['rec_qf_delay'] = params['rec_qf_delay']
-    elif params['control_receiver'] == 'ssc_clearsky':
-        D['rec_clearsky_fraction'] = params['rec_clearsky_fraction']
-        D['rec_clearsky_model'] = params['rec_clearsky_model']
-        D['rec_clearsky_dni'] = data['clearsky_data'].tolist()
-    elif params['control_receiver'] == 'ssc_actual_dni':
-        D['rec_clearsky_fraction'] = params['rec_clearsky_fraction']
-
-    return
 
 
 def default_ssc_return_vars():

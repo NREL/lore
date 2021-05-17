@@ -1,9 +1,8 @@
 import sys, os
 sys.path.insert(1, os.path.join(sys.path[0], '..'))
-
 from enum import Enum
 import numpy as np
-import datetime
+import datetime, rapidjson
 
 try:
     from mediation import data_validator
@@ -56,9 +55,35 @@ class Plant:
         }
 
         self.set_design(design)
-        self.state.update((k, initial_state[k]) for k in self.state.keys() & initial_state.keys())     # update state using initial_state, but don't add any new keys
-        self.set_solar_multiple()
-        self.set_heliostat_field(self.design['heliostat_field_file'], delimiter = ',')
+        self.set_initial_state(initial_state)
+
+    def set_design(self, design):
+        """
+        Reads a plant design from either a JSON file or dict, validates the values, then adds them to the member design dict
+        TODO: reinstitute the validation once the plant design is more finalized
+        """
+        if isinstance(design, str) and os.path.isfile(design):
+            with open(design) as f:
+                plant_design = rapidjson.load(f)                            # assume its a JSON file
+        elif isinstance(design, dict):
+            plant_design = design.copy()
+        else:
+            raise Exception('Plant design not found.')
+
+        plant_design['N_hel'], plant_design['helio_positions'] = self.get_heliostat_field(plant_design['heliostat_field_file'])
+
+        # validated_plant_design = data_validator.validate(plant_design, data_validator.plant_config_schema)
+        self.design.update(plant_design)                                    # save plant design
+        self.design['solarm'] = self.calc_solar_multiple(self.design)
+
+    def set_flux_maps(self, flux_eta_maps):
+        self.design['A_sf_in'] = flux_eta_maps['A_sf']
+        self.design['eta_map'] = flux_eta_maps['eta_map_out']
+        self.design['flux_maps'] = [x[2:] for x in flux_eta_maps['flux_maps_for_import']]
+        return
+    
+    def set_initial_state(self, state):
+        self.set_state(state)
         self.state['rec_startup_time_remain_init'] = self.design['rec_su_delay']
         self.state['rec_startup_energy_remain_init'] = self.design['rec_qf_delay'] * self.design['Qrec'] * 1.e6
         self.state['T_tank_cold_init'] = self.design['T_htf_cold_des']
@@ -66,46 +91,20 @@ class Plant:
         self.state['pc_startup_time_remain_init'] = self.design['startup_time']
         self.state['pc_startup_energy_remain_initial'] = self.design['startup_frac'] * self.get_cycle_thermal_rating() * 1000.
 
-    def set_design(self, design):
-        """
-        Reads a plant configuration from a JSON file or dict, validates the values, then loads them into the respective db table
-        TODO: reinstitute the validation once the plant configuration is more finalized (most likely in a JSON file)
-        """
+    def set_state(self, state):
+        self.state.update((k, state[k]) for k in state.keys() & self.state.keys())     # update state but don't add any new keys
 
-        # If design is a file path, read plant configuration from a JSON file
-        if isinstance(design, str) and os.path.isfile(design):
-            with open(config_path) as f:
-                plant_config = rapidjson.load(f)
-        elif isinstance(design, dict):
-            plant_config = design.copy()
-        else:
-            raise Exception('Plant configuration not found.')
-        
-        # TODO: reinstitute this once configuration is more finalized:
-        # Validate plant configuration values
-        # validated_plant_config = data_validator.validate(plant_config, data_validator.plant_config_schema)
-
-        # Load plant configuration
-        # self.design.update(validated_plant_config)
-        self.design.update(plant_config)
-
-    def set_flux_maps(self, S):
-        """ S = dictionary of ssc ouputs """
-        self.design['A_sf_in'] = S['A_sf']
-        self.design['eta_map'] = S['eta_map_out']
-        self.design['flux_maps'] = [x[2:] for x in S['flux_maps_for_import']]
-        return
+    def calc_solar_multiple(self, design):
+        return design['Qrec'] / (design['P_ref'] / design['design_eff'])
     
-    def set_solar_multiple(self):
-        self.design['solarm'] = self.design['Qrec'] / (self.design['P_ref'] / self.design['design_eff'])
-        return
-    
-    def set_heliostat_field(self, heliostat_field_file, delimiter=','):
+    def get_heliostat_field(self, heliostat_field_file, delimiter=','):
         full_heliostat_field_file_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), heliostat_field_file)
         heliostat_layout = np.genfromtxt(full_heliostat_field_file_path, delimiter = delimiter)
-        self.design['N_hel'] = heliostat_layout.shape[0]
-        self.design['helio_positions'] = [heliostat_layout[j,0:2].tolist() for j in range(self.design['N_hel'])]
-        return
+        N_hel = heliostat_layout.shape[0]
+        helio_positions = [heliostat_layout[j,0:2].tolist() for j in range(N_hel)]
+        return N_hel, helio_positions
+
+
 
     def get_cycle_thermal_rating(self):
         return self.design['P_ref'] / self.design['design_eff']     # MW
@@ -167,7 +166,11 @@ class Plant:
         m_des = self.design['Qrec']*1.e6 / (cp_des * (self.design['T_htf_hot_des'] - self.design['T_htf_cold_des']))    # kg/s
         return m_des
 
+    #TODO: Can set_design() and update_design() be merged?
+    def update_design(self, design_vars):
+        self.design.update(design_vars)         # update design (new keys can be added)
 
+    #TODO: Are set_initial_state(), set_state() and update_state() all needed?
     def update_state(self, cycle_results, new_plant_state_vars, ssc_time_step):
         """
         Inputs:
@@ -274,7 +277,6 @@ class Plant:
         self.state.update(new_plant_state_vars)
 
         return
-
 
     def get_location(self):
         location = {
@@ -447,7 +449,7 @@ plant_design = {
     'pc_config':                    0,              # 0=Steam Rankine, 1=User-defined
     'ud_f_W_dot_cool_des':          0.58333,        # This is an estimate for the cooling system (700 kW) TODO: update user-defined cycle data with ambient variation
     'ud_m_dot_water_cool_des':      0.0,
-    'ud_ind_od':                    [0],
+    'ud_ind_od':                    [[0]],
     'tech_type':                    1,              # 1=fixed, 3=sliding
     'P_boil':                       125,            # Boiler operating pressure [bar]
     'CT':                           2,              # 1=evaporative, 2=air*, 3=hybrid
