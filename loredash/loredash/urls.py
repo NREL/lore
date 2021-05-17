@@ -33,10 +33,7 @@ def InitAndRunMediator():
         params=mediator.mediator_params,
         plant_config_path = plant_config_path,
         plant_design=plant_.plant_design,
-        override_with_weather_file_location = False,
         weather_file = default_weather_file,
-        preprocess_pysam = True,
-        preprocess_pysam_on_init = True,
         update_interval = datetime.timedelta(seconds = 5),
     )
     result = m.ModelPreviousDayAndAddToDb()

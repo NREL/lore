@@ -95,7 +95,7 @@ class Plant:
         return N_hel, helio_positions
 
     def get_state(self):
-        result = self.state.copy()              # copy to disallow edits
+        result = self.state.copy()             # copy to disallow edits
         result['sf_adjust:hourly'] = self.get_field_availability()
         return result
 
@@ -304,7 +304,6 @@ class Plant:
         self.state.update(new_plant_state_vars)
 
         return
-
 
     def get_location(self):
         location = {
@@ -733,4 +732,3 @@ class Revenue:
         pmavg = sum(price_multipliers)/len(price_multipliers)  
         price_data = [avg_price*p/pmavg  for p in price_multipliers]  # Electricity price at ssc time steps ($/MWh)
         return price_data
-

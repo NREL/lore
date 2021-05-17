@@ -854,7 +854,7 @@ class DispatchTargets:
 
 
 class DispatchWrap:
-    def __init__(self, plant, params, data):
+    def __init__(self, plant, params):
 
         ## DISPATCH INPUTS ###############################################################################################################################
         # Input data files: weather, masslow, clearsky DNI must have length of full annual array based on ssc time step size
@@ -864,6 +864,9 @@ class DispatchWrap:
         # self.plant = None                             # Plant design and operating properties
         
         self.user_defined_cycle_input_file = '../../librtdispatch/udpc_noTamb_dependency.csv'  # Only required if cycle_type is user_defined
+        self.ground_truth_weather_file = './model-validation/input_files/weather_files/ssc_weatherfile_1min_2018.csv',   # Weather file derived from CD data: DNI, ambient temperature,
+                                                                                                                         #  wind speed, etc. are averaged over 4 CD weather stations,
+                                                                                                                         #  after filtering DNI readings for bad measurements. 
 
         ## DISPATCH PERSISTING INTERMEDIARIES ############################################################################################################
         self.first_run = True                           # Is this the first time run() is called?
@@ -916,20 +919,22 @@ class DispatchWrap:
 
         self.plant = plant                              # Plant design and operating properties
         self.params = params
-        self.data = data
+        # self.data = data
 
         for key,value in params.items():
             setattr(self, key, value)
 
-        for key,value in data.items():
-            setattr(self, key, value)
+        # for key,value in data.items():
+        #     setattr(self, key, value)
         
+        self.ground_truth_weather_data = util.get_ground_truth_weather_data(self.ground_truth_weather_file, params['time_steps_per_hour'])
+
         # Aliases (that could be combined and removed)
         self.ssc_time_steps_per_hour = params['time_steps_per_hour']
         self.use_transient_model = params['is_rec_model_trans']
         self.use_transient_startup = params['is_rec_startup_trans']
-        self.ground_truth_weather_data = data['solar_resource_data']
-        self.price_data = data['dispatch_factors_ts']
+        self.price_data = params['dispatch_factors_ts']
+        # self.ground_truth_weather_data = data['solar_resource_data']
 
         # Initialize and adjust above parameters
         self.initialize()
@@ -939,37 +944,38 @@ class DispatchWrap:
 
     def initialize(self):
 
-        def adjust_plant_design(plant_design, cycle_type, user_defined_cycle_input_file):
-            """Set cycle specifications (from model validation code)"""
-            if cycle_type == 'user_defined':
-                plant_design['P_ref'] = 120
-                plant_design['design_eff'] = 0.409
-                plant_design['T_htf_cold_des'] = 295.0 # [C]      # This sets design mass flowrate to that in CD's data
-                plant_design['pc_config'] = 1
-                with open(os.path.join(os.path.dirname(__file__), user_defined_cycle_input_file), 'r') as read_obj:
-                    csv_reader = reader(read_obj)
-                    plant_design['ud_ind_od'] = list(csv_reader)        
-                for i in range(len(plant_design['ud_ind_od'])):
-                    plant_design['ud_ind_od'][i] = [float(item) for item in plant_design['ud_ind_od'][i]]
+        # # TODO: remove adjust_plant_design
+        # def adjust_plant_design(plant_design, cycle_type, user_defined_cycle_input_file):
+        #     """Set cycle specifications (from model validation code)"""
+        #     if cycle_type == 'user_defined':
+        #         plant_design['P_ref'] = 120
+        #         plant_design['design_eff'] = 0.409
+        #         plant_design['T_htf_cold_des'] = 295.0 # [C]      # This sets design mass flowrate to that in CD's data
+        #         plant_design['pc_config'] = 1
+        #         with open(os.path.join(os.path.dirname(__file__), user_defined_cycle_input_file), 'r') as read_obj:
+        #             csv_reader = reader(read_obj)
+        #             plant_design['ud_ind_od'] = list(csv_reader)        
+        #         for i in range(len(plant_design['ud_ind_od'])):
+        #             plant_design['ud_ind_od'][i] = [float(item) for item in plant_design['ud_ind_od'][i]]
                     
-            elif cycle_type == 'sliding':  
-                ### For sliding pressure
-                ## These parameters work with heat input calculated using 290 as the lower temperature - however, there are a couple of controller issues
-                plant_design['P_ref'] = 125
-                plant_design['design_eff'] = 0.378
-                plant_design['tech_type'] = 3
+        #     elif cycle_type == 'sliding':  
+        #         ### For sliding pressure
+        #         ## These parameters work with heat input calculated using 290 as the lower temperature - however, there are a couple of controller issues
+        #         plant_design['P_ref'] = 125
+        #         plant_design['design_eff'] = 0.378
+        #         plant_design['tech_type'] = 3
             
-            else:
-                ### For fixed pressure
-                plant_design['P_ref'] = 120.
-                plant_design['design_eff'] = 0.409  # 0.385
-                plant_design['tech_type'] = 1
+        #     else:
+        #         ### For fixed pressure
+        #         plant_design['P_ref'] = 120.
+        #         plant_design['design_eff'] = 0.409  # 0.385
+        #         plant_design['tech_type'] = 1
             
-            return
+        #     return
         
-        # Set cycle specifications (from model validation code)
-        # TODO: do we actually want to do this? I would assume not.
-        adjust_plant_design(self.plant.design, self.cycle_type, self.user_defined_cycle_input_file)
+        # # Set cycle specifications (from model validation code)
+        # # TODO: do we actually want to do this? I would assume not.
+        # adjust_plant_design(self.plant.design, self.cycle_type, self.user_defined_cycle_input_file)
         
         # Check combinations of control conditions
         if self.is_optimize and (self.control_field == 'CD_data' or self.control_receiver == 'CD_data'):
@@ -1032,11 +1038,11 @@ class DispatchWrap:
         D.update(self.plant.flux_maps)
         D['time_start'] = int(util.get_time_of_year(self.start_date))
         D['time_stop'] = util.get_time_of_year(self.start_date.replace(hour=0, minute=0, second=0)) + self.sim_days*24*3600
-        D['sf_adjust:hourly'] = self.data['sf_adjust:hourly']
+        # D['sf_adjust:hourly'] = self.data['sf_adjust:hourly']       # commented out--seems redundant with pysam_wrap initialization
         reupdate_ssc_constants(D, self.params, self.data)
-        if self.control_receiver == 'CD_data':
-            D['rec_user_mflow_path_1'] = self.data['rec_user_mflow_path_1']
-            D['rec_user_mflow_path_2'] = self.data['rec_user_mflow_path_2']
+        # if self.control_receiver == 'CD_data':
+        #     D['rec_user_mflow_path_1'] = self.data['rec_user_mflow_path_1']
+        #     D['rec_user_mflow_path_2'] = self.data['rec_user_mflow_path_2']
 
         #-------------------------------------------------------------------------
         # Run simulation in a rolling horizon   
