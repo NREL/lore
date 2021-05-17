@@ -312,6 +312,7 @@ deploy/samples/*.csv
 # Visual Studio Code
 .vscode/
 .vscode/settings.json
+*.code-workspace
 
 # Specific LORE ignores
 loredash/data/field_design.json
