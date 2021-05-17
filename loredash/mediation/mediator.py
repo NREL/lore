@@ -28,27 +28,6 @@ class Mediator:
         self.update_interval = update_interval
         self.simulation_timestep = datetime.timedelta(hours=1/self.params['time_steps_per_hour'])
 
-        # TODO  ##############################################################################################################
-        #  What are these receiver flow paths, and why do they depend on the simulation timestep (time_steps_per_hour)?
-        #  ->  Either move this to Plant::set_design or into dispatch_wrap if not really a plant attribute. Anonymize first.
-        if self.params['control_receiver'] == 'CD_data':
-            rec_user_mflow_path_1, rec_user_mflow_path_2 = get_user_flow_paths(
-                flow_path1_file=self.params['CD_mflow_path2_file'],          # Note ssc path numbers are reversed relative to CD path numbers
-                flow_path2_file=self.params['CD_mflow_path1_file'],
-                time_steps_per_hour=self.params['time_steps_per_hour'],
-                helio_reflectance=plant_design['helio_reflectance'],
-                use_measured_reflectivity=self.params['use_CD_measured_reflectivity'],
-                soiling_avail=util.get_CD_soiling_availability(start_date_year, plant_design['helio_reflectance'] * 100), # CD soiled / clean reflectivity (daily array),
-                fixed_soiling_loss=self.params['fixed_soiling_loss']
-                )
-            plant_design['rec_user_mflow_path_1'] = rec_user_mflow_path_1
-            plant_design['rec_user_mflow_path_2'] = rec_user_mflow_path_2
-        # else:
-        #     rec_user_mflow_path_1 = None
-        #     rec_user_mflow_path_2 = None
-        # /TODO ##############################################################################################################
-
-
         self.plant = plant_.Plant(
             design=plant_design,
             initial_state=plant_.plant_initial_state,
@@ -85,8 +64,6 @@ class Mediator:
             # 'dispatch_factors_ts':              price_data,
             # 'solar_resource_data':              ground_truth_weather_data,
             # 'clearsky_data':                    clearsky_data,
-            # 'rec_user_mflow_path_1':            rec_user_mflow_path_1,
-            # 'rec_user_mflow_path_2':            rec_user_mflow_path_2,
         # }
         dispatch_wrap_params = dispatch_wrap.dispatch_wrap_params
         dispatch_wrap_params['clearsky_data'] = clearsky_data
@@ -509,21 +486,3 @@ def default_disp_stored_vars():
     return ['cycle_on', 'cycle_standby', 'cycle_startup', 'receiver_on', 'receiver_startup', 'receiver_standby', 
             'receiver_power', 'thermal_input_to_cycle', 'electrical_output_from_cycle', 'net_electrical_output', 'tes_soc',
             'yrsd', 'ursd']
-
-
-def get_user_flow_paths(flow_path1_file, flow_path2_file, time_steps_per_hour, helio_reflectance, use_measured_reflectivity,
-    soiling_avail=None, fixed_soiling_loss=None):
-    """Load user flow paths into the ssc input dict (D)"""
-    flow_path1_data = np.genfromtxt(flow_path1_file)
-    flow_path2_data = np.genfromtxt(flow_path2_file)
-    if time_steps_per_hour != 60:
-        flow_path1_data = np.array(util.translate_to_new_timestep(flow_path1_data, 1./60, 1./time_steps_per_hour))
-        flow_path2_data = np.array(util.translate_to_new_timestep(flow_path2_data, 1./60, 1./time_steps_per_hour))
-    mult = np.ones_like(flow_path1_data)
-    if not use_measured_reflectivity:                                                   # Scale mass flow based on simulated reflectivity vs. CD actual reflectivity
-        rho = (1-fixed_soiling_loss) * helio_reflectance                                # Simulated heliostat reflectivity
-        mult = rho*np.ones(365) / (soiling_avail*helio_reflectance)                     # Ratio of simulated / CD reflectivity
-        mult = np.repeat(mult, 24*time_steps_per_hour)                                  # Annual array at ssc resolution
-    rec_user_mflow_path_1 = (flow_path1_data * mult).tolist()                          # Note ssc path numbers are reversed relative to CD path numbers
-    rec_user_mflow_path_2 = (flow_path2_data * mult).tolist()
-    return rec_user_mflow_path_1, rec_user_mflow_path_2

@@ -1040,9 +1040,6 @@ class DispatchWrap:
         D['time_stop'] = util.get_time_of_year(self.start_date.replace(hour=0, minute=0, second=0)) + self.sim_days*24*3600
         # D['sf_adjust:hourly'] = self.data['sf_adjust:hourly']       # commented out--seems redundant with pysam_wrap initialization
         reupdate_ssc_constants(D, self.params, self.data)
-        # if self.control_receiver == 'CD_data':
-        #     D['rec_user_mflow_path_1'] = self.data['rec_user_mflow_path_1']
-        #     D['rec_user_mflow_path_2'] = self.data['rec_user_mflow_path_2']
 
         #-------------------------------------------------------------------------
         # Run simulation in a rolling horizon   
