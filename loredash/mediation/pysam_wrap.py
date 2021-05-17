@@ -31,9 +31,6 @@ class PysamWrap:
             mediator_params['time_steps_per_hour'], start_date_year, mediator_params['control_field'],
             mediator_params['use_CD_measured_reflectivity'], plant.design, mediator_params['fixed_soiling_loss'])}
         )
-        if all(key in plant.design for key in ('rec_user_mflow_path_1', 'rec_user_mflow_path_1')):
-            self.ssc.set({'rec_user_mflow_path_1': plant.design['rec_user_mflow_path_1']})
-            self.ssc.set({'rec_user_mflow_path_2': plant.design['rec_user_mflow_path_2']})
 
         if (__name__ == "__main__" or settings.DEBUG) == True:
             self._set_design_from_file(self.design_path)            # only used for debugging to avoid recalculating flux maps
