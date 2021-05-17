@@ -1,5 +1,10 @@
 {
-    "files.exclude": {
+    "python.analysis.useImportHeuristic": true,
+	"python.analysis.extraPaths": [
+		"**/.loredash/mediation",
+		"**/.librtdispatch",
+	],
+	"files.exclude": {
         "**/.git": true,
         "**/.svn": true,
         "**/.hg": true,

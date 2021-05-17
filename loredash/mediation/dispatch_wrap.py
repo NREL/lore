@@ -14,8 +14,8 @@ try:
     import librtdispatch.util as util
     import librtdispatch.dispatch_model as dispatch_model
 except:     # if called from case_study
-    import util
-    import dispatch_model
+    from librtdispatch import util
+    from librtdispatch import dispatch_model
 
 
 dispatch_wrap_params = {
@@ -1207,6 +1207,8 @@ class DispatchWrap:
                 avg_purchase_price = self.avg_purchase_price,
                 day_ahead_tol_plus = self.day_ahead_tol_plus,
                 day_ahead_tol_minus = self.day_ahead_tol_minus,
+                startpt = startpt,
+                toy = toy,
                 tod = tod,
                 current_day_schedule = self.current_day_schedule,
                 day_ahead_pen_plus = self.day_ahead_pen_plus,
@@ -1289,12 +1291,6 @@ class DispatchWrap:
                 Rdisp = None
                 ssc_dispatch_targets = None
 
-        # Read NVE schedules (if not already read during rolling horizon calculations)
-        if self.is_optimize == False and self.use_day_ahead_schedule and self.day_ahead_schedule_from == 'NVE':
-            for j in range(self.sim_days):
-                date = datetime.datetime(self.start_date.year, self.start_date.month, self.start_date.day + j)
-                dispatch_outputs['schedules'].append(get_CD_NVE_day_ahead_schedule(date))
-
         tod = int(util.get_time_of_day(self.start_date))
         if tod == 0 and self.use_day_ahead_schedule and self.day_ahead_schedule_from == 'calculated':
             self.current_day_schedule = [s for s in self.next_day_schedule]
@@ -1311,6 +1307,12 @@ class DispatchWrap:
 	        'current_day_schedule': self.current_day_schedule,
 	        'next_day_schedule': self.next_day_schedule
         }
+
+        # Read NVE schedules (if not already read during rolling horizon calculations)
+        if self.is_optimize == False and self.use_day_ahead_schedule and self.day_ahead_schedule_from == 'NVE':
+            for j in range(self.sim_days):
+                date = datetime.datetime(self.start_date.year, self.start_date.month, self.start_date.day + j)
+                dispatch_outputs['schedules'].append(self.get_CD_NVE_day_ahead_schedule(date))
 
         return dispatch_outputs
 
@@ -1445,7 +1447,7 @@ def setup_dispatch_model(R_est, freq, horizon, include_day_ahead_in_dispatch,
     dispatch_params, plant, nonlinear_model_time, use_linear_dispatch_at_night,
     clearsky_data, night_clearky_cutoff, dispatch_steplength_array, dispatch_steplength_end_time,
     disp_time_weighting, price, sscstep, avg_price, avg_price_disp_storage_incentive,
-    avg_purchase_price, day_ahead_tol_plus, day_ahead_tol_minus,
+    avg_purchase_price, day_ahead_tol_plus, day_ahead_tol_minus, startpt, toy,
     tod, current_day_schedule, day_ahead_pen_plus, day_ahead_pen_minus,
     dispatch_horizon, night_clearsky_cutoff, ursd_last, yrsd_last):
 

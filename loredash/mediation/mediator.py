@@ -3,6 +3,7 @@ from django.db import IntegrityError
 import sys, os
 sys.path.insert(1, os.path.join(sys.path[0], '..'))
 import time, copy, datetime, math
+import numpy as np
 from twisted.internet.task import LoopingCall
 from twisted.internet import reactor
 import PySAM_DAOTk.TcsmoltenSalt as pysam
