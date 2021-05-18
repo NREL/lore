@@ -14,7 +14,6 @@ from mediation import models
 class ForecastTestCase(TestCase):
 
     def test_forecaster_from_plant(self):
-        """Animals that can speak are correctly identified"""
         plant = models.PlantConfig.objects.get(pk = 1)
         forecaster = forecasts.SolarForecast(
             plant.latitude,
