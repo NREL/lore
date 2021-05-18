@@ -224,7 +224,8 @@ class SolarForecast:
         horizon = pandas.Timedelta(hours = 48),
     ):
         """
-        Return the latest DNI forecast.
+        Return the latest DNI forecast and update the database. This should be
+        called by the forecast plotter.
 
         Parameters
         ----------

@@ -43,8 +43,7 @@ def init_and_mediate():
 # try:
 init_and_mediate()
 # except Exception as err:
-#     print("Migration failed because database has not yet been created. Try running that command again.")
-#     pass
+    # print("Migration failed because database has not yet been created. Try running that command again.")
 
 # This is the main production code where the mediator runs continuously
 # update_interval = 10     # seconds

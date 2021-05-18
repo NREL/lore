@@ -1,5 +1,14 @@
-import sys, os
-sys.path.insert(1, os.path.join(sys.path[0], '..'))
+# We need access to the librtdispatch directory. However, don't just assume that
+# the first entry in the path is `loredash`, because this file may get called
+# from a Bokeh app.
+import os, sys
+dir_path = os.path.join(
+    os.path.dirname(os.path.realpath(__file__)), # /mediation
+    '..',                                        # /loreloredash
+    '..',                                        # /lore
+)
+sys.path.insert(1, dir_path)
+
 from enum import Enum
 import numpy as np
 import pandas as pd
@@ -356,6 +365,7 @@ plant_design = {
     "longitude":                    -117.36368180656123,
     "elevation":                    1524,
     "timezone":                     -8,
+    "timezone_string":              "US/Pacific",
 
     # System
     'T_htf_cold_des':               290.0,          # C
