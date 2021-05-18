@@ -32,13 +32,10 @@ class Mediator:
             design=plant_design,
             initial_state=plant_.plant_initial_state,
             )
-
-        clearsky_data = util.get_clearsky_data(self.params['clearsky_file'], self.params['time_steps_per_hour'])
-        self.params['rec_clearsky_dni'] = clearsky_data.tolist()
         self.params['dispatch_factors_ts'] = Revenue.get_price_data(self.params['price_multiplier_file'], self.params['avg_price'],
             self.params['price_steps_per_hour'], self.params['time_steps_per_hour'])
 
-        default_ssc_params.update(self.params)
+        default_ssc_params.update(self.params)                                  # combine default and mediator params, overwriting the defaults
         self.pysam_wrap = pysam_wrap.PysamWrap(
             mediator_params=default_ssc_params,                                 # already a copy so pysam_wrap cannot edit
             plant=copy.deepcopy(self.plant),                                    # copy so pysam_wrap cannot edit
@@ -46,13 +43,24 @@ class Mediator:
             weather_file=None
             )
 
-        #TODO: Fix GetWeatherDataframe() as it returns a full 8760
         #TODO: Add a function to pysam_wrap that creates a generic weather_dataframe and don't pass a weather_dataframe here
         weather_dataframe = self.GetWeatherDataframe(
-            datetime.datetime(start_date_year, 1, 1),
-            datetime.datetime(start_date_year, 1, 1),
+            datetime.datetime(start_date_year, 1, 1, 0),
+            datetime.datetime(start_date_year, 12, 31, 23),
             tmy3_path=self.weather_file
             )
+
+        #TODO: Where should Forecasts be initialized?
+        # Add an equivalent call of the following to Forecasts. Need this set for the later calc_flux_eta_maps()
+        timestep = weather_dataframe.index[1] - weather_dataframe.index[0]
+        clearsky_data = get_clearsky_data(
+            clearsky_file=self.params['clearsky_file'],
+            datetime_start=weather_dataframe.index[0],
+            duration=weather_dataframe.index[-1] - weather_dataframe.index[0] + timestep,   # need to add timestep, e.g., 0:00 to 1:00 is two hours, not one
+            timestep=timestep)
+        self.pysam_wrap.ssc.set({'rec_clearsky_dni': clearsky_data})        #TODO: use a new pysam_wrap set function instead of reaching in to ssc.set()
+
+        
         self.plant.update_design(self.pysam_wrap.calc_flux_eta_maps(weather_dataframe=weather_dataframe))
 
         # Setup dispatch_wrap
@@ -66,7 +74,7 @@ class Mediator:
             # 'clearsky_data':                    clearsky_data,
         # }
         dispatch_wrap_params = dispatch_wrap.dispatch_wrap_params
-        dispatch_wrap_params['clearsky_data'] = clearsky_data
+        dispatch_wrap_params['clearsky_data'] = util.get_clearsky_data(self.params['clearsky_file'], self.params['time_steps_per_hour']) # legacy call. TODO: cleanup?
         dispatch_wrap_params.update(self.params)                                                    # include mediator params in with dispatch_wrap_params
         dispatch_wrap_params['start_date'] = datetime.datetime(start_date_year, 1, 1, 8, 0, 0)      # needed for schedules TODO: fix spanning years (note the 8)
         self.dispatch_wrap = dispatch_wrap.DispatchWrap(plant=self.plant, params=dispatch_wrap.dispatch_wrap_params)
@@ -173,9 +181,20 @@ class Mediator:
         self.dispatch_inputs['schedules'] = dispatch_outputs['schedules']
         self.dispatch_inputs['horizon'] -= int(self.simulation_timestep.seconds)
 
+        # Step 1, Thread 2:?
+        # a. Call Forecasts
+        #TODO: add this call to forecasts.py
+        clearsky_data = get_clearsky_data(
+            clearsky_file=self.params['clearsky_file'],
+            datetime_start=datetime_start,
+            duration=datetime_start - datetime_end,
+            timestep=self.simulation_timestep)
+        self.pysam_wrap.ssc.set({'rec_clearsky_dni': clearsky_data})        #TODO: use a new pysam_wrap set function.
+
 
         # b. Call PySAM
-        self.pysam_wrap._SetTechModelParams(dispatch_outputs['ssc_dispatch_targets'])
+        self.pysam_wrap.ssc.set(dispatch_outputs['ssc_dispatch_targets'])       #TODO: make pysam_wrap function for set (don't just reach in and use ssc.set())
+
         tech_outputs = self.pysam_wrap.Simulate(datetime_start, datetime_end, self.simulation_timestep, self.plant.get_state(), weather_dataframe=weather_dataframe)
         print("Annual Energy [kWh]= ", tech_outputs["annual_energy"])
 
@@ -411,6 +430,28 @@ def GetLocationFromWeatherFile(tmy3_path):
         'elevation': float(df_meta['Elevation'][0])
     }
 
+
+#TODO: Remove this function and replace with one in forecasts.py
+def get_clearsky_data(clearsky_file, datetime_start=None, duration=None, timestep=None):
+    """output array must be equal in length to the weather data to satisfy ssc"""
+    if datetime_start is None:
+        datetime_start = datetime.datetime(2018, 1, 1)
+    if duration is None:
+        duration = datetime.timedelta(days=365)
+    if timestep is None:
+        timestep = datetime.timedelta(minutes=1)
+
+    CLEARSKY_DAYS_GENERATED = 365
+    steps_per_hour = 1/(timestep.total_seconds()/3600)
+    clearsky_data = util.get_clearsky_data(clearsky_file, steps_per_hour).tolist()
+    assert(len(clearsky_data) == steps_per_hour * 24 * CLEARSKY_DAYS_GENERATED)
+    df = pd.DataFrame(clearsky_data, columns=['clearsky_data'])
+    df.index = pd.date_range(start=datetime_start,
+                             end=datetime_start + datetime.timedelta(days=CLEARSKY_DAYS_GENERATED) - timestep,
+                             freq=timestep)
+
+    df_out = df[datetime_start:(datetime_start + duration - timestep)]
+    return list(df_out['clearsky_data'])
 
 # This is duplicated in case_study.py
 mediator_params = {

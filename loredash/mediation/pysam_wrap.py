@@ -35,8 +35,6 @@ class PysamWrap:
         self.ssc.set({'field_model_type': 2})                                   # generate flux and eta maps but don't optimize field or tower
         datetime_start = datetime.datetime(2018, 1, 1, 0, 0, 0)
         datetime_end = datetime_start                                           # run for just first timestep of year
-        # datetime_end = datetime.datetime(2018, 1, 1, 1, 0, 0)
-        # timestep = datetime.timedelta(hours=1)
         tech_outputs = self.Simulate(datetime_start, datetime_end, weather_dataframe=weather_dataframe)
         eta_map = tech_outputs["eta_map_out"]                                   # get maps and set for subsequent runs
         flux_maps = [r[2:] for r in tech_outputs['flux_maps_for_import']]       # Don't include first two columns
@@ -87,15 +85,13 @@ class PysamWrap:
             self.ssc.set({'time_steps_per_hour': 3600 / timestep.seconds})                      # otherwise its using already set value
 
         # TODO: do this trimming better and properly ##############################################
-        N_weather_vals = len(self.ssc.get('solar_resource_data')['year'])
-        self.ssc.set({'rec_clearsky_dni': self.ssc.get('rec_clearsky_dni')[0:N_weather_vals]})
-
         def resize_list(_list, total_elements):
             if len(_list) < total_elements:
                 _list.extend((total_elements - len(_list))*[_list[-1]])
                 return _list
             else:
                 return _list[0:total_elements]
+        
         N_timesteps = ceil((self.ssc.get('time_stop') - self.ssc.get('time_start')) / 3600. * self.ssc.get('time_steps_per_hour'))
         self.ssc.set({'q_pc_target_su_in': resize_list(self.ssc.get('q_pc_target_su_in'), N_timesteps)})
         self.ssc.set({'q_pc_target_on_in': resize_list(self.ssc.get('q_pc_target_on_in'), N_timesteps)})
