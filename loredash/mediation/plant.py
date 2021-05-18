@@ -2,7 +2,9 @@ import sys, os
 sys.path.insert(1, os.path.join(sys.path[0], '..'))
 from enum import Enum
 import numpy as np
+import pandas as pd
 import datetime, rapidjson
+import librtdispatch.util as util
 
 try:
     from mediation import data_validator
@@ -104,6 +106,38 @@ class Plant:
         helio_positions = [heliostat_layout[j,0:2].tolist() for j in range(N_hel)]
         return N_hel, helio_positions
 
+    def get_state(self):
+        result = self.state.copy()              # copy to disallow edits
+        result['sf_adjust:hourly'] = self.get_field_availability()
+        return result
+
+    def get_field_availability(self, datetime_start=None, duration=None, timestep=None):
+        #TODO: replace this function body with call to real plant
+        """output array must be equal in length to the weather data to satisfy ssc"""
+        if datetime_start is None:
+            datetime_start = datetime.datetime(2018, 1, 1)
+        if duration is None:
+            duration = datetime.timedelta(hours=1)
+        if timestep is None:
+            timestep = datetime.timedelta(minutes=1)
+
+        FIELD_AVAIL_DAYS_GENERATED = 365
+        steps_per_hour = 1/(timestep.total_seconds()/3600)
+        field_availability = util.get_field_availability_adjustment(
+            steps_per_hour=steps_per_hour,
+            year=2018,
+            control_field='ssc',
+            use_CD_measured_reflectivity=False,
+            plant_design=self.design.copy(),
+            fixed_soiling_loss=0.02)
+        assert(len(field_availability) == steps_per_hour * 24 * FIELD_AVAIL_DAYS_GENERATED)
+        df = pd.DataFrame(field_availability, columns=['field_availability'])
+        df.index = pd.date_range(start=datetime_start,
+                                 end=datetime_start + datetime.timedelta(days=FIELD_AVAIL_DAYS_GENERATED) - timestep,
+                                 freq=timestep)
+
+        df_out = df[datetime_start:(datetime_start + duration - timestep)]
+        return list(df_out['field_availability'])
 
 
     def get_cycle_thermal_rating(self):

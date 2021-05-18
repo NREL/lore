@@ -27,11 +27,6 @@ class PysamWrap:
         self.ssc.set(mediator_params)       # what are these exactly?
         self.set_weather_data(tmy_file_path=weather_file)
 
-        self.ssc.set({'sf_adjust:hourly': util.get_field_availability_adjustment(
-            mediator_params['time_steps_per_hour'], start_date_year, mediator_params['control_field'],
-            mediator_params['use_CD_measured_reflectivity'], plant.design, mediator_params['fixed_soiling_loss'])}
-        )
-
         if (__name__ == "__main__" or settings.DEBUG) == True:
             self._set_design_from_file(self.design_path)            # only used for debugging to avoid recalculating flux maps
 
@@ -93,7 +88,6 @@ class PysamWrap:
 
         # TODO: do this trimming better and properly ##############################################
         N_weather_vals = len(self.ssc.get('solar_resource_data')['year'])
-        self.ssc.set({'sf_adjust:hourly': self.ssc.get('sf_adjust:hourly')[0:N_weather_vals]})
         self.ssc.set({'rec_clearsky_dni': self.ssc.get('rec_clearsky_dni')[0:N_weather_vals]})
 
         def resize_list(_list, total_elements):
@@ -110,8 +104,10 @@ class PysamWrap:
         self.ssc.set({'is_rec_sb_allowed_in': resize_list(self.ssc.get('is_rec_sb_allowed_in'), N_timesteps)})
         self.ssc.set({'is_pc_su_allowed_in': resize_list(self.ssc.get('is_pc_su_allowed_in'), N_timesteps)})
         self.ssc.set({'is_pc_sb_allowed_in': resize_list(self.ssc.get('is_pc_sb_allowed_in'), N_timesteps)})
-        # self.ssc.set({'is_ignore_elec_heat_dur_off': resize_list(self.ssc.get('is_ignore_elec_heat_dur_off'), N_timesteps)})    # NOT SET
-
+        try:
+            self.ssc.set({'is_ignore_elec_heat_dur_off': resize_list(self.ssc.get('is_ignore_elec_heat_dur_off'), N_timesteps)})    # NOT SET
+        except:
+            pass
         ###########################################################################################
 
         tech_outputs = self.ssc.execute()
