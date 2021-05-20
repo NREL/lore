@@ -25,7 +25,7 @@ import mediation.plant as plant_
 
 # TODO: Ensure database migration happens before this code is run. It is currently
 # run on a 'migrate', which initially fails because no database has yet been created.
-def InitAndRunMediator():
+def init_and_mediate():
     parent_dir = str(Path(__file__).parents[1])
     default_weather_file = parent_dir + "/data/daggett_ca_34.865371_-116.783023_psmv3_60_tmy.csv"
     plant_config_path = parent_dir + "/data/plant_config.json"
@@ -36,12 +36,12 @@ def InitAndRunMediator():
         weather_file = default_weather_file,
         update_interval = datetime.timedelta(seconds = 5),
     )
-    result = m.ModelPreviousDayAndAddToDb()
-    # result = m.RunOnce()
+    result = m.model_previous_day_and_add_to_db()
+    # result = m.RunOnce()          #TODO: reenable and get this working
     return
 
 # try:
-InitAndRunMediator()
+init_and_mediate()
 # except Exception as err:
 #     print("Migration failed because database has not yet been created. Try running that command again.")
 #     pass

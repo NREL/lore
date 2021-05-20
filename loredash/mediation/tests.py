@@ -53,17 +53,17 @@ def test_plant_config_validation():
 def test_roundtime():
     dt = datetime.datetime(2021, 1, 4, 23, 59, 59, 510000)
     second_resolution = 1
-    dt_rounded = mediator.RoundTime(dt, second_resolution)
+    dt_rounded = mediator.round_time(dt, second_resolution)
     assert dt_rounded == datetime.datetime(2021, 1, 5, 0, 0, 0, 0)
 
     dt = datetime.datetime(2021, 1, 4, 23, 59, 59, 500000)
     second_resolution = 1
-    dt_rounded = mediator.RoundTime(dt, second_resolution)
+    dt_rounded = mediator.round_time(dt, second_resolution)
     assert dt_rounded == datetime.datetime(2021, 1, 5, 0, 0, 0, 0)
 
     dt = datetime.datetime(2021, 1, 4, 23, 59, 59, 490000)
     second_resolution = 1
-    dt_rounded = mediator.RoundTime(dt, second_resolution)
+    dt_rounded = mediator.round_time(dt, second_resolution)
     assert dt_rounded == datetime.datetime(2021, 1, 4, 23, 59, 59, 0)
 
 #---PySAM minimum one hours sims-----------------------------------------------------------------------------------------
@@ -78,7 +78,7 @@ def test_pysam_one_hour_minimum():
 
     pysam_wrap1 = pysam_wrap.PysamWrap(plant_config=plant_config, load_defaults=True, weather_file=weather_file,
                                        enable_preprocessing=False)
-    tech_outputs = pysam_wrap1.Simulate(datetime_start, datetime_end, timestep)
+    tech_outputs = pysam_wrap1.simulate(datetime_start, datetime_end, timestep)
     T_tes_cold = tech_outputs["T_tes_cold"]
 
     # Ensure values are not zeros and there are the correct number of entries
@@ -98,13 +98,13 @@ def test_pysam_preprocessing_vs_not():
     # With no preprocessing of design info (for testing):
     pysam_wrap1 = pysam_wrap.PysamWrap(plant_config=plant_config, load_defaults=True, weather_file=weather_file,
                                        enable_preprocessing=False)
-    tech_outputs1 = pysam_wrap1.Simulate(datetime_start, datetime_end, timestep)
+    tech_outputs1 = pysam_wrap1.simulate(datetime_start, datetime_end, timestep)
     annual_energy_kWh1 = tech_outputs1["annual_energy"]
 
     # With preprocessing of design info:
     pysam_wrap2 = pysam_wrap.PysamWrap(plant_config=plant_config, load_defaults=True, weather_file=weather_file,
                                        enable_preprocessing=True)
-    tech_outputs2 = pysam_wrap2.Simulate(datetime_start, datetime_end, timestep)
+    tech_outputs2 = pysam_wrap2.simulate(datetime_start, datetime_end, timestep)
     annual_energy_kWh2 = tech_outputs2["annual_energy"]
 
     assert annual_energy_kWh1 == annual_energy_kWh2
@@ -243,22 +243,22 @@ def test_pysam_preprocessing_vs_not():
 def test_round_minutes():
     timestep_minutes = 5
     datetime1 = datetime.datetime(2014, 8, 31, 17, 34, 0)
-    datetime1_up = mediator.RoundMinutes(datetime1, 'up', timestep_minutes)
-    datetime1_dn = mediator.RoundMinutes(datetime1, 'down', timestep_minutes)
+    datetime1_up = mediator.round_minutes(datetime1, 'up', timestep_minutes)
+    datetime1_dn = mediator.round_minutes(datetime1, 'down', timestep_minutes)
     assert datetime1_up == datetime.datetime(2014, 8, 31, 17, 35, 0)
     assert datetime1_dn == datetime.datetime(2014, 8, 31, 17, 30, 0)
 
     timestep_minutes = 5
     datetime2 = datetime.datetime(2014, 8, 31, 17, 35, 0)
-    datetime2_up = mediator.RoundMinutes(datetime2, 'up', timestep_minutes)
-    datetime2_dn = mediator.RoundMinutes(datetime2, 'down', timestep_minutes)
+    datetime2_up = mediator.round_minutes(datetime2, 'up', timestep_minutes)
+    datetime2_dn = mediator.round_minutes(datetime2, 'down', timestep_minutes)
     assert datetime2_up == datetime.datetime(2014, 8, 31, 17, 35, 0)
     assert datetime2_dn == datetime.datetime(2014, 8, 31, 17, 35, 0)
 
     timestep_minutes = 5
     datetime3 = datetime.datetime(2014, 8, 31, 23, 55, 1)
-    datetime3_up = mediator.RoundMinutes(datetime3, 'up', timestep_minutes)
-    datetime3_dn = mediator.RoundMinutes(datetime3, 'down', timestep_minutes)
+    datetime3_up = mediator.round_minutes(datetime3, 'up', timestep_minutes)
+    datetime3_dn = mediator.round_minutes(datetime3, 'down', timestep_minutes)
     assert datetime3_up == datetime.datetime(2014, 9, 1, 0, 0, 0)
     assert datetime3_dn == datetime.datetime(2014, 8, 31, 23, 55, 0)
 #---/Rounding minutes----------------------------------------------------------------------------------------------------
@@ -267,14 +267,14 @@ def test_round_minutes():
 def test_tmy_to_dataframe():
     weather_file_path = 'nonsense'
     with pytest.raises(Exception) as excinfo:
-        df = mediator.Tmy3ToDataframe(tmy3_path=weather_file_path)
+        df = mediator.tmy3_to_df(tmy3_path=weather_file_path)
     assert "file not found" in str(excinfo.value)
 
     parent_dir = str(Path(__file__).parents[1])
     weather_file_path = parent_dir+"/data/daggett_ca_34.865371_-116.783023_psmv3_60_tmy.csv"
     datetime_start = datetime.datetime(2020, 11, 20, 1, 1, 0)
     datetime_end = datetime.datetime(2021, 5, 1, 1, 1, 0)
-    df = mediator.Tmy3ToDataframe(tmy3_path=weather_file_path, datetime_start=datetime_start, datetime_end=datetime_end)
+    df = mediator.tmy3_to_df(tmy3_path=weather_file_path, datetime_start=datetime_start, datetime_end=datetime_end)
 #---/Reading TMY to dataframe--------------------------------------------------------------------------------------------
 
 #---Solar Resource Data--------------------------------------------------------------------------------------------------
