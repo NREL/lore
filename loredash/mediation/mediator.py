@@ -3,13 +3,9 @@ from django.db import IntegrityError
 import sys, os
 sys.path.insert(1, os.path.join(sys.path[0], '..'))
 import time, copy, datetime, math
-import numpy as np
 from twisted.internet.task import LoopingCall
 from twisted.internet import reactor
-import PySAM_DAOTk.TcsmoltenSalt as pysam
-from pathlib import Path
 import pandas as pd
-import rapidjson
 from mediation import data_validator, pysam_wrap, dispatch_wrap, models
 import mediation.plant as plant_
 import librtdispatch.util as util
@@ -35,6 +31,7 @@ class Mediator:
         self.params['dispatch_factors_ts'] = Revenue.get_price_data(self.params['price_multiplier_file'], self.params['avg_price'],
             self.params['price_steps_per_hour'], self.params['time_steps_per_hour'])
 
+        default_ssc_params.update(self.plant.get_state())                       # combine default and plant params, overwriting the defaults
         default_ssc_params.update(self.params)                                  # combine default and mediator params, overwriting the defaults
         self.pysam_wrap = pysam_wrap.PysamWrap(
             mediator_params=default_ssc_params,                                 # already a copy so pysam_wrap cannot edit
@@ -45,8 +42,8 @@ class Mediator:
 
         #TODO: Add a function to pysam_wrap that creates a generic weather_dataframe and don't pass a weather_dataframe here
         weather_dataframe = self.GetWeatherDataframe(
-            datetime.datetime(start_date_year, 1, 1, 0),
-            datetime.datetime(start_date_year, 12, 31, 23),
+            datetime.datetime(self.params['start_date_year'], 1, 1, 0),
+            datetime.datetime(self.params['start_date_year'], 12, 31, 23),
             tmy3_path=self.weather_file
             )
 
@@ -61,24 +58,13 @@ class Mediator:
         self.pysam_wrap.ssc.set({'rec_clearsky_dni': clearsky_data})        #TODO: use a new pysam_wrap set function instead of reaching in to ssc.set()
 
         
-        self.plant.update_design(self.pysam_wrap.calc_flux_eta_maps(weather_dataframe=weather_dataframe))
+        self.plant.update_flux_maps(self.pysam_wrap.calc_flux_eta_maps(self.plant.get_state(), weather_dataframe=weather_dataframe))
 
         # Setup dispatch_wrap
-        # sf_adjust_hourly = util.get_field_availability_adjustment(self.params['time_steps_per_hour'], start_date_year, self.params['control_field'],
-        #     self.params['use_CD_measured_reflectivity'], self.plant.design, self.params['fixed_soiling_loss'])
-        # ground_truth_weather_data = util.get_ground_truth_weather_data(self.params['ground_truth_weather_file'], self.params['time_steps_per_hour'])
-        # dispatch_wrap_data = {
-            # 'sf_adjust:hourly':                 sf_adjust_hourly,
-            # 'dispatch_factors_ts':              price_data,
-            # 'solar_resource_data':              ground_truth_weather_data,
-            # 'clearsky_data':                    clearsky_data,
-        # }
-        dispatch_wrap_params = dispatch_wrap.dispatch_wrap_params
-        dispatch_wrap_params['clearsky_data'] = util.get_clearsky_data(self.params['clearsky_file'], self.params['time_steps_per_hour']) # legacy call. TODO: cleanup?
+        dispatch_wrap_params = dispatch_wrap.dispatch_wrap_params                                   # TODO: replace with a path to a JSON config file
         dispatch_wrap_params.update(self.params)                                                    # include mediator params in with dispatch_wrap_params
-        dispatch_wrap_params['start_date'] = datetime.datetime(start_date_year, 1, 1, 8, 0, 0)      # needed for schedules TODO: fix spanning years (note the 8)
         self.dispatch_wrap = dispatch_wrap.DispatchWrap(plant=self.plant, params=dispatch_wrap.dispatch_wrap_params)
-        self.dispatch_inputs = {
+        self.dispatch_inputs = {        #TODO: does this belong here?
             'ursd_last':                        None,
             'yrsd_last':                        None,
             'weather_data_for_dispatch':        None,
@@ -86,7 +72,7 @@ class Mediator:
             'next_day_schedule':                None,
             'current_forecast_weather_data':    None,
             'schedules':                        None,
-            'horizon':                          1/self.params['time_steps_per_hour']*3600,          # [s]
+            'horizon':                          3600,          # [s]   TODO: what should this really be?
         }
 
     
@@ -159,7 +145,7 @@ class Mediator:
         # b. Call dispatch model, (which includes a PySAM model run to get estimates) and update inputs for next call
         dispatch_outputs = self.dispatch_wrap.run(
             start_date=datetime_start,
-            timestep_days=self.simulation_timestep.seconds/(24*3600),
+            timestep_days=(datetime_end - datetime_start).days,       # not timestep but actually duration in days
             horizon=self.dispatch_inputs['horizon'],
             retvars=default_disp_stored_vars(),
             ursd_last=self.dispatch_inputs['ursd_last'],
@@ -170,7 +156,7 @@ class Mediator:
             current_day_schedule=self.dispatch_inputs['current_day_schedule'],
             next_day_schedule=self.dispatch_inputs['next_day_schedule'],
             f_estimates_for_dispatch_model=self.pysam_wrap.estimates_for_dispatch_model,
-            initial_plant_state=self.plant.state
+            initial_plant_state=self.plant.get_state()
         )
         self.dispatch_inputs['ursd_last'] = dispatch_outputs['ursd_last']
         self.dispatch_inputs['yrsd_last'] = dispatch_outputs['yrsd_last']
@@ -187,13 +173,13 @@ class Mediator:
         clearsky_data = get_clearsky_data(
             clearsky_file=self.params['clearsky_file'],
             datetime_start=datetime_start,
-            duration=datetime_start - datetime_end,
+            duration=datetime_end - datetime_start,
             timestep=self.simulation_timestep)
         self.pysam_wrap.ssc.set({'rec_clearsky_dni': clearsky_data})        #TODO: use a new pysam_wrap set function.
 
 
         # b. Call PySAM
-        self.pysam_wrap.ssc.set(dispatch_outputs['ssc_dispatch_targets'])       #TODO: make pysam_wrap function for set (don't just reach in and use ssc.set())
+        self.pysam_wrap.ssc.set(dispatch_outputs['ssc_dispatch_targets'].asdict())       #TODO: make pysam_wrap function for set (don't just reach in and use ssc.set())
 
         tech_outputs = self.pysam_wrap.Simulate(datetime_start, datetime_end, self.simulation_timestep, self.plant.get_state(), weather_dataframe=weather_dataframe)
         print("Annual Energy [kWh]= ", tech_outputs["annual_energy"])
@@ -455,6 +441,8 @@ def get_clearsky_data(clearsky_file, datetime_start=None, duration=None, timeste
 
 # This is duplicated in case_study.py
 mediator_params = {
+    'start_date_year':                      2018,                   # TODO: Remove the need for this somewhat arbitrary year
+
     # Control conditions
 	'time_steps_per_hour':			        60,			            # Simulation time resolution in ssc (1min)   DUPLICATED to: ssc_time_steps_per_hour
 	'is_dispatch':					        0,                      # Always disable dispatch optimization in ssc
