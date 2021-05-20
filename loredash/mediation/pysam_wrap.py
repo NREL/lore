@@ -120,6 +120,9 @@ class PysamWrap:
 
         return tech_outputs
 
+    def set(self, ssc_param_dict):
+        self.ssc.set(ssc_param_dict)
+
     @staticmethod
     def create_solar_resource_data_var(plant_location=None):
         solar_resource_data = {
