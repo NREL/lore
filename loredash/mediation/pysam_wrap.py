@@ -5,11 +5,8 @@ sys.path.insert(1, os.path.join(sys.path[0], '..'))
 from django.conf import settings
 from pathlib import Path
 import datetime
-import os
 import json
-from mediation import data_validator, mediator, ssc_wrap
-import mediation.plant as plant_
-import librtdispatch.util as util
+from mediation import data_validator, ssc_wrap
 
 class PysamWrap:
     parent_dir = str(Path(__file__).parents[1])
@@ -30,12 +27,12 @@ class PysamWrap:
         if (__name__ == "__main__" or settings.DEBUG) == True:
             self._set_design_from_file(self.design_path)            # only used for debugging to avoid recalculating flux maps
 
-    def calc_flux_eta_maps(self, weather_dataframe):
+    def calc_flux_eta_maps(self, plant_state, weather_dataframe):
         """Compute the flux and eta maps and assign them to the ssc model parameters, first getting the needed solar resource data"""
         self.ssc.set({'field_model_type': 2})                                   # generate flux and eta maps but don't optimize field or tower
         datetime_start = datetime.datetime(2018, 1, 1, 0, 0, 0)
         datetime_end = datetime_start                                           # run for just first timestep of year
-        tech_outputs = self.Simulate(datetime_start, datetime_end, weather_dataframe=weather_dataframe)
+        tech_outputs = self.Simulate(datetime_start, datetime_end, None, plant_state=plant_state, weather_dataframe=weather_dataframe)
         eta_map = tech_outputs["eta_map_out"]                                   # get maps and set for subsequent runs
         flux_maps = [r[2:] for r in tech_outputs['flux_maps_for_import']]       # Don't include first two columns
         A_sf_in = tech_outputs["A_sf"]
@@ -47,7 +44,7 @@ class PysamWrap:
 
         return flux_eta_maps
 
-    def Simulate(self, datetime_start, datetime_end, timestep=None, plant_state=None, weather_dataframe=None, solar_resource_data=None):
+    def Simulate(self, datetime_start, datetime_end, timestep, plant_state, weather_dataframe=None, solar_resource_data=None):
         """
         datetime_start = beginning of first timestep
         datetime_end = end of last timestep
@@ -67,9 +64,9 @@ class PysamWrap:
             self.ssc.set({'field_model_type': 3})           # use the provided flux and eta map inputs
             self.ssc.set({'eta_map_aod_format': False})     # false = eta map not in 3D AOD format
 
-        if plant_state is None:
-            plant_state = plant_.plant_initial_state
         self.ssc.set(plant_state)
+
+        #NOTE: this pads the weather data to 8760 if its length is less than that:
         self.set_weather_data(weather_dataframe=weather_dataframe, solar_resource_data=solar_resource_data)
 
         # set times:
@@ -85,23 +82,28 @@ class PysamWrap:
             self.ssc.set({'time_steps_per_hour': 3600 / timestep.seconds})                      # otherwise its using already set value
 
         # TODO: do this trimming better and properly ##############################################
-        def resize_list(_list, total_elements):
+        def resize_list(list_name, total_elements):
+            _list = self.ssc.get(list_name)
             if len(_list) < total_elements:
                 _list.extend((total_elements - len(_list))*[_list[-1]])
-                return _list
             else:
-                return _list[0:total_elements]
-        
+                _list = _list[0:total_elements]
+            self.ssc.set({list_name: _list})
+
+        N_weather_data = len(self.ssc.get('solar_resource_data')['year'])
+        resize_list('sf_adjust:hourly', N_weather_data)
+        resize_list('rec_clearsky_dni', N_weather_data)
+
         N_timesteps = ceil((self.ssc.get('time_stop') - self.ssc.get('time_start')) / 3600. * self.ssc.get('time_steps_per_hour'))
-        self.ssc.set({'q_pc_target_su_in': resize_list(self.ssc.get('q_pc_target_su_in'), N_timesteps)})
-        self.ssc.set({'q_pc_target_on_in': resize_list(self.ssc.get('q_pc_target_on_in'), N_timesteps)})
-        self.ssc.set({'q_pc_max_in': resize_list(self.ssc.get('q_pc_max_in'), N_timesteps)})
-        self.ssc.set({'is_rec_su_allowed_in': resize_list(self.ssc.get('is_rec_su_allowed_in'), N_timesteps)})
-        self.ssc.set({'is_rec_sb_allowed_in': resize_list(self.ssc.get('is_rec_sb_allowed_in'), N_timesteps)})
-        self.ssc.set({'is_pc_su_allowed_in': resize_list(self.ssc.get('is_pc_su_allowed_in'), N_timesteps)})
-        self.ssc.set({'is_pc_sb_allowed_in': resize_list(self.ssc.get('is_pc_sb_allowed_in'), N_timesteps)})
+        resize_list('q_pc_target_su_in', N_timesteps)
+        resize_list('q_pc_target_on_in', N_timesteps)
+        resize_list('q_pc_max_in', N_timesteps)
+        resize_list('is_rec_su_allowed_in', N_timesteps)
+        resize_list('is_rec_sb_allowed_in', N_timesteps)
+        resize_list('is_pc_su_allowed_in', N_timesteps)
+        resize_list('is_pc_sb_allowed_in', N_timesteps)
         try:
-            self.ssc.set({'is_ignore_elec_heat_dur_off': resize_list(self.ssc.get('is_ignore_elec_heat_dur_off'), N_timesteps)})    # NOT SET
+            resize_list('is_ignore_elec_heat_dur_off', N_timesteps)    # NOT SET
         except:
             pass
         ###########################################################################################
@@ -285,7 +287,7 @@ class PysamWrap:
 
         # Filter and adjust results
         retvars = ['Q_thermal', 'm_dot_rec', 'beam', 'clearsky', 'tdry', 'P_tower_pump', 'pparasi']
-        if results['clearsky'].max() < 1.e-3:         # Clear-sky data wasn't passed through ssc (ssc controlled from actual DNI, or user-defined flow inputs)
+        if 'clearsky' not in results or max(results['clearsky']) < 1.e-3:         # Clear-sky data wasn't passed through ssc (ssc controlled from actual DNI, or user-defined flow inputs)
             results['clearsky'] = clearsky_data[start_pt : start_pt + N_pts_horizon]
 
         return results

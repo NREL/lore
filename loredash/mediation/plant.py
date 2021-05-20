@@ -54,6 +54,7 @@ class Plant:
             # TODO: these are cycle state variables?:
             'wdot0':                                0.,                                 # Cycle electricity generation (MWe)
             'qdot0':                                0.,                                 # Cycle thermal input (MWt)
+            'sf_adjust:hourly':                     [0],
         }
 
         self.set_design(design)
@@ -92,6 +93,7 @@ class Plant:
         self.state['T_tank_hot_init'] = self.design['T_htf_hot_des']
         self.state['pc_startup_time_remain_init'] = self.design['startup_time']
         self.state['pc_startup_energy_remain_initial'] = self.design['startup_frac'] * self.get_cycle_thermal_rating() * 1000.
+        self.state['sf_adjust:hourly'] = self.get_field_availability()
 
     def set_state(self, state):
         self.state.update((k, state[k]) for k in state.keys() & self.state.keys())     # update state but don't add any new keys
@@ -117,12 +119,12 @@ class Plant:
         if datetime_start is None:
             datetime_start = datetime.datetime(2018, 1, 1)
         if duration is None:
-            duration = datetime.timedelta(hours=1)
+            duration = datetime.timedelta(days=365)
         if timestep is None:
             timestep = datetime.timedelta(minutes=1)
 
         FIELD_AVAIL_DAYS_GENERATED = 365
-        steps_per_hour = 1/(timestep.total_seconds()/3600)
+        steps_per_hour = int(1/(timestep.total_seconds()/3600))
         field_availability = util.get_field_availability_adjustment(
             steps_per_hour=steps_per_hour,
             year=2018,
@@ -203,6 +205,9 @@ class Plant:
     #TODO: Can set_design() and update_design() be merged?
     def update_design(self, design_vars):
         self.design.update(design_vars)         # update design (new keys can be added)
+
+    def update_flux_maps(self, flux_eta_maps):
+        self.flux_maps.update(flux_eta_maps)
 
     #TODO: Are set_initial_state(), set_state() and update_state() all needed?
     def update_state(self, cycle_results, new_plant_state_vars, ssc_time_step):

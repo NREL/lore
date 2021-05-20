@@ -18,10 +18,10 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from pathlib import Path
+import datetime
+import multiprocessing
 from mediation import mediator
 import mediation.plant as plant_
-import multiprocessing
-import datetime
 
 # TODO: Ensure database migration happens before this code is run. It is currently
 # run on a 'migrate', which initially fails because no database has yet been created.
@@ -37,7 +37,7 @@ def InitAndRunMediator():
         update_interval = datetime.timedelta(seconds = 5),
     )
     result = m.ModelPreviousDayAndAddToDb()
-    result = m.RunOnce()
+    # result = m.RunOnce()
     return
 
 # try:
