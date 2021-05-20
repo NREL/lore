@@ -32,7 +32,7 @@ class PysamWrap:
         self.ssc.set({'field_model_type': 2})                                   # generate flux and eta maps but don't optimize field or tower
         datetime_start = datetime.datetime(2018, 1, 1, 0, 0, 0)
         datetime_end = datetime_start                                           # run for just first timestep of year
-        tech_outputs = self.Simulate(datetime_start, datetime_end, None, plant_state=plant_state, weather_dataframe=weather_dataframe)
+        tech_outputs = self.simulate(datetime_start, datetime_end, None, plant_state=plant_state, weather_dataframe=weather_dataframe)
         eta_map = tech_outputs["eta_map_out"]                                   # get maps and set for subsequent runs
         flux_maps = [r[2:] for r in tech_outputs['flux_maps_for_import']]       # Don't include first two columns
         A_sf_in = tech_outputs["A_sf"]
@@ -44,7 +44,7 @@ class PysamWrap:
 
         return flux_eta_maps
 
-    def Simulate(self, datetime_start, datetime_end, timestep, plant_state, weather_dataframe=None, solar_resource_data=None):
+    def simulate(self, datetime_start, datetime_end, timestep, plant_state, weather_dataframe=None, solar_resource_data=None):
         """
         datetime_start = beginning of first timestep
         datetime_end = end of last timestep
@@ -58,7 +58,7 @@ class PysamWrap:
 
         #NOTE: field_model_type values: 0=optimize field and tower; 1=optimize just field based on tower;
         #                               2=no field nor tower optimization; 3=use provided flux and eta maps (don't calculate)
-        if not self._DesignIsSet() or self.REUSE_FLUXMAPS == False:
+        if not self._design_is_set() or self.REUSE_FLUXMAPS == False:
             self.ssc.set({'field_model_type': 2})           # calculate flux and eta maps at simulation start
         else:
             self.ssc.set({'field_model_type': 3})           # use the provided flux and eta map inputs
@@ -116,7 +116,7 @@ class PysamWrap:
                  'time_steps_per_hour': tech_outputs['time_steps_per_hour']}
         if self.MIN_ONE_HOUR_SIMS == True:
             times['time_stop'] = (datetime_end_original - datetime_newyears).total_seconds()
-        tech_outputs = self._RemoveDataPadding(tech_outputs, times)
+        tech_outputs = self._remove_data_padding(tech_outputs, times)
 
         return tech_outputs
 
@@ -148,7 +148,7 @@ class PysamWrap:
         return solar_resource_data
 
     @staticmethod
-    def WeatherDataframeToPysamFormat(weather_dataframe):
+    def weather_df_to_ssc_table(weather_dataframe):
         """solar_resource_data can be directly passed to PySAM, after lists are padded to an 8760 length"""
         solar_resource_data = PysamWrap.create_solar_resource_data_var()
 
@@ -180,7 +180,7 @@ class PysamWrap:
 
         solar_resource_data_input = None
         if weather_dataframe is not None and solar_resource_data is None:
-            solar_resource_data_input = PysamWrap.WeatherDataframeToPysamFormat(weather_dataframe)     # convert
+            solar_resource_data_input = PysamWrap.weather_df_to_ssc_table(weather_dataframe)     # convert
         elif solar_resource_data is not None:
             solar_resource_data_input = solar_resource_data
 
@@ -199,7 +199,7 @@ class PysamWrap:
             self.ssc.set({'solar_resource_data': validated_solar_resource_data})
         return 0
 
-    def GetSimulatedPlantState(self, model_outputs, **kwargs):
+    def get_simulated_plant_state(self, model_outputs, **kwargs):
         '''
         Returns simulated plant state at end of prior simulation, or if no prior simulation, returns None
         The default assumption is that the trailing zeros from a partial-year simulation have already been stripped
@@ -211,7 +211,7 @@ class PysamWrap:
         Dictionary of numbers with the same keys as GetPlantStateIoMap()
         '''
 
-        def GetPlantStateIoMap():
+        def get_plant_state_io_map():
             return {
             # Last value in array output becomes number input?
             # Number Inputs                         # Arrays Outputs
@@ -236,12 +236,12 @@ class PysamWrap:
 
         if 'strip_zeros' in kwargs and kwargs.get('strip_zeros') == True:
             try:
-                self._RemoveDataPadding(model_outputs, kwargs.get('times'))
+                self._remove_data_padding(model_outputs, kwargs.get('times'))
             except:
                 print("Trailing zeroes could not be stripped. Plant state may be invalid.")
 
         try:
-            plant_state_io_map = GetPlantStateIoMap()
+            plant_state_io_map = get_plant_state_io_map()
             plant_state = {k:model_outputs[v][-1] for (k, v) in plant_state_io_map.items()}      # return last value in each list
         except:
             plant_state = None
@@ -280,7 +280,7 @@ class PysamWrap:
             'is_pc_sb_allowed_in': [0],
             })
 
-        results = self.Simulate(datetime_start, datetime_end, timestep, plant_state=plant_state, solar_resource_data=solar_resource_data)
+        results = self.simulate(datetime_start, datetime_end, timestep, plant_state=plant_state, solar_resource_data=solar_resource_data)
         
         # Revert back to original parameters
         self.ssc.set(original_params)
@@ -293,7 +293,7 @@ class PysamWrap:
         return results
 
 
-    def _WeatherFileIsSet(self):
+    def _weather_file_is_set(self):
         try:
             solar_resource_file = self.ssc.get('solar_resource_file')   # check if assigned
         except:
@@ -304,7 +304,7 @@ class PysamWrap:
         else:
             return False
 
-    def _DesignIsSet(self):
+    def _design_is_set(self):
         try:
             self.ssc.get('eta_map')      # check if assigned
             self.ssc.get('flux_maps')    # check if assigned
@@ -314,7 +314,7 @@ class PysamWrap:
         else:
             return True
 
-    def _RemoveDataPadding(self, model_outputs, times):
+    def _remove_data_padding(self, model_outputs, times):
         points_per_year = int(times['time_steps_per_hour'] * 24 * 365)
         points_in_simulation = int((times['time_stop']-times['time_start'])/ \
             3600 * times['time_steps_per_hour'])
@@ -366,7 +366,7 @@ class PysamWrap:
     
     # NOTE: not currently used. See dispatch.DispatchTargets, which is used instead. Not sure if this mapping is still useful.
     # @staticmethod
-    # def _GetPlantSchedulesIoMap():
+    # def _get_plant_schedules_io_map():
     #     return {
     #     # Array Inputs                          # Array Outputs
     #     'q_pc_target_su_in':                    'q_dot_pc_target_su',

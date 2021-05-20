@@ -41,7 +41,7 @@ class Mediator:
             )
 
         #TODO: Add a function to pysam_wrap that creates a generic weather_dataframe and don't pass a weather_dataframe here
-        weather_dataframe = self.GetWeatherDataframe(
+        weather_dataframe = self.get_weather_df(
             datetime.datetime(self.params['start_date_year'], 1, 1, 0),
             datetime.datetime(self.params['start_date_year'], 12, 31, 23),
             tmy3_path=self.weather_file
@@ -76,7 +76,7 @@ class Mediator:
         }
 
     
-    def RunOnce(self, datetime_start=None, datetime_end=None):
+    def run_once(self, datetime_start=None, datetime_end=None):
         """
         Get data from external plant and weather interfaces and run
         entire set of submodels, saving data to database
@@ -126,13 +126,13 @@ class Mediator:
         # Normalize timesteps to even intervals, even if they are given
         datetime_now = datetime.datetime.now()
         if isinstance(datetime_start, datetime.datetime):
-            datetime_start = RoundMinutes(datetime_start, 'down', self.simulation_timestep.seconds/60)
+            datetime_start = round_minutes(datetime_start, 'down', self.simulation_timestep.seconds/60)
             if isinstance(datetime_end, datetime.datetime):
-                datetime_end = RoundMinutes(datetime_end, 'up', self.simulation_timestep.seconds/60)
+                datetime_end = round_minutes(datetime_end, 'up', self.simulation_timestep.seconds/60)
             else:
                 datetime_end = datetime_start + self.simulation_timestep
         else:
-            datetime_start = RoundMinutes(datetime_now, 'down', self.simulation_timestep.seconds/60)    # the start of the time interval currently in
+            datetime_start = round_minutes(datetime_now, 'down', self.simulation_timestep.seconds/60)    # the start of the time interval currently in
             datetime_end = datetime_start + self.simulation_timestep        # disregard a given datetime_end if there is no given datetime_start
         
         print("Datetime now = {datetime}".format(datetime=datetime_now))
@@ -140,7 +140,7 @@ class Mediator:
         print("End datetime = {datetime}".format(datetime=datetime_end))
 
         # a. Set weather values and plant state for PySAM
-        weather_dataframe = self.GetWeatherDataframe(datetime_start, datetime_end, tmy3_path=self.weather_file)
+        weather_dataframe = self.get_weather_df(datetime_start, datetime_end, tmy3_path=self.weather_file)
         
         # b. Call dispatch model, (which includes a PySAM model run to get estimates) and update inputs for next call
         dispatch_outputs = self.dispatch_wrap.run(
@@ -181,10 +181,10 @@ class Mediator:
         # b. Call PySAM
         self.pysam_wrap.ssc.set(dispatch_outputs['ssc_dispatch_targets'].asdict())       #TODO: make pysam_wrap function for set (don't just reach in and use ssc.set())
 
-        tech_outputs = self.pysam_wrap.Simulate(datetime_start, datetime_end, self.simulation_timestep, self.plant.get_state(), weather_dataframe=weather_dataframe)
+        tech_outputs = self.pysam_wrap.simulate(datetime_start, datetime_end, self.simulation_timestep, self.plant.get_state(), weather_dataframe=weather_dataframe)
         print("Annual Energy [kWh]= ", tech_outputs["annual_energy"])
 
-        new_plant_state_vars = self.pysam_wrap.GetSimulatedPlantState(tech_outputs)      # for initializing next simulation from a prior one
+        new_plant_state_vars = self.pysam_wrap.get_simulated_plant_state(tech_outputs)      # for initializing next simulation from a prior one
         self.plant.update_state(tech_outputs, new_plant_state_vars, self.simulation_timestep.seconds/3600)
 
         # c. Validate these data
@@ -201,22 +201,22 @@ class Mediator:
 
         # d. Add data to cache and store in database
         self.validated_outputs_prev = copy.deepcopy(validated_outputs)
-        self.BulkAddToPysamTable(validated_outputs)
+        self.bulk_add_to_pysam_table(validated_outputs)
 
         return 0
 
-    def RunContinuously(self, update_interval=5):
+    def run_continuously(self, update_interval=5):
         """Continuously get data from external plant and weather interfaces and run
         entire set of submodels, saving data to database
         
         update_interval -- [s] how frequently the interfaces and submodels are polled and run, respectively
         """
-        looping_call = LoopingCall(self.RunOnce)
+        looping_call = LoopingCall(self.run_once)
         time.sleep(update_interval - time.time() % update_interval)          # wait to start until it's an even clock interval
         looping_call.start(update_interval)
         reactor.run()
 
-    def ModelPreviousDayAndAddToDb(self):
+    def model_previous_day_and_add_to_db(self):
         """
         Simulate previous day and add to database
         e.g.:
@@ -227,20 +227,20 @@ class Mediator:
             for 288 total new entries
         """
         datetime_now = datetime.datetime.now()
-        datetime_now_rounded_down = RoundMinutes(datetime_now, 'down', self.simulation_timestep.seconds/60)    # the start of the time interval currently in
+        datetime_now_rounded_down = round_minutes(datetime_now, 'down', self.simulation_timestep.seconds/60)    # the start of the time interval currently in
         datetime_start_prev_day = datetime_now_rounded_down - datetime.timedelta(days=1)
         datetime_end_current_day = datetime_now_rounded_down                   # end of the last timestep
                                                                             # (as noted for "time_stop" on line 1004 in cmod_tcsmolten_salt.cpp)
-        self.RunOnce(datetime_start_prev_day, datetime_end_current_day)
+        self.run_once(datetime_start_prev_day, datetime_end_current_day)
         return 0
 
-    def BulkAddToPysamTable(self, records):
+    def bulk_add_to_pysam_table(self, records):
         n_records = len(records['time_hr'])
         newyears = datetime.datetime(records['year_start'], 1, 1, 0, 0, 0)
 
         instances = [
             models.PysamData(
-                timestamp =             RoundTime(newyears + datetime.timedelta(hours=records['time_hr'][i]), 1),       # round to nearest second
+                timestamp =             round_time(newyears + datetime.timedelta(hours=records['time_hr'][i]), 1),       # round to nearest second
                 E_tes_charged =         records['e_ch_tes'][i],
                 eta_tower_thermal =     records['eta_therm'][i],
                 eta_field_optical =     records['eta_field'][i],
@@ -268,80 +268,29 @@ class Mediator:
         except Exception as err:
             raise(err)
     
-    def GetWeatherDataframe(self, datetime_start, datetime_end, **kwargs):
+    def get_weather_df(self, datetime_start, datetime_end, **kwargs):
         """put the weather forecast call here instead"""
         tmy3_path = kwargs.get('tmy3_path') if 'tmy3_path' in kwargs else None
-        return Tmy3ToDataframe(tmy3_path, datetime_start, datetime_end)
+        return tmy3_to_df(tmy3_path, datetime_start, datetime_end)
 
-class Plant:
-    @staticmethod
-    def LoadPlantConfig(config_path):
-        if isinstance(config_path, str) and os.path.isfile(config_path):
-            with open(config_path) as f:
-                plant_config = rapidjson.load(f)
-        else:
-            raise Exception('Plant configuration file not found.')
-            
-        validated_outputs = data_validator.validate(plant_config, data_validator.plant_config_schema)
-
-        plant_config_table = PlantConfig()
-        plant_config_table.name = plant_config['name']
-        plant_config_table.save()
-        Plant.LoadPlantLocation(plant_config['location'], validate=False)    # already validated above
-        del plant_config
-
-    @staticmethod
-    def LoadPlantLocation(plant_location, validate=True):
-        if validate == True:
-            plant_location = data_validator.validate(plant_location, data_validator.plant_location_schema)
-
-        plant_config_table = PlantConfig()
-        plant_config_table.latitude = plant_location['latitude']
-        plant_config_table.longitude = plant_location['longitude']
-        plant_config_table.elevation = plant_location['elevation']
-        plant_config_table.timezone = plant_location['timezone']
-        plant_config_table.timezone_string = plant_location['timezone_string']
-        plant_config_table.save()
-
-    @staticmethod
-    def GetPlantConfig():
-        result = list(PlantConfig.objects.filter(site_id=settings.SITE_ID).values())[0]
-        result['location'] = {}
-        result['location']['latitude'] = result.pop('latitude')
-        result['location']['longitude'] = result.pop('longitude')
-        result['location']['elevation'] = result.pop('elevation')
-        result['location']['timezone'] = result.pop('timezone')
-        result['location']['timezone_string'] = result.pop('timezone_string')
-        return result
-
-    @staticmethod
-    def GetPlantState(validated_outputs_prev, **kwargs):
-        """put virtual/real call here instead"""
-        assert 'pysam_wrap' in kwargs
-        pysam_wrap = kwargs.get('pysam_wrap')
-        plant_state = pysam_wrap.GetSimulatedPlantState(validated_outputs_prev)      # for initializing next simulation from a prior one
-        if plant_state is None:
-            plant_state = pysam_wrap.GetDefaultPlantState()
-        return plant_state    
-
-def MediateContinuously(update_interval=5):
+def mediate_continuously(update_interval=5):
     mediator = Mediator()
-    mediator.RunContinuously(update_interval=update_interval)
+    mediator.run_continuously(update_interval=update_interval)
     return False
 
-# def MediateOnce():
+# def mediate_once():
 #     """This will likely only be used for testing"""
 #     mediator = Mediator()
 #     mediator.RunOnce()
 #     return False
 
-def RoundTime(dt, second_resolution):
+def round_time(dt, second_resolution):
     """Round to nearest second interval"""
     seconds = (dt.replace(tzinfo=None) - dt.min).seconds + dt.microsecond * 1.e-6
     rounding = (seconds+second_resolution/2) // second_resolution * second_resolution
     return dt + datetime.timedelta(0,rounding-seconds,0)
 
-def RoundMinutes(dt, direction, minute_resolution):
+def round_minutes(dt, direction, minute_resolution):
     """
     Round to nearest minute interval
     e.g.:
@@ -356,7 +305,7 @@ def RoundMinutes(dt, direction, minute_resolution):
     new_time_old_seconds = dt + datetime.timedelta(minutes=new_minute - dt.minute)
     return new_time_old_seconds.replace(second=0, microsecond=0)
 
-def Tmy3ToDataframe(tmy3_path, datetime_start=None, datetime_end=None):
+def tmy3_to_df(tmy3_path, datetime_start=None, datetime_end=None):
     """does not work for end dates more than one year after start date"""
 
     if not isinstance(tmy3_path, str) or not os.path.isfile(tmy3_path):
@@ -382,13 +331,13 @@ def Tmy3ToDataframe(tmy3_path, datetime_start=None, datetime_end=None):
         date_parser=lambda x: datetime.datetime.strptime(x, '%Y %m %d %H %M'))
     df.index = df.index.map(lambda t: t.replace(year=df.index[0].year))     # normalize all years to that of 1/1. Could also do this via date_parser.
     df = df[df.columns.drop(list(df.filter(regex='Unnamed')))]      # drop unnamed columns (which are empty)
-    location = GetLocationFromWeatherFile(tmy3_path)
+    location = get_weatherfile_location(tmy3_path)
     df.attrs.update(location)
 
     # Ensure the requested datetimes are contained within the returned weather datetimes
     df_timestep = df.index[1] - df.index[0]
-    datetime_start_adj = RoundMinutes(datetime_start, 'down', df_timestep.seconds/60)
-    datetime_end_adj = RoundMinutes(datetime_end, 'up', df_timestep.seconds/60)
+    datetime_start_adj = round_minutes(datetime_start, 'down', df_timestep.seconds/60)
+    datetime_end_adj = round_minutes(datetime_end, 'up', df_timestep.seconds/60)
     timestamp_start_query = pd.Timestamp(datetime_start_adj.replace(year=df.index[0].year))        # align the years and convert to Timestamp
     timestamp_end_query = pd.Timestamp(datetime_end_adj.replace(year=df.index[0].year))
 
@@ -407,7 +356,7 @@ def Tmy3ToDataframe(tmy3_path, datetime_start=None, datetime_end=None):
     df_out.attrs = df.attrs
     return df_out
 
-def GetLocationFromWeatherFile(tmy3_path):
+def get_weatherfile_location(tmy3_path):
     df_meta = pd.read_csv(tmy3_path, sep=',', header=0, nrows=1)
     return {
         'latitude': float(df_meta['Latitude'][0]),
