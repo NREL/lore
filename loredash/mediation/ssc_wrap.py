@@ -130,6 +130,7 @@ class PysamWrap(SscWrap):
         return result
 
 
+# TODO: make these few following functions into member functions
 # Functions to simulate compute modules through dictionaries
 def ssc_sim_from_dict(ssc, data_pydict):
     """ Run a technology compute module using parameters in a dict.

@@ -11,20 +11,6 @@ try:
 except:
     from loredash.mediation import data_validator       # if running from case_study.py
 
-#TODO: Implement these for 'rec_op_mode_initial'
-class ReceiverState(Enum):
-    OFF = 0
-    STARTUP = 1
-    ON = 2
-
-#TODO: Implement these for 'pc_op_mode_initial'
-class PowerCycleState(Enum):
-    STARTUP = 0
-    ON = 1
-    STANDBY = 2
-    OFF = 3
-    STARTUP_CONTROLLED = 4
-
 class Plant:
     def __init__(self, design, initial_state):
         self.design = {}
@@ -331,31 +317,6 @@ class Plant:
         self.design['longitude'] = location['longitude']
         self.design['elevation'] = location['elevation']
         self.design['timezone'] = location['timezone']
-
-
-# Used just for case study
-plant_initial_state_CD = {
-    # Field and receiver:
-    'is_field_tracking_init':               False,                              # Is field tracking?
-    'rec_op_mode_initial':                  0,                                  # Receiver operating mode
-    'rec_startup_time_remain_init':         0.,                                 # Receiver startup time remaining (hr)
-    'rec_startup_energy_remain_init':       0.,                                 # Receiver startup energy remaining (Wh)
-    'disp_rec_persist0':                    1000.,                              # Time (hr) that receiver has been in its current state
-    'disp_rec_off0':                        1000.,                              # Time (hr) that receiver has not been operating (off or startup)
-    # TES:
-    'T_tank_cold_init':                     0.,                                 # Cold tank temperature (C)
-    'T_tank_hot_init':                      0.,                                 # Hot tank temperature (C)
-    'csp_pt_tes_init_hot_htf_percent':      30.,                                # Fraction of available storage in hot tank (%)
-    # Power cycle:
-    'pc_op_mode_initial':                   3,                                  # Initial cycle operating mode (0 = startup, 1 = on, 2 = standby, 3 = off, 4 = startup_controlled)
-    'pc_startup_time_remain_init':          0.,                                 # Cycle startup time remaining (hr)
-    'pc_startup_energy_remain_initial':     0.,                                 # Cycle startup energy remaining (kWh)
-    'disp_pc_persist0':                     1000.,                              # Time (hr) that cycle has been in its current state
-    'disp_pc_off0':                         1000.,                              # Time (hr) that cycle has not been generating electric power (off, startup, or standby)
-    # TODO: these are cycle state variables?:
-    'wdot0':                                0.,                                 # Cycle electricity generation (MWe)
-    'qdot0':                                0.,                                 # Cycle thermal input (MWt)
-}
 
 
 # NOTE: These are the values of the corresponding outputs after 5 minutes of operation,
