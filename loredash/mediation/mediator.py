@@ -55,7 +55,7 @@ class Mediator:
             datetime_start=weather_dataframe.index[0],
             duration=weather_dataframe.index[-1] - weather_dataframe.index[0] + timestep,   # need to add timestep, e.g., 0:00 to 1:00 is two hours, not one
             timestep=timestep)
-        self.pysam_wrap.ssc.set({'rec_clearsky_dni': clearsky_data})        #TODO: use a new pysam_wrap set function instead of reaching in to ssc.set()
+        self.pysam_wrap.set({'rec_clearsky_dni': clearsky_data})
 
         
         self.plant.update_flux_maps(self.pysam_wrap.calc_flux_eta_maps(self.plant.get_state(), weather_dataframe=weather_dataframe))
@@ -175,11 +175,11 @@ class Mediator:
             datetime_start=datetime_start,
             duration=datetime_end - datetime_start,
             timestep=self.simulation_timestep)
-        self.pysam_wrap.ssc.set({'rec_clearsky_dni': clearsky_data})        #TODO: use a new pysam_wrap set function.
+        self.pysam_wrap.set({'rec_clearsky_dni': clearsky_data})
 
 
         # b. Call PySAM
-        self.pysam_wrap.ssc.set(dispatch_outputs['ssc_dispatch_targets'].asdict())       #TODO: make pysam_wrap function for set (don't just reach in and use ssc.set())
+        self.pysam_wrap.set(dispatch_outputs['ssc_dispatch_targets'].asdict())
 
         tech_outputs = self.pysam_wrap.simulate(datetime_start, datetime_end, self.simulation_timestep, self.plant.get_state(), weather_dataframe=weather_dataframe)
         print("Annual Energy [kWh]= ", tech_outputs["annual_energy"])
