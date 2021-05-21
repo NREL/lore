@@ -6,7 +6,7 @@ import time, copy, datetime, math
 from twisted.internet.task import LoopingCall
 from twisted.internet import reactor
 import pandas as pd
-from mediation import data_validator, pysam_wrap, dispatch_wrap, models
+from mediation import tech_wrap, data_validator, dispatch_wrap, models
 import mediation.plant as plant_
 import librtdispatch.util as util
 from mediation.plant import Revenue
@@ -14,7 +14,7 @@ from data.mspt_2020_defaults import default_ssc_params
 # import models
 
 class Mediator:
-    pysam_wrap = None
+    tech_wrap = None
     validated_outputs_prev = None
 
     def __init__(self, params, plant_config_path, plant_design, weather_file=None,
@@ -35,10 +35,10 @@ class Mediator:
 
         default_ssc_params.update(self.plant.get_state())                       # combine default and plant params, overwriting the defaults
         default_ssc_params.update(self.params)                                  # combine default and mediator params, overwriting the defaults
-        self.pysam_wrap = pysam_wrap.PysamWrap(
-            params=default_ssc_params,                                          # already a copy so pysam_wrap cannot edit
-            plant=copy.deepcopy(self.plant),                                    # copy so pysam_wrap cannot edit
-            dispatch_wrap_params=dispatch_wrap.dispatch_wrap_params.copy(),     # copy so pysam_wrap cannot edit
+        self.tech_wrap = tech_wrap.TechWrap(
+            params=default_ssc_params,                                          # already a copy so tech_wrap cannot edit
+            plant=copy.deepcopy(self.plant),                                    # copy so tech_wrap cannot edit
+            dispatch_wrap_params=dispatch_wrap.dispatch_wrap_params.copy(),     # copy so tech_wrap cannot edit
             weather_file=None
             )
 
@@ -49,9 +49,9 @@ class Mediator:
             datetime_start=datetime.datetime(self.params['start_date_year'], 1, 1, 0),
             duration=datetime.timedelta(days=365),
             timestep=datetime.timedelta(hours=1))
-        self.pysam_wrap.set({'rec_clearsky_dni': clearsky_data})
+        self.tech_wrap.set({'rec_clearsky_dni': clearsky_data})
 
-        self.plant.update_flux_maps(self.pysam_wrap.calc_flux_eta_maps(self.plant.get_design(), self.plant.get_state()))
+        self.plant.update_flux_maps(self.tech_wrap.calc_flux_eta_maps(self.plant.get_design(), self.plant.get_state()))
 
         # Setup dispatch_wrap
         dispatch_wrap_params = dispatch_wrap.dispatch_wrap_params                                   # TODO: replace with a path to a JSON config file
@@ -95,8 +95,8 @@ class Mediator:
         #
         # Step 3:
         #   Thread 1:
-        #       a. Set dispatch targets in PySAM
-        #       b. Call PySAM using inputs
+        #       a. Set dispatch targets in tech model
+        #       b. Call tech model using inputs
         #       c. Validate output data
         #       d. Add simulated plant state and other data to cache and store in database
         #
@@ -127,7 +127,7 @@ class Mediator:
             datetime_start=datetime_start,
             duration=datetime_end - datetime_start,
             timestep=self.simulation_timestep)
-        self.pysam_wrap.set({'rec_clearsky_dni': clearsky_data})    # Set here in anticipated need by dispatch model
+        self.tech_wrap.set({'rec_clearsky_dni': clearsky_data})    # Set here in anticipated need by dispatch model
 
         
         # Step 2, Thread 1:
@@ -135,7 +135,7 @@ class Mediator:
         dispatch_outputs = self.dispatch_wrap.run(
             start_date=datetime_start,
             timestep_days=(datetime_end - datetime_start).days,                             # not timestep but actually duration in days
-            f_estimates_for_dispatch_model=self.pysam_wrap.estimates_for_dispatch_model,
+            f_estimates_for_dispatch_model=self.tech_wrap.estimates_for_dispatch_model,
             initial_plant_state=plant_state
         )
         self.dispatch_wrap.update_inputs(dispatch_outputs, self.simulation_timestep)        # TODO: add to end of run()?
@@ -148,26 +148,26 @@ class Mediator:
 
 
         # Step 3, Thread 1:
-        # a. Set dispatch targets in PySAM
-        self.pysam_wrap.set(dispatch_outputs['ssc_dispatch_targets'].asdict())
+        # a. Set dispatch targets in tech model
+        self.tech_wrap.set(dispatch_outputs['ssc_dispatch_targets'].asdict())
 
-        # b. Call PySAM using inputs
-        tech_outputs = self.pysam_wrap.simulate(datetime_start, datetime_end, self.simulation_timestep, plant_state, weather_dataframe=weather_dataframe)
+        # b. Call tech model using inputs
+        tech_outputs = self.tech_wrap.simulate(datetime_start, datetime_end, self.simulation_timestep, plant_state, weather_dataframe=weather_dataframe)
         print("Generated Energy [kWh]= ", tech_outputs["annual_energy"])
 
         # c. Validate output data
         tech_outputs = {k:(list(v) if isinstance(v, tuple) else v) for (k,v) in tech_outputs.items()}   # converts tuples to lists so they can be edited
         tic = time.process_time()
-        validated_outputs = data_validator.validate(tech_outputs, data_validator.pysam_schema)
+        validated_outputs = data_validator.validate(tech_outputs, data_validator.ssc_schema)
         toc = time.process_time()
         print("Validation took {seconds:0.2f} seconds".format(seconds=toc-tic))
         validated_outputs['year_start'] = datetime_start.year                                           # add this so date can be determined from time_hr
 
         # d. Add simulated plant state and other data to cache and store in database
         self.validated_outputs_prev = copy.deepcopy(validated_outputs)
-        new_plant_state_vars = self.pysam_wrap.get_simulated_plant_state(validated_outputs)             # for initializing next simulation from a prior one
+        new_plant_state_vars = self.tech_wrap.get_simulated_plant_state(validated_outputs)             # for initializing next simulation from a prior one
         self.plant.update_state(validated_outputs, new_plant_state_vars, self.simulation_timestep.seconds/3600)
-        self.bulk_add_to_pysam_table(validated_outputs)                                                 # add to database
+        self.bulk_add_to_db_table(validated_outputs)                                                 # add to database
 
         return 0
 
@@ -218,12 +218,12 @@ class Mediator:
         self.run_once(datetime_start_prev_day, datetime_end_current_day)
         return 0
 
-    def bulk_add_to_pysam_table(self, records):
+    def bulk_add_to_db_table(self, records):
         n_records = len(records['time_hr'])
         newyears = datetime.datetime(records['year_start'], 1, 1, 0, 0, 0)
 
         instances = [
-            models.PysamData(
+            models.TechData(
                 timestamp =             round_time(newyears + datetime.timedelta(hours=records['time_hr'][i]), 1),       # round to nearest second
                 E_tes_charged =         records['e_ch_tes'][i],
                 eta_tower_thermal =     records['eta_therm'][i],
@@ -240,20 +240,20 @@ class Mediator:
         ]
 
         try:
-            models.PysamData.objects.bulk_create(instances, ignore_conflicts=True)
+            models.TechData.objects.bulk_create(instances, ignore_conflicts=True)
             # If ignore_conflicts=False and if any to-be-added records are already in the database, as indicated by the timestamp,
             #  an exception is raised and no to-be-added records are added.
             # If ignore_conflicts=True, all records not already in the database are added. To-be-added records that are already in the
             #  database do not replace the database records. Therefore, no existing database records are overwritten.
         except IntegrityError as err:
             error_string = format(err)
-            if error_string == "UNIQUE constraint failed: mediation_pysamdata.timestamp":
+            if error_string == "UNIQUE constraint failed: mediation_techdata.timestamp":
                 raise IntegrityError(error_string)      # just re-raise the exception for now
         except Exception as err:
             raise(err)
     
     def get_weather_df(self, datetime_start, datetime_end, **kwargs):
-        """put the weather forecast call here instead"""
+        # TODO: put the weather API/forecast call here instead"""
         tmy3_path = kwargs.get('tmy3_path') if 'tmy3_path' in kwargs else None
         return tmy3_to_df(tmy3_path, datetime_start, datetime_end)
 

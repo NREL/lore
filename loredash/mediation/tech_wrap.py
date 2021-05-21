@@ -9,7 +9,7 @@ import pandas as pd
 import json
 from mediation import data_validator, ssc_wrap
 
-class PysamWrap:
+class TechWrap:
     parent_dir = str(Path(__file__).parents[1])
     design_path = parent_dir+"/data/field_design_debugging_only.json"
     MIN_ONE_HOUR_SIMS = True        # used to circumvent SSC bug
@@ -20,7 +20,7 @@ class PysamWrap:
         # NOTE: order is important as earlier set parameters are overwritten:
         self.ssc.set(dispatch_wrap_params)
         if not 'solar_resource_data' in plant.design:       # solar_resource_data is where location info is set in ssc
-            plant.design['solar_resource_data'] = PysamWrap.create_solar_resource_data_var(plant.design)
+            plant.design['solar_resource_data'] = TechWrap.create_solar_resource_data_var(plant.design)
         self.ssc.set(plant.design)
         self.ssc.set(params)            # what are these exactly?
         self.set_weather_data(tmy_file_path=weather_file)
@@ -31,7 +31,7 @@ class PysamWrap:
     def calc_flux_eta_maps(self, plant_design, plant_state):
         """Compute the flux and eta maps and assign them to the ssc model parameters, first getting the needed solar resource data"""
         datetime_start = datetime.datetime(2018, 1, 1, 0, 0, 0)
-        solar_resource_data = PysamWrap.create_solar_resource_data_var(plant_location=plant_design,     # get 8760 data points to satisfy ssc constraint
+        solar_resource_data = TechWrap.create_solar_resource_data_var(plant_location=plant_design,     # get 8760 data points to satisfy ssc constraint
                                                                        datetime_start=datetime_start,
                                                                        datetime_end=datetime_start.replace(year=datetime_start.year + 1),
                                                                        timedelta=datetime.timedelta(hours=1))
@@ -174,8 +174,8 @@ class PysamWrap:
 
     @staticmethod
     def weather_df_to_ssc_table(weather_dataframe):
-        """solar_resource_data can be directly passed to PySAM, after lists are padded to an 8760 length"""
-        solar_resource_data = PysamWrap.create_solar_resource_data_var()
+        """solar_resource_data can be directly passed to ssc, after lists are padded to an 8760 length"""
+        solar_resource_data = TechWrap.create_solar_resource_data_var()
 
         solar_resource_data['tz'] = weather_dataframe.attrs['timezone']
         solar_resource_data['elev'] = weather_dataframe.attrs['elevation']
@@ -205,7 +205,7 @@ class PysamWrap:
 
         solar_resource_data_input = None
         if weather_dataframe is not None and solar_resource_data is None:
-            solar_resource_data_input = PysamWrap.weather_df_to_ssc_table(weather_dataframe)     # convert
+            solar_resource_data_input = TechWrap.weather_df_to_ssc_table(weather_dataframe)     # convert
         elif solar_resource_data is not None:
             solar_resource_data_input = solar_resource_data
 
@@ -274,8 +274,6 @@ class PysamWrap:
 
 
     def estimates_for_dispatch_model(self, plant_design, toy, horizon, weather_data, N_pts_horizon, clearsky_data, start_pt):
-        """This is an interchangeable pysam version of ssc_wrapper.estimates_for_dispatch_model()"""
-
         def time_of_year_to_datetime(year, seconds_since_newyears):
             return datetime.datetime(int(year), 1, 1, 0, 0, 0) + datetime.timedelta(seconds=seconds_since_newyears)
 

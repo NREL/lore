@@ -792,13 +792,13 @@ class DispatchTargets:
 
     def asdict(self):
         return {
-            'q_pc_target_su_in': self.q_pc_target_su_in,
-            'q_pc_target_on_in': self.q_pc_target_on_in,
-            'q_pc_max_in': self.q_pc_max_in,
-            'is_rec_su_allowed_in': self.is_rec_su_allowed_in,
-            'is_rec_sb_allowed_in': self.is_rec_sb_allowed_in,
-            'is_pc_su_allowed_in': self.is_pc_su_allowed_in,
-            'is_pc_sb_allowed_in': self.is_pc_sb_allowed_in,
+            'q_pc_target_su_in':        self.q_pc_target_su_in,
+            'q_pc_target_on_in':        self.q_pc_target_on_in,
+            'q_pc_max_in':              self.q_pc_max_in,
+            'is_rec_su_allowed_in':     self.is_rec_su_allowed_in,
+            'is_rec_sb_allowed_in':     self.is_rec_sb_allowed_in,
+            'is_pc_su_allowed_in':      self.is_pc_su_allowed_in,
+            'is_pc_sb_allowed_in':      self.is_pc_sb_allowed_in,
             }
 
     def set_from_dispatch_solution(self, disp_soln, plant, disp_params, sscstep, horizon):

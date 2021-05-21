@@ -2,7 +2,7 @@ from django.db import models
 from django.conf import settings
 
 #--------------PySAM Data----------------------------------
-class PysamData(models.Model):                                                                              # SSC variables, pre unit conversion:
+class TechData(models.Model):                                                                               # SSC variables, pre unit conversion:
     timestamp = models.DateTimeField(verbose_name="Timestep end", primary_key=True)                         #   time_hr (end of timestep) [hr]
                                                                                                             #    (db_index=True is likely redundant to primary_key=True)
     E_tes_charged = models.FloatField(verbose_name="TES charge state [kWht]", default=None)                 #   e_ch_tes [MWht]
