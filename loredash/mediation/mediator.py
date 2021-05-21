@@ -43,7 +43,7 @@ class Mediator:
             )
 
         #TODO: Initialize Forecasts here.
-        #TODO: Alos add an equivalent call of the following to Forecasts. Need this set for the later calc_flux_eta_maps()
+        #TODO: Also add an equivalent call of the following to Forecasts. Need this set for the later calc_flux_eta_maps()
         clearsky_data = get_clearsky_data(
             clearsky_file=self.params['clearsky_file'],
             datetime_start=datetime.datetime(self.params['start_date_year'], 1, 1, 0),
@@ -57,16 +57,6 @@ class Mediator:
         dispatch_wrap_params = dispatch_wrap.dispatch_wrap_params                                   # TODO: replace with a path to a JSON config file
         dispatch_wrap_params.update(self.params)                                                    # include mediator params in with dispatch_wrap_params
         self.dispatch_wrap = dispatch_wrap.DispatchWrap(plant=self.plant, params=dispatch_wrap.dispatch_wrap_params)
-        self.dispatch_inputs = {        #TODO: does this belong here?
-            'ursd_last':                        None,
-            'yrsd_last':                        None,
-            'weather_data_for_dispatch':        None,
-            'current_day_schedule':             None,
-            'next_day_schedule':                None,
-            'current_forecast_weather_data':    None,
-            'schedules':                        None,
-            'horizon':                          3600,          # [s]   TODO: what should this really be?
-        }
 
     
     def run_once(self, datetime_start=None, datetime_end=None):
@@ -139,26 +129,11 @@ class Mediator:
         dispatch_outputs = self.dispatch_wrap.run(
             start_date=datetime_start,
             timestep_days=(datetime_end - datetime_start).days,       # not timestep but actually duration in days
-            horizon=self.dispatch_inputs['horizon'],
             retvars=default_disp_stored_vars(),
-            ursd_last=self.dispatch_inputs['ursd_last'],
-            yrsd_last=self.dispatch_inputs['yrsd_last'],
-            current_forecast_weather_data=self.dispatch_inputs['current_forecast_weather_data'],
-            weather_data_for_dispatch=self.dispatch_inputs['weather_data_for_dispatch'],
-            schedules=self.dispatch_inputs['schedules'],
-            current_day_schedule=self.dispatch_inputs['current_day_schedule'],
-            next_day_schedule=self.dispatch_inputs['next_day_schedule'],
             f_estimates_for_dispatch_model=self.pysam_wrap.estimates_for_dispatch_model,
             initial_plant_state=self.plant.get_state()
         )
-        self.dispatch_inputs['ursd_last'] = dispatch_outputs['ursd_last']
-        self.dispatch_inputs['yrsd_last'] = dispatch_outputs['yrsd_last']
-        self.dispatch_inputs['weather_data_for_dispatch'] = dispatch_outputs['weather_data_for_dispatch']
-        self.dispatch_inputs['current_day_schedule'] = dispatch_outputs['current_day_schedule']
-        self.dispatch_inputs['next_day_schedule'] = dispatch_outputs['next_day_schedule']
-        self.dispatch_inputs['current_forecast_weather_data'] = dispatch_outputs['current_forecast_weather_data']
-        self.dispatch_inputs['schedules'] = dispatch_outputs['schedules']
-        self.dispatch_inputs['horizon'] -= int(self.simulation_timestep.seconds)
+        self.dispatch_wrap.update_inputs(dispatch_outputs, self.simulation_timestep)        # TODO: add to end of run()?
 
         # Step 1, Thread 2:?
         # a. Call Forecasts
