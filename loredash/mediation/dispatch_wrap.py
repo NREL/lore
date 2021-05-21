@@ -864,6 +864,17 @@ class DispatchTargets:
 class DispatchWrap:
     def __init__(self, plant, params):
 
+        self.dispatch_inputs = {
+            'ursd_last':                        None,
+            'yrsd_last':                        None,
+            'weather_data_for_dispatch':        None,
+            'current_day_schedule':             None,
+            'next_day_schedule':                None,
+            'current_forecast_weather_data':    None,
+            'schedules':                        None,
+            'horizon':                          3600,          # [s]   TODO: what should this really be?
+        }
+
         ## DISPATCH INPUTS ###############################################################################################################################
         # Input data files: weather, masslow, clearsky DNI must have length of full annual array based on ssc time step size
         #--- Simulation start point and duration
@@ -978,11 +989,23 @@ class DispatchWrap:
         self.is_initialized = True
         return
 
+    def update_inputs(self, outputs, timestep):
+        self.dispatch_inputs.update((k, outputs[k]) for k in outputs.keys() & self.dispatch_inputs.keys())     # update inputs but don't add any new keys
+        self.dispatch_inputs['horizon'] -= int(timestep.seconds)
 
     #--- Run simulation
-    def run(self, start_date, timestep_days, horizon, retvars, ursd_last, yrsd_last, current_forecast_weather_data, weather_data_for_dispatch,
-            schedules, current_day_schedule, next_day_schedule, f_estimates_for_dispatch_model, initial_plant_state=None):
+    def run(self, start_date, timestep_days, retvars,
+            f_estimates_for_dispatch_model, initial_plant_state=None):
         """horizon = [s]"""
+        horizon = self.dispatch_inputs['horizon']
+        ursd_last=self.dispatch_inputs['ursd_last']
+        yrsd_last=self.dispatch_inputs['yrsd_last']
+        current_forecast_weather_data=self.dispatch_inputs['current_forecast_weather_data'],
+        weather_data_for_dispatch=self.dispatch_inputs['weather_data_for_dispatch']
+        schedules=self.dispatch_inputs['schedules']
+        current_day_schedule=self.dispatch_inputs['current_day_schedule']
+        next_day_schedule=self.dispatch_inputs['next_day_schedule']
+
         if self.first_run == True:
             if ursd_last is None: ursd_last = self.ursd_last
             if yrsd_last is None: yrsd_last = self.yrsd_last
