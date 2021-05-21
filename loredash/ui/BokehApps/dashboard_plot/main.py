@@ -20,7 +20,7 @@ import datetime
 import re
 
 # Asyncronous access to Django DB
-from mediation.models import PysamData as dd
+from mediation.models import TechData as dd
 from threading import Thread
 import queue
 
@@ -32,7 +32,7 @@ TIME_BOXES = {
     'LAST_48_HOURS': 48
 }
 
-# From the PysamData model table
+# From the TechData model table
 PLOT_LABELS_FOR_DATA_COLS = {
     'Timestamp': 'timestamp',
     'Actual [MWe]': 'W_grid_no_derate',

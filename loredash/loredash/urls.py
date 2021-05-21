@@ -32,7 +32,7 @@ def init_and_mediate():
     m = mediator.Mediator(
         params=mediator.mediator_params,
         plant_config_path = plant_config_path,
-        plant_design=plant_.plant_design,
+        plant_design=plant_.plant_design,                       # TODO: does this need to be a parameter?
         weather_file = default_weather_file,
         update_interval = datetime.timedelta(seconds = 5),
     )

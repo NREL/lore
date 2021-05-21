@@ -21,11 +21,11 @@ import datetime
 import re
 
 # Asyncronous Access to Django DB
-from mediation.models import PysamData as dd
+from mediation.models import TechData as dd
 from threading import Thread
 import queue
 
-# From the PysamData model table
+# From the TechData model table
 PLOT_LABELS_FOR_DATA_COLS = {
     'Timestamp': 'timestamp',
     'Actual [MWe]': 'W_grid_no_derate',

@@ -79,7 +79,7 @@ def MwToKw(mw):
 #   Random Notes:
 #    - Clamp() sets an out-of-bounds value to the nearest limit
 
-pysam_schema = Schema( All(
+ssc_schema = Schema( All(
         # First pass for renaming and normalization
         # Explanation:
         # - If multiple variables are present that are renamed to the same key, the latter entry in the input data dictionary overwrites the earlier one(s)
@@ -112,7 +112,7 @@ pysam_schema = Schema( All(
         # },
         
         # Alphabetize!
-        # The current names, units and datatype are those directly from pysam
+        # The current names, units and datatype are those directly from ssc
         {
         Required('beam', default=[None]): [Any(And(Coerce(float), Range(min=0., max=1600.)), SetTo(None))],                     # DNI [W/m2]
         Required('defocus', default=[None]): [Any(And(Coerce(float), Range(min=0., max=1.)), SetTo(None))],                     # Field optical focus fraction [-]

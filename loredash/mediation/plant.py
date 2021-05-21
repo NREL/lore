@@ -323,7 +323,7 @@ class Plant:
 
 
 # NOTE: These are the values of the corresponding outputs after 5 minutes of operation,
-# starting with the PySAM default initialization
+# starting with the ssc default initialization
 plant_initial_state = {
     # Field and receiver:
     'is_field_tracking_init':               0,                                  # Is field tracking?

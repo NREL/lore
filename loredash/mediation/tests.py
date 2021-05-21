@@ -3,7 +3,7 @@ import pytest
 from voluptuous import Schema, Required, Optional, Range, And, Or, DefaultTo, SetTo, Any, Coerce, Maybe, ALLOW_EXTRA, All
 import random, time, copy, datetime
 from pathlib import Path
-from mediation import pysam_wrap, data_validator, mediator
+from mediation import tech_wrap, data_validator, mediator
 import numpy as np
 
 # To run these tests:
@@ -66,9 +66,9 @@ def test_roundtime():
     dt_rounded = mediator.round_time(dt, second_resolution)
     assert dt_rounded == datetime.datetime(2021, 1, 4, 23, 59, 59, 0)
 
-#---PySAM minimum one hours sims-----------------------------------------------------------------------------------------
+#---TechModel minimum one hours sims-----------------------------------------------------------------------------------------
 """Ensure returned date is just that requested if less than one hour"""
-def test_pysam_one_hour_minimum():
+def test_ssc_one_hour_minimum():
     parent_dir = str(Path(__file__).parents[1])
     weather_file = parent_dir+"/data/daggett_ca_34.865371_-116.783023_psmv3_60_tmy.csv"
     plant_config = {'design': None, 'location': None}
@@ -76,9 +76,9 @@ def test_pysam_one_hour_minimum():
     datetime_start = datetime.datetime(2021, 1, 1, 0, 0, 0)
     datetime_end = datetime.datetime(2021, 1, 1, 0, 30, 0)
 
-    pysam_wrap1 = pysam_wrap.PysamWrap(plant_config=plant_config, load_defaults=True, weather_file=weather_file,
+    tech_wrap1 = tech_wrap.TechWrap(plant_config=plant_config, load_defaults=True, weather_file=weather_file,
                                        enable_preprocessing=False)
-    tech_outputs = pysam_wrap1.simulate(datetime_start, datetime_end, timestep)
+    tech_outputs = tech_wrap1.simulate(datetime_start, datetime_end, timestep)
     T_tes_cold = tech_outputs["T_tes_cold"]
 
     # Ensure values are not zeros and there are the correct number of entries
@@ -86,8 +86,8 @@ def test_pysam_one_hour_minimum():
     unique_temps = list(set(T_tes_cold))
     assert len(unique_temps) > 1 or not np.isclose(unique_temps[0], 0)
 
-#---PySAM preprocessing vs. not------------------------------------------------------------------------------------------
-def test_pysam_preprocessing_vs_not():
+#---TechModel preprocessing vs. not------------------------------------------------------------------------------------------
+def test_ssc_preprocessing_vs_not():
     parent_dir = str(Path(__file__).parents[1])
     weather_file = parent_dir+"/data/daggett_ca_34.865371_-116.783023_psmv3_60_tmy.csv"
     plant_config = {'design': None, 'location': None}
@@ -96,31 +96,31 @@ def test_pysam_preprocessing_vs_not():
     datetime_end = datetime.datetime(2021, 12, 31, 23, 0, 0)    # end of year
 
     # With no preprocessing of design info (for testing):
-    pysam_wrap1 = pysam_wrap.PysamWrap(plant_config=plant_config, load_defaults=True, weather_file=weather_file,
+    tech_wrap1 = tech_wrap.TechWrap(plant_config=plant_config, load_defaults=True, weather_file=weather_file,
                                        enable_preprocessing=False)
-    tech_outputs1 = pysam_wrap1.simulate(datetime_start, datetime_end, timestep)
+    tech_outputs1 = tech_wrap1.simulate(datetime_start, datetime_end, timestep)
     annual_energy_kWh1 = tech_outputs1["annual_energy"]
 
     # With preprocessing of design info:
-    pysam_wrap2 = pysam_wrap.PysamWrap(plant_config=plant_config, load_defaults=True, weather_file=weather_file,
+    tech_wrap2 = tech_wrap.TechWrap(plant_config=plant_config, load_defaults=True, weather_file=weather_file,
                                        enable_preprocessing=True)
-    tech_outputs2 = pysam_wrap2.simulate(datetime_start, datetime_end, timestep)
+    tech_outputs2 = tech_wrap2.simulate(datetime_start, datetime_end, timestep)
     annual_energy_kWh2 = tech_outputs2["annual_energy"]
 
     assert annual_energy_kWh1 == annual_energy_kWh2
-#---/PySAM preprocessing vs. not-----------------------------------------------------------------------------------------
+#---/TechModel preprocessing vs. not-----------------------------------------------------------------------------------------
 
-#---PySAM preprocessing--------------------------------------------------------------------------------------------------
+#---TechModel preprocessing--------------------------------------------------------------------------------------------------
 
 # *****************************************************************************************************
 # NOTE: THIS TEST PASSED THE LAST TIME IT WAS RUN, BUT IT IS QUITE SLOW SO IT IS NORMALLY COMMENTED OUT
 # *****************************************************************************************************
 
-# def test_pysam_preprocessing():
+# def test_ssc_preprocessing():
 #     import PySAM_DAOTk.TcsmoltenSalt as t
 
 #     #  returns a dictionary of design values
-#     def run_pysam(weather_file=None, solar_resource_data=None, datetime_start=None, datetime_end=None, timestep=None):
+#     def run_ssc(weather_file=None, solar_resource_data=None, datetime_start=None, datetime_end=None, timestep=None):
 #         tech_model = t.default('MSPTSingleOwner')
 #         if weather_file is not None:
 #             tech_model.SolarResource.solar_resource_file = weather_file
@@ -154,11 +154,11 @@ def test_pysam_preprocessing_vs_not():
 #     datetime_start = datetime.datetime(2020, 1, 1, 0, 0, 0)
 #     datetime_end = datetime.datetime(2020, 1, 1, 0, 0, 0)
 #     timestep = datetime.timedelta(hours=1)
-#     design_vals1 = run_pysam(weather_file=weather_file, datetime_start=datetime_start, datetime_end=datetime_end, timestep=timestep)
+#     design_vals1 = run_ssc(weather_file=weather_file, datetime_start=datetime_start, datetime_end=datetime_end, timestep=timestep)
 
 #     #---test 2--------
 #     weather_file = parent_dir+"/data/daggett_ca_34.865371_-116.783023_psmv3_60_tmy.csv"
-#     design_vals2 = run_pysam(weather_file=weather_file)     # whole year simulation
+#     design_vals2 = run_ssc(weather_file=weather_file)     # whole year simulation
 
 #     assert design_vals2['eta_map'] == design_vals1['eta_map']
 #     assert design_vals2['flux_maps'] == design_vals1['flux_maps']
@@ -193,7 +193,7 @@ def test_pysam_preprocessing_vs_not():
 #     datetime_start = datetime.datetime(2018, 1, 1, 0, 0, 0)
 #     datetime_end = datetime.datetime(2018, 1, 1, 0, 0, 0)
 #     timestep = datetime.timedelta(hours=1)
-#     design_vals3 = run_pysam(solar_resource_data=solar_resource_data, datetime_start=datetime_start, datetime_end=datetime_end, timestep=timestep)
+#     design_vals3 = run_ssc(solar_resource_data=solar_resource_data, datetime_start=datetime_start, datetime_end=datetime_end, timestep=timestep)
 
 #     assert design_vals3['eta_map'] == design_vals1['eta_map']
 #     assert design_vals3['flux_maps'] == design_vals1['flux_maps']
@@ -228,7 +228,7 @@ def test_pysam_preprocessing_vs_not():
 #     datetime_start = datetime.datetime(2018, 1, 1, 0, 0, 0)
 #     datetime_end = datetime.datetime(2018, 1, 1, 0, 0, 0)
 #     timestep = datetime.timedelta(hours=1)
-#     design_vals4 = run_pysam(solar_resource_data=solar_resource_data, datetime_start=datetime_start, datetime_end=datetime_end, timestep=timestep)
+#     design_vals4 = run_ssc(solar_resource_data=solar_resource_data, datetime_start=datetime_start, datetime_end=datetime_end, timestep=timestep)
 
 #     assert design_vals4['eta_map'] != design_vals3['eta_map']           # NOT EQUALS!
 #     assert design_vals4['flux_maps'] != design_vals3['flux_maps']       # NOT EQUALS!
@@ -237,7 +237,7 @@ def test_pysam_preprocessing_vs_not():
 #     assert design_vals4['D_rec'] == design_vals3['D_rec']
 #     assert design_vals4['h_tower'] == design_vals3['h_tower']
 
-#---/PySAM preprocessing-------------------------------------------------------------------------------------------------
+#---/TechModel preprocessing-------------------------------------------------------------------------------------------------
 
 #---Rounding minutes-----------------------------------------------------------------------------------------------------
 def test_round_minutes():
@@ -279,7 +279,7 @@ def test_tmy_to_dataframe():
 
 #---Solar Resource Data--------------------------------------------------------------------------------------------------
 def test_weather_data_validation():
-    weather_data = pysam_wrap.PysamWrap.create_solar_resource_data_var()
+    weather_data = tech_wrap.TechWrap.create_solar_resource_data_var()
     weather_data['tz'] = -8.        # [hr]      timezone
     weather_data['elev']= 561.      # [m]       elevation
     weather_data['lat'] = 34.85     # [deg]     latitude
@@ -316,7 +316,7 @@ def test_weather_data_validation():
         validated_data = weather_schema(weather_data)
 
     # Missing values should cause exception
-    weather_data = pysam_wrap.PysamWrap.create_solar_resource_data_var()
+    weather_data = tech_wrap.TechWrap.create_solar_resource_data_var()
     weather_data['tz'] = -8.        # [hr]      timezone
     weather_data['elev']= 561.      # [m]       elevation
     weather_data['lat'] = 34.85     # [deg]     latitude
@@ -327,7 +327,7 @@ def test_weather_data_validation():
     assert "required key not provided" in str(excinfo.value)
 
     # Unequal list lengths should cause exception
-    weather_data = pysam_wrap.PysamWrap.create_solar_resource_data_var()
+    weather_data = tech_wrap.TechWrap.create_solar_resource_data_var()
     weather_data['tz'] = -8.        # [hr]      timezone
     weather_data['elev']= 561.      # [m]       elevation
     weather_data['lat'] = 34.85     # [deg]     latitude
