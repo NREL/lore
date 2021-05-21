@@ -23,42 +23,35 @@ class Mediator:
         self.weather_file = weather_file
         self.update_interval = update_interval
         self.simulation_timestep = datetime.timedelta(hours=1/self.params['time_steps_per_hour'])
+        self.params['dispatch_factors_ts'] = Revenue.get_price_data(
+            self.params['price_multiplier_file'],
+            self.params['avg_price'],
+            self.params['price_steps_per_hour'],
+            self.params['time_steps_per_hour'])
 
         self.plant = plant_.Plant(
             design=plant_design,
-            initial_state=plant_.plant_initial_state,
-            )
-        self.params['dispatch_factors_ts'] = Revenue.get_price_data(self.params['price_multiplier_file'], self.params['avg_price'],
-            self.params['price_steps_per_hour'], self.params['time_steps_per_hour'])
+            initial_state=plant_.plant_initial_state)
 
         default_ssc_params.update(self.plant.get_state())                       # combine default and plant params, overwriting the defaults
         default_ssc_params.update(self.params)                                  # combine default and mediator params, overwriting the defaults
         self.pysam_wrap = pysam_wrap.PysamWrap(
-            mediator_params=default_ssc_params,                                 # already a copy so pysam_wrap cannot edit
+            params=default_ssc_params,                                          # already a copy so pysam_wrap cannot edit
             plant=copy.deepcopy(self.plant),                                    # copy so pysam_wrap cannot edit
             dispatch_wrap_params=dispatch_wrap.dispatch_wrap_params.copy(),     # copy so pysam_wrap cannot edit
             weather_file=None
             )
 
-        #TODO: Add a function to pysam_wrap that creates a generic weather_dataframe and don't pass a weather_dataframe here
-        weather_dataframe = self.get_weather_df(
-            datetime.datetime(self.params['start_date_year'], 1, 1, 0),
-            datetime.datetime(self.params['start_date_year'], 12, 31, 23),
-            tmy3_path=self.weather_file
-            )
-
-        #TODO: Where should Forecasts be initialized?
-        # Add an equivalent call of the following to Forecasts. Need this set for the later calc_flux_eta_maps()
-        timestep = weather_dataframe.index[1] - weather_dataframe.index[0]
+        #TODO: Initialize Forecasts here.
+        #TODO: Alos add an equivalent call of the following to Forecasts. Need this set for the later calc_flux_eta_maps()
         clearsky_data = get_clearsky_data(
             clearsky_file=self.params['clearsky_file'],
-            datetime_start=weather_dataframe.index[0],
-            duration=weather_dataframe.index[-1] - weather_dataframe.index[0] + timestep,   # need to add timestep, e.g., 0:00 to 1:00 is two hours, not one
-            timestep=timestep)
+            datetime_start=datetime.datetime(self.params['start_date_year'], 1, 1, 0),
+            duration=datetime.timedelta(days=365),
+            timestep=datetime.timedelta(hours=1))
         self.pysam_wrap.set({'rec_clearsky_dni': clearsky_data})
 
-        
-        self.plant.update_flux_maps(self.pysam_wrap.calc_flux_eta_maps(self.plant.get_state(), weather_dataframe=weather_dataframe))
+        self.plant.update_flux_maps(self.pysam_wrap.calc_flux_eta_maps(self.plant.get_design(), self.plant.get_state()))
 
         # Setup dispatch_wrap
         dispatch_wrap_params = dispatch_wrap.dispatch_wrap_params                                   # TODO: replace with a path to a JSON config file
