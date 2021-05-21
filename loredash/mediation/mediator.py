@@ -74,13 +74,14 @@ class Mediator:
             datetime_end = 17:45
         """
 
-        # The planned code:
+        # Code Design:
+        # Step 0: Normalize timesteps to even intervals, even if they are given
+        #
         # Step 1:
         #   Thread 1:
-        #       a. If virtual plant, query database for needed inputs (or use cache from previous timestep)
-        #       b. Call virtual/real plant to get plant operating state and any local weather data
-        #       c. Validate these data
-        #       d. Store in database and add to current timestep cache
+        #       a. Call virtual/real plant to get plant operating state and any local weather data
+        #       b. Validate these data
+        #       c. Store in database and add to current timestep cache
         #   Thread 2:
         #       a. Call module to retrieve weather data(s)
         #       b. Validate these data
@@ -88,25 +89,91 @@ class Mediator:
         #
         # Step 2:
         #   Thread 1:
-        #       a. Get dispatch model inputs from data cache of current and/or previous timestep
-        #       b. Call dispatch model using inputs
-        #       c. Validate these data
-        #       d. Store in database and add to current timestep cache
+        #       a. Call dispatch model
+        #       b. Validate these data
+        #       c. Store in database and add to current timestep cache
         #
         # Step 3:
         #   Thread 1:
-        #       a. Set plant state and weather values in PySAM
+        #       a. Set dispatch targets in PySAM
         #       b. Call PySAM using inputs
-        #       c. Validate these data
-        #       d. Add data to cache and store in database
+        #       c. Validate output data
+        #       d. Add simulated plant state and other data to cache and store in database
         #
         # Step 4:
         #   Thread 1:
         #       a. Update previous timestep cache with current timestep cache and then clear current cache
 
 
+        # Step 0: Normalize timesteps to even intervals, even if they are given
+        datetime_start, datetime_end = self.normalize_timesteps(datetime_start, datetime_end)
+
+
+        # Step 1, Thread 1:
+        # a. Call virtual/real plant to get plant operating state and any local weather data
+        plant_state = self.plant.get_state()
+
+        # b. Validate these data
+            #TODO: Add this
+
+        # c. Store in database and add to current timestep cache
+            #TODO: Add this
+
+        # Step 1, Thread 2:
+        # a. Get weather data and forecasts
+        weather_dataframe = self.get_weather_df(datetime_start, datetime_end, tmy3_path=self.weather_file)
+        clearsky_data = get_clearsky_data(                          # TODO: call an equivalent function from forecasts.py
+            clearsky_file=self.params['clearsky_file'],
+            datetime_start=datetime_start,
+            duration=datetime_end - datetime_start,
+            timestep=self.simulation_timestep)
+        self.pysam_wrap.set({'rec_clearsky_dni': clearsky_data})    # Set here in anticipated need by dispatch model
+
+        
+        # Step 2, Thread 1:
+        # a. Call dispatch model, (which includes the 'f_estimates...' tech_wrap function to get estimates) and update inputs for next call
+        dispatch_outputs = self.dispatch_wrap.run(
+            start_date=datetime_start,
+            timestep_days=(datetime_end - datetime_start).days,       # not timestep but actually duration in days
+            retvars=default_disp_stored_vars(),
+            f_estimates_for_dispatch_model=self.pysam_wrap.estimates_for_dispatch_model,
+            initial_plant_state=plant_state
+        )
+        self.dispatch_wrap.update_inputs(dispatch_outputs, self.simulation_timestep)        # TODO: add to end of run()?
+
+        # b. Validate these data
+            #TODO: Add this
+
+        # c. Store in database and add to current timestep cache
+            #TODO: Add this
+
+
         # Step 3, Thread 1:
-        # Normalize timesteps to even intervals, even if they are given
+        # a. Set dispatch targets in PySAM
+        self.pysam_wrap.set(dispatch_outputs['ssc_dispatch_targets'].asdict())
+
+        # b. Call PySAM using inputs
+        tech_outputs = self.pysam_wrap.simulate(datetime_start, datetime_end, self.simulation_timestep, plant_state, weather_dataframe=weather_dataframe)
+        print("Generated Energy [kWh]= ", tech_outputs["annual_energy"])
+
+        # c. Validate output data
+        tech_outputs = {k:(list(v) if isinstance(v, tuple) else v) for (k,v) in tech_outputs.items()}   # converts tuples to lists so they can be edited
+        tic = time.process_time()
+        validated_outputs = data_validator.validate(tech_outputs, data_validator.pysam_schema)
+        toc = time.process_time()
+        print("Validation took {seconds:0.2f} seconds".format(seconds=toc-tic))
+        validated_outputs['year_start'] = datetime_start.year                                           # add this so date can be determined from time_hr
+
+        # d. Add simulated plant state and other data to cache and store in database
+        self.validated_outputs_prev = copy.deepcopy(validated_outputs)
+        new_plant_state_vars = self.pysam_wrap.get_simulated_plant_state(validated_outputs)             # for initializing next simulation from a prior one
+        self.plant.update_state(validated_outputs, new_plant_state_vars, self.simulation_timestep.seconds/3600)
+        self.bulk_add_to_pysam_table(validated_outputs)                                                 # add to database
+
+        return 0
+
+
+    def normalize_timesteps(self, datetime_start, datetime_end):
         datetime_now = datetime.datetime.now()
         if isinstance(datetime_start, datetime.datetime):
             datetime_start = round_minutes(datetime_start, 'down', self.simulation_timestep.seconds/60)
@@ -117,61 +184,11 @@ class Mediator:
         else:
             datetime_start = round_minutes(datetime_now, 'down', self.simulation_timestep.seconds/60)    # the start of the time interval currently in
             datetime_end = datetime_start + self.simulation_timestep        # disregard a given datetime_end if there is no given datetime_start
-        
+
         print("Datetime now = {datetime}".format(datetime=datetime_now))
         print("Start datetime = {datetime}".format(datetime=datetime_start))
         print("End datetime = {datetime}".format(datetime=datetime_end))
-
-        # a. Set weather values and plant state for PySAM
-        weather_dataframe = self.get_weather_df(datetime_start, datetime_end, tmy3_path=self.weather_file)
-        
-        # b. Call dispatch model, (which includes a PySAM model run to get estimates) and update inputs for next call
-        dispatch_outputs = self.dispatch_wrap.run(
-            start_date=datetime_start,
-            timestep_days=(datetime_end - datetime_start).days,       # not timestep but actually duration in days
-            retvars=default_disp_stored_vars(),
-            f_estimates_for_dispatch_model=self.pysam_wrap.estimates_for_dispatch_model,
-            initial_plant_state=self.plant.get_state()
-        )
-        self.dispatch_wrap.update_inputs(dispatch_outputs, self.simulation_timestep)        # TODO: add to end of run()?
-
-        # Step 1, Thread 2:?
-        # a. Call Forecasts
-        #TODO: add this call to forecasts.py
-        clearsky_data = get_clearsky_data(
-            clearsky_file=self.params['clearsky_file'],
-            datetime_start=datetime_start,
-            duration=datetime_end - datetime_start,
-            timestep=self.simulation_timestep)
-        self.pysam_wrap.set({'rec_clearsky_dni': clearsky_data})
-
-
-        # b. Call PySAM
-        self.pysam_wrap.set(dispatch_outputs['ssc_dispatch_targets'].asdict())
-
-        tech_outputs = self.pysam_wrap.simulate(datetime_start, datetime_end, self.simulation_timestep, self.plant.get_state(), weather_dataframe=weather_dataframe)
-        print("Annual Energy [kWh]= ", tech_outputs["annual_energy"])
-
-        new_plant_state_vars = self.pysam_wrap.get_simulated_plant_state(tech_outputs)      # for initializing next simulation from a prior one
-        self.plant.update_state(tech_outputs, new_plant_state_vars, self.simulation_timestep.seconds/3600)
-
-        # c. Validate these data
-        # wanted_keys = ['time_hr', 'e_ch_tes', 'eta_therm', 'eta_field', 'P_out_net', 'tou_value', 'gen', 'q_dot_rec_inc', 'q_sf_inc', 'pricing_mult', 'beam']
-        # wanted_keys = list(set(tech_outputs.keys()))       # all keys are wanted
-        # wanted_outputs = dict((k, tech_outputs[k]) for k in wanted_keys if k in tech_outputs)
-        wanted_outputs = tech_outputs
-        wanted_outputs = {k:(list(v) if isinstance(v, tuple) else v) for (k,v) in wanted_outputs.items()}     # converts tuples to lists so they can be edited
-        tic = time.process_time()
-        validated_outputs = data_validator.validate(wanted_outputs, data_validator.pysam_schema)
-        toc = time.process_time()
-        print("Validation took {seconds:0.2f} seconds".format(seconds=toc-tic))
-        validated_outputs['year_start'] = datetime_start.year       # add this so date can be determined from time_hr
-
-        # d. Add data to cache and store in database
-        self.validated_outputs_prev = copy.deepcopy(validated_outputs)
-        self.bulk_add_to_pysam_table(validated_outputs)
-
-        return 0
+        return datetime_start, datetime_end
 
     def run_continuously(self, update_interval=5):
         """Continuously get data from external plant and weather interfaces and run
