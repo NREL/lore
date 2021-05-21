@@ -134,8 +134,7 @@ class Mediator:
         # a. Call dispatch model, (which includes the 'f_estimates...' tech_wrap function to get estimates) and update inputs for next call
         dispatch_outputs = self.dispatch_wrap.run(
             start_date=datetime_start,
-            timestep_days=(datetime_end - datetime_start).days,       # not timestep but actually duration in days
-            retvars=default_disp_stored_vars(),
+            timestep_days=(datetime_end - datetime_start).days,                             # not timestep but actually duration in days
             f_estimates_for_dispatch_model=self.pysam_wrap.estimates_for_dispatch_model,
             initial_plant_state=plant_state
         )
@@ -429,23 +428,3 @@ mediator_params = {
 	'is_rec_model_trans':			        False,                  # TODO: Disabling transient receiver model -> ssc not yet configured to store/retrieve receiver temperature profiles
     'cycle_type':                           'user_defined',         # 'user-defined', 'sliding', or 'fixed'
 }
-
-
-def default_ssc_return_vars():
-    return ['beam', 'clearsky', 'tdry', 'wspd', 'solzen', 'solaz', 'pricing_mult',
-                'sf_adjust_out', 'q_sf_inc', 'eta_field', 'defocus', 
-                'q_dot_rec_inc', 'Q_thermal', 'm_dot_rec', 'q_startup', 'q_piping_losses', 'q_thermal_loss', 'eta_therm',
-                'T_rec_in', 'T_rec_out', 'T_panel_out',
-                'T_tes_hot', 'T_tes_cold', 'mass_tes_cold', 'mass_tes_hot', 'q_dc_tes', 'q_ch_tes', 'e_ch_tes', 'tank_losses', 'hot_tank_htf_percent_final',
-                'm_dot_cr_to_tes_hot', 'm_dot_tes_hot_out', 'm_dot_pc_to_tes_cold', 'm_dot_tes_cold_out', 'm_dot_field_to_cycle', 'm_dot_cycle_to_field',
-                'P_cycle','eta', 'T_pc_in', 'T_pc_out', 'q_pb', 'q_dot_pc_startup', 'P_out_net', 
-                'P_tower_pump', 'htf_pump_power', 'P_cooling_tower_tot', 'P_fixed', 'P_plant_balance_tot', 'P_rec_heattrace', 'q_heater', 'P_cycle_off_heat', 'pparasi',
-                'is_rec_su_allowed', 'is_pc_su_allowed', 'is_pc_sb_allowed',
-                'op_mode_1', 'op_mode_2', 'op_mode_3', 'q_dot_est_cr_on', 'q_dot_est_cr_su', 'q_dot_est_tes_dc', 'q_dot_est_tes_ch', 'q_dot_pc_target_on'
-                ]
-
-
-def default_disp_stored_vars():
-    return ['cycle_on', 'cycle_standby', 'cycle_startup', 'receiver_on', 'receiver_startup', 'receiver_standby', 
-            'receiver_power', 'thermal_input_to_cycle', 'electrical_output_from_cycle', 'net_electrical_output', 'tes_soc',
-            'yrsd', 'ursd']
