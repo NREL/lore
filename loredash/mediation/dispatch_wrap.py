@@ -875,6 +875,11 @@ class DispatchWrap:
             'horizon':                          3600,          # [s]   TODO: what should this really be?
         }
 
+        self.default_disp_stored_vars = [
+            'cycle_on', 'cycle_standby', 'cycle_startup', 'receiver_on', 'receiver_startup', 'receiver_standby', 
+            'receiver_power', 'thermal_input_to_cycle', 'electrical_output_from_cycle', 'net_electrical_output',
+            'tes_soc', 'yrsd', 'ursd']
+
         ## DISPATCH INPUTS ###############################################################################################################################
         # Input data files: weather, masslow, clearsky DNI must have length of full annual array based on ssc time step size
         #--- Simulation start point and duration
@@ -994,9 +999,10 @@ class DispatchWrap:
         self.dispatch_inputs['horizon'] -= int(timestep.seconds)
 
     #--- Run simulation
-    def run(self, start_date, timestep_days, retvars,
+    def run(self, start_date, timestep_days,
             f_estimates_for_dispatch_model, initial_plant_state=None):
         """horizon = [s]"""
+        retvars = self.default_disp_stored_vars
         horizon = self.dispatch_inputs['horizon']
         ursd_last=self.dispatch_inputs['ursd_last']
         yrsd_last=self.dispatch_inputs['yrsd_last']
