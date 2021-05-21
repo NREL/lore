@@ -5,6 +5,7 @@ sys.path.insert(1, os.path.join(sys.path[0], '..'))
 from django.conf import settings
 from pathlib import Path
 import datetime
+import pandas as pd
 import json
 from mediation import data_validator, ssc_wrap
 
@@ -14,25 +15,29 @@ class PysamWrap:
     MIN_ONE_HOUR_SIMS = True        # used to circumvent SSC bug
     REUSE_FLUXMAPS = True
 
-    def __init__(self, mediator_params, plant, dispatch_wrap_params, weather_file=None, start_date_year=2018):
+    def __init__(self, params, plant, dispatch_wrap_params, weather_file=None, start_date_year=2018):
         self.ssc = ssc_wrap.ssc_wrap(wrapper='pyssc', tech_name='tcsmolten_salt', financial_name=None, defaults_name='MSPTSingleOwner') # defaults_name not used for pyssc
         # NOTE: order is important as earlier set parameters are overwritten:
         self.ssc.set(dispatch_wrap_params)
         if not 'solar_resource_data' in plant.design:       # solar_resource_data is where location info is set in ssc
             plant.design['solar_resource_data'] = PysamWrap.create_solar_resource_data_var(plant.design)
         self.ssc.set(plant.design)
-        self.ssc.set(mediator_params)       # what are these exactly?
+        self.ssc.set(params)            # what are these exactly?
         self.set_weather_data(tmy_file_path=weather_file)
 
         if (__name__ == "__main__" or settings.DEBUG) == True:
             self._set_design_from_file(self.design_path)            # only used for debugging to avoid recalculating flux maps
 
-    def calc_flux_eta_maps(self, plant_state, weather_dataframe):
+    def calc_flux_eta_maps(self, plant_design, plant_state):
         """Compute the flux and eta maps and assign them to the ssc model parameters, first getting the needed solar resource data"""
-        self.ssc.set({'field_model_type': 2})                                   # generate flux and eta maps but don't optimize field or tower
         datetime_start = datetime.datetime(2018, 1, 1, 0, 0, 0)
+        solar_resource_data = PysamWrap.create_solar_resource_data_var(plant_location=plant_design,     # get 8760 data points to satisfy ssc constraint
+                                                                       datetime_start=datetime_start,
+                                                                       datetime_end=datetime_start.replace(year=datetime_start.year + 1),
+                                                                       timedelta=datetime.timedelta(hours=1))
         datetime_end = datetime_start                                           # run for just first timestep of year
-        tech_outputs = self.simulate(datetime_start, datetime_end, None, plant_state=plant_state, weather_dataframe=weather_dataframe)
+        self.ssc.set({'field_model_type': 2})                                   # generate flux and eta maps but don't optimize field or tower
+        tech_outputs = self.simulate(datetime_start, datetime_end, None, plant_state=plant_state, solar_resource_data=solar_resource_data)
         eta_map = tech_outputs["eta_map_out"]                                   # get maps and set for subsequent runs
         flux_maps = [r[2:] for r in tech_outputs['flux_maps_for_import']]       # Don't include first two columns
         A_sf_in = tech_outputs["A_sf"]
@@ -124,7 +129,8 @@ class PysamWrap:
         self.ssc.set(ssc_param_dict)
 
     @staticmethod
-    def create_solar_resource_data_var(plant_location=None):
+    def create_solar_resource_data_var(plant_location=None, datetime_start=None, datetime_end=None, timedelta=None):
+        """ result: [datetime_start:timedelta:datetime_end) """
         solar_resource_data = {
             'tz':       None,       # [hr]      timezone
             'elev':     None,       # [m]       elevation
@@ -147,6 +153,22 @@ class PysamWrap:
             solar_resource_data['elev'] = plant_location['elevation']
             solar_resource_data['lat'] = plant_location['latitude']
             solar_resource_data['lon'] = plant_location['longitude']
+
+        if datetime_start is not None and datetime_end > datetime_start and timedelta is not None:
+            date_range = pd.date_range(start=datetime_start,
+                                       end=datetime_end - timedelta,
+                                       freq=timedelta)
+            solar_resource_data['year'] = list(date_range.year)
+            solar_resource_data['month'] = list(date_range.month)
+            solar_resource_data['day'] = list(date_range.day)
+            solar_resource_data['hour'] = list(date_range.hour)
+            solar_resource_data['minute'] = list(date_range.minute)
+            length = len(date_range)
+            solar_resource_data['dn'] = length * [0.]
+            solar_resource_data['df'] = length * [0.]
+            solar_resource_data['gh'] = length * [0.]
+            solar_resource_data['wspd'] = length * [0.]
+            solar_resource_data['tdry'] = length * [0.]
 
         return solar_resource_data
 

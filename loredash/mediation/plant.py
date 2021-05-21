@@ -99,6 +99,9 @@ class Plant:
         result['sf_adjust:hourly'] = self.get_field_availability()
         return result
 
+    def get_design(self):
+        return self.design.copy()
+
     def get_field_availability(self, datetime_start=None, duration=None, timestep=None):
         #TODO: replace this function body with call to real plant
         """output array must be equal in length to the weather data to satisfy ssc"""
