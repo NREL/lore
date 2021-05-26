@@ -82,7 +82,7 @@ class RealTimeDispatchModel(object):
         self.model.W_u_minus = pe.Param(self.model.T_inputs, mutable=True, initialize=params.W_u_minus, units=units.kW)  #W^{u-}_{t}: Maximum power production in period $t$ when stopping generation in period $t+1$  [kW\sse]
         Q_cls_d = dict()
         for t in self.model.T_inputs:
-            Q_cls_d[t] = self.model.Qin[t] / (1 if self.model.F[t] == 0 else self.model.F[t])
+            Q_cls_d[t] = self.model.Qin[t] / (1 if self.model.F[t].value == 0 else self.model.F[t])
         self.model.Q_cls = pe.Param(self.model.T_inputs, mutable=True, initialize=Q_cls_d, units=units.kW)  # Calculated theoretic clear-sky resource at period t [kW\sst]
 
         ### Time-Series PV Parameters ###
