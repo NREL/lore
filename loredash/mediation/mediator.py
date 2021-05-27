@@ -11,7 +11,8 @@ import mediation.plant as plant_
 import librtdispatch.util as util
 from mediation.plant import Revenue
 from data.mspt_2020_defaults import default_ssc_params
-# import models
+
+from mediation import forecasts
 
 class Mediator:
     tech_wrap = None
@@ -41,8 +42,14 @@ class Mediator:
             dispatch_wrap_params=dispatch_wrap.dispatch_wrap_params.copy(),     # copy so tech_wrap cannot edit
             weather_file=None
             )
-
-        #TODO: Initialize Forecasts here.
+        # Initialize forecasts
+        p = plant_.plant_design
+        self.forecaster = forecasts.SolarForecast(
+            p['latitude'],
+            p['longitude'],
+            p['timezone_string'],
+            p['elevation'],
+        )
         #TODO: Also add an equivalent call of the following to Forecasts. Need this set for the later calc_flux_eta_maps()
         clearsky_data = get_clearsky_data(
             clearsky_file=self.params['clearsky_file'],
@@ -121,7 +128,12 @@ class Mediator:
 
         # Step 1, Thread 2:
         # a. Get weather data and forecasts
-        weather_dataframe = self.get_weather_df(datetime_start, datetime_end, tmy3_path=self.weather_file)
+        # Internall, get_weather_df gets the forecasts.
+        weather_dataframe = self.get_weather_df(
+            datetime_start,
+            datetime_end,
+            tmy3_path = self.weather_file,
+        )
         clearsky_data = get_clearsky_data(                          # TODO: call an equivalent function from forecasts.py
             clearsky_file=self.params['clearsky_file'],
             datetime_start=datetime_start,
@@ -129,7 +141,6 @@ class Mediator:
             timestep=self.simulation_timestep)
         self.tech_wrap.set({'rec_clearsky_dni': clearsky_data})    # Set here in anticipated need by dispatch model
 
-        
         # Step 2, Thread 1:
         # a. Call dispatch model, (which includes the 'f_estimates...' tech_wrap function to get estimates) and update inputs for next call
         dispatch_outputs = self.dispatch_wrap.run(
@@ -152,7 +163,13 @@ class Mediator:
         self.tech_wrap.set(dispatch_outputs['ssc_dispatch_targets'].asdict())
 
         # b. Call tech model using inputs
-        tech_outputs = self.tech_wrap.simulate(datetime_start, datetime_end, self.simulation_timestep, plant_state, weather_dataframe=weather_dataframe)
+        tech_outputs = self.tech_wrap.simulate(
+            datetime_start,
+            datetime_end,
+            self.simulation_timestep,
+            plant_state,
+            weather_dataframe=weather_dataframe,
+        )
         print("Generated Energy [kWh]= ", tech_outputs["annual_energy"])
 
         # c. Validate output data
@@ -252,10 +269,28 @@ class Mediator:
         except Exception as err:
             raise(err)
     
-    def get_weather_df(self, datetime_start, datetime_end, **kwargs):
-        # TODO: put the weather API/forecast call here instead"""
-        tmy3_path = kwargs.get('tmy3_path') if 'tmy3_path' in kwargs else None
-        return tmy3_to_df(tmy3_path, datetime_start, datetime_end)
+    def get_weather_df(self, datetime_start, datetime_end, tmy3_path):
+        data = tmy3_to_df(tmy3_path, datetime_start, datetime_end)
+        start_time = data.index[0].to_pydatetime().astimezone()
+        # Short-cut here: if the horizon is small use the latest forecast.
+        # If you're passing in a longer horizon, you probably just want the TMY
+        # data.
+        if len(data) < 60:
+            solar_forecast = self.forecaster.getForecast(
+                # Make sure to localize the timezone! This takes the
+                # timezone-free datetime_start and converts it into the
+                # computers current timezone.
+                datetime_start = start_time,
+                # Match the length of data from the TMY file.
+                horizon = pd.Timedelta(hours = len(data)),
+                # The TMY file is in hours.
+                resolution = pd.Timedelta(hours = 1),
+            )
+            # The indices of the two dataframes are confusing. Convert the
+            # forecast to a list, and use the median forecast. We could consider
+            # doing something else here in future.
+            data['DNI'] = list(solar_forecast['0.5'])
+        return data
 
 def mediate_continuously(update_interval=5):
     mediator = Mediator()
