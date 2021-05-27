@@ -10,6 +10,9 @@ units.load_definitions_from_strings(['USD = [currency]'])
 from pyomo.util.check_units import assert_units_consistent, assert_units_equivalent
 #TODO either update specifications for temperatures throughout, or convert upon initialization of dispatch model
 
+import os
+import sys
+
 class RealTimeDispatchModel(object):
     def __init__(self, params, include={"pv": False, "battery": False, "persistence": False}):
         """
@@ -1490,7 +1493,14 @@ class RealTimeDispatchModel(object):
 
     def solveModel(self, mipgap=0.001, solver='cbc', timelimit=60, tee=False, keepfiles=False):
         if solver == 'cbc':
-            opt = pe.SolverFactory('cbc')
+            if sys.platform == 'darwin':
+                dir_path = os.path.dirname(os.path.realpath(__file__))
+                opt = pe.SolverFactory(
+                    'cbc',
+                    executable = os.path.join(dir_path, 'solvers', 'cbc'),
+                )
+            else:
+                opt = pe.SolverFactory('cbc')
             opt.options["ratioGap"] = mipgap
             opt.options["seconds"] = timelimit
         elif solver == 'cplex':

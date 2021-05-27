@@ -40,11 +40,10 @@ def init_and_mediate():
     # result = m.RunOnce()          #TODO: reenable and get this working
     return
 
-# try:
-init_and_mediate()
-# except Exception as err:
-#     print("Migration failed because database has not yet been created. Try running that command again.")
-#     pass
+try:
+    init_and_mediate()
+except Exception as err:
+    print("Migration failed because database has not yet been created. Try running that command again.")
 
 # This is the main production code where the mediator runs continuously
 # update_interval = 10     # seconds
