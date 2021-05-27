@@ -85,7 +85,7 @@ class RealTimeDispatchModel(object):
         self.model.W_u_minus = pe.Param(self.model.T_inputs, mutable=True, initialize=params.W_u_minus, units=units.kW)  #W^{u-}_{t}: Maximum power production in period $t$ when stopping generation in period $t+1$  [kW\sse]
         Q_cls_d = dict()
         for t in self.model.T_inputs:
-            Q_cls_d[t] = self.model.Qin[t] / (1 if params.F[t] == 0 else params.F[t])
+            Q_cls_d[t] = self.model.Qin[t] / (1 if self.model.F[t].value == 0 else self.model.F[t])
         self.model.Q_cls = pe.Param(self.model.T_inputs, mutable=True, initialize=Q_cls_d, units=units.kW)  # Calculated theoretic clear-sky resource at period t [kW\sst]
 
         ### Time-Series PV Parameters ###
@@ -144,7 +144,7 @@ class RealTimeDispatchModel(object):
             #self.model.Wht = pe.Param(mutable=True, initialize=params.Wht, units=units.kW)       #Tower piping heat trace parasitic loss [kW\sse]
 
         ### Thermal Energy Storage parameters
-        self.model.Eu = pe.Param(mutable=True, initialize=params.Eu)  # Thermal energy storage capacity [kWh\sst]
+        self.model.Eu = pe.Param(mutable=True, units=units.kWh, initialize=params.Eu)  # Thermal energy storage capacity [kWh\sst]
         self.model.Cp = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.Cp, units=units.kJ/(units.degK*units.kg))  # Specific heat of the heat transfer fluid & [kJ\sst/ kg $^{\circ} C$]
         self.model.mass_cs_min = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.mass_cs_min, units=units.kg)  # Minimum mass of heat transfer fluid in cold storage [kg]
         self.model.mass_cs_max = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.mass_cs_max, units=units.kg)  # Maximum mass of heat transfer fluid in cold storage [kg]
@@ -194,8 +194,8 @@ class RealTimeDispatchModel(object):
         self.model.Wdotu = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.Wdotu, units=units.kW)        #Cycle electric power rated capacity [kW\sse]
         self.model.W_delta_plus = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.W_delta_plus, units=units.kW/units.hr) #Power cycle ramp-up designed limit [kW\sse/h]
         self.model.W_delta_minus = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.W_delta_minus, units=units.kW/units.hr)#Power cycle ramp-down designed limit [kW\sse/h]
-        self.model.W_v_plus = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.W_v_plus, units=units.kW/units.hr)     #Power cycle ramp-up violation limit [kW\sse/h]
-        self.model.W_v_minus = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.W_v_minus, units=units.kW/units.hr)    #Power cycle ramp-down violation limit [kW\sse/h]
+        self.model.W_v_plus = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.W_v_plus, units=units.kW)     #Power cycle ramp-up violation limit [kW\sse/h]
+        self.model.W_v_minus = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.W_v_minus, units=units.kW)    #Power cycle ramp-down violation limit [kW\sse/h]
         self.model.Yu = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.Yu, units=units.hr)           #Minimum required power cycle uptime [h]
         self.model.Yd = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.Yd, units=units.hr)           #Minimum required power cycle downtime [h]
         
