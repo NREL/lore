@@ -361,7 +361,7 @@ class PySSC:
             # self.pdll = CDLL(os.path.join(os.environ.get('SAMNTDIR'),'deploy/x64/sscd.dll'))
             self.pdll = CDLL(SSCDLL_PATH)
         elif sys.platform == 'darwin':
-            self.pdll = CDLL(os.path.join(this_directory, "libssc.so"))
+            self.pdll = CDLL(os.path.join(this_directory, "ssc.dylib"))
         elif sys.platform == 'linux':
             self.pdll = CDLL(os.path.join(this_directory, 'libssc.so'))
         else:
