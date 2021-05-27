@@ -16,9 +16,6 @@ from pyomo.util.check_units import assert_units_consistent, assert_units_equival
 import pyutilib.subprocess.GlobalData
 pyutilib.subprocess.GlobalData.DEFINE_SIGNAL_HANDLERS_DEFAULT = False
 
-import os
-import sys
-
 class RealTimeDispatchModel(object):
     def __init__(self, params, include={"pv": False, "battery": False, "persistence": False}):
         """
@@ -1499,14 +1496,7 @@ class RealTimeDispatchModel(object):
 
     def solveModel(self, mipgap=0.001, solver='cbc', timelimit=60, tee=False, keepfiles=False):
         if solver == 'cbc':
-            if sys.platform == 'darwin':
-                dir_path = os.path.dirname(os.path.realpath(__file__))
-                opt = pe.SolverFactory(
-                    'cbc',
-                    executable = os.path.join(dir_path, 'solvers', 'cbc'),
-                )
-            else:
-                opt = pe.SolverFactory('cbc')
+            opt = pe.SolverFactory('cbc')
             opt.options["ratioGap"] = mipgap
             opt.options["seconds"] = timelimit
         elif solver == 'cplex':
