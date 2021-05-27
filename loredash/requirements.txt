@@ -27,6 +27,8 @@ packaging==20.8
 pandas==1.0.3
 param==1.10.1
 Pillow==8.1.0
+Pint==0.17
+ply==3.11
 prompt-toolkit==1.0.14
 protobuf==3.14.0
 pvlib==0.8.1
@@ -34,9 +36,10 @@ pyct==0.4.8
 Pygments==2.7.4
 PyHamcrest==2.0.2
 PyInquirer==1.0.3
+Pyomo==6.0
 pyparsing==2.4.7
-python-rapidjson==1.0
 python-dateutil==2.8.1
+python-rapidjson==1.0
 pytz==2020.5
 PyYAML==5.4
 regex==2020.11.13
@@ -53,4 +56,5 @@ typing-extensions==3.7.4.3
 urllib3==1.26.2
 voluptuous==0.11.7
 wcwidth==0.2.5
+wincertstore==0.2
 zope.interface==5.2.0
