@@ -1,13 +1,14 @@
 import datetime
 import timeit
 import numpy as np
+import os
+import math
 
 import define_cases
 import plots
 import case_study
 
-import os
-import math
+os.chdir(os.path.dirname(__file__))
 
 
 CD_raw_data_direc = '../../../Crescent Dunes data/NREL - CD collaboration/Steam Generation/Daily Reports/'  # Directory containing raw data files from CD
