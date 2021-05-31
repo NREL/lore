@@ -95,7 +95,7 @@ class Plant:
         return N_hel, helio_positions
 
     def get_state(self):
-        result = self.state.copy()             # copy to disallow edits
+        result = self.state.copy()              # copy to disallow edits
         result['sf_adjust:hourly'] = self.get_field_availability()
         return result
 
@@ -129,6 +129,7 @@ class Plant:
 
         df_out = df[datetime_start:(datetime_start + duration - timestep)]
         return list(df_out['field_availability'])
+
 
     def get_cycle_thermal_rating(self):
         return self.design['P_ref'] / self.design['design_eff']     # MW
@@ -237,7 +238,7 @@ class Plant:
                 is_rec_current = (np.array(cycle_results['Q_thermal']) + np.array(cycle_results['q_startup'])) <= 1.e-3
 
             n = len(cycle_results['Q_thermal'])
-            if n == 1 or np.abs(np.diff(is_rec_current)).max() == 0:  # Receiver did not change state over this simulation window
+            if n == 1 or np.abs(np.diff(is_rec_current)).max() == 0:  # Receiver did not change state over this simulation window:
                 disp_rec_persist0 = n*ssc_time_step if previous_rec_state != current_rec_state else self.state['disp_rec_persist0'] + n*ssc_time_step
             else:
                 i = np.where(np.abs(np.diff(is_rec_current)) == 1)[0][-1]
@@ -354,7 +355,7 @@ plant_design = {
     "latitude":                     38.23895540732931,
     "longitude":                    -117.36368180656123,
     "elevation":                    1524,
-    "timezone":                     -8, 
+    "timezone":                     -8,
 
     # System
     'T_htf_cold_des':               290.0,          # C
@@ -712,6 +713,7 @@ class Revenue:
         }
         return outputs
 
+    
     @staticmethod
     def get_price_data(price_multiplier_file, avg_price, price_steps_per_hour, time_steps_per_hour):
 
