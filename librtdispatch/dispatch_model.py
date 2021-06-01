@@ -10,6 +10,12 @@ units.load_definitions_from_strings(['USD = [currency]'])
 from pyomo.util.check_units import assert_units_consistent, assert_units_equivalent
 #TODO either update specifications for temperatures throughout, or convert upon initialization of dispatch model
 
+# We need to modify signal handling when Pyomo is called from inside the
+# webserver. John Siirola says to use these two lines here, so I guess this is
+# gospel: https://github.com/PyUtilib/pyutilib/issues/31#issuecomment-382479024
+import pyutilib.subprocess.GlobalData
+pyutilib.subprocess.GlobalData.DEFINE_SIGNAL_HANDLERS_DEFAULT = False
+
 class RealTimeDispatchModel(object):
     def __init__(self, params, include={"pv": False, "battery": False, "persistence": False}):
         """
