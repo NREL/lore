@@ -22,17 +22,16 @@ from pvlib import location
 import pytz
 
 from mediation import forecasts
-from mediation import models
+from mediation import plant
 
 # Make sure to mark any tests that need database access.
 @pytest.mark.django_db
 def test_forecaster_from_plant():
-    plant = models.PlantConfig.objects.get(pk = 1)
     forecaster = forecasts.SolarForecast(
-        plant.latitude,
-        plant.longitude,
-        plant.timezone_string,
-        plant.elevation,
+        plant.plant_design['latitude'],
+        plant.plant_design['longitude'],
+        plant.plant_design['timezone_string'],
+        plant.plant_design['elevation'],
     )
     assert(type(forecaster.plant_location) == location.Location)
     assert(
