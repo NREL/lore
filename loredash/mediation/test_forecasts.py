@@ -48,7 +48,7 @@ def test_latestForecast():
         'US/Pacific',
         100.0,
     )
-    data = forecaster.latestForecast()
+    data = forecaster.latestForecast(update_threshold = 0.5)
     assert(len(data) == 48)
     assert('clear_sky' in data.keys())
     assert('0.5' in data.keys())
@@ -67,7 +67,7 @@ def test_latestForecast_resolution():
         'US/Pacific',
         100.0,
     )
-    data = forecaster.latestForecast(resolution = '2h')
+    data = forecaster.latestForecast(resolution = '2h', update_threshold = 0.5)
     assert(len(data) == 24)
     return
 
