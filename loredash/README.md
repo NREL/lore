@@ -90,6 +90,13 @@ For production testing, the web server [Waitress](https://docs.pylonsproject.org
 	```
 6. Open the dashboard by going to the above address in a web browser
 
+# Running Tests
+
+To run the suite of tests during the development process, navigate to `/lore/loredash` and run
+```
+python -m pytest
+```
+
 # Dashboard Plots
 
 The Dashboard stack currently uses Django and Bokeh both running on a server. These will both be run in production mode once on the local plant server.

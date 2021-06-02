@@ -1,5 +1,12 @@
 # Release Notes
 
+=======
+## Version 1.2.2, May 4, 2021 ~ SAM 2020.2.29 r2, SSC Version 240
+* Fixed more functionality
+
+## Version 1.2.1, May 3, 2021 ~ SAM 2020.2.29 r2, SSC Version 240
+* Fixed functionality
+
 ## Version 1.2.0, April 30, 2021 ~ SAM 2020.2.29 r2, SSC Version 240
 * Added daotk-develop commits through Apr 27, 2021 (28ee05282dbac940826a91b130e470e3c27a5948)
 
