@@ -1,6 +1,6 @@
 from django.contrib import admin
 
 # Register your models here.
-from .models import PysamData
+from .models import TechData
 
-admin.site.register(PysamData)
+admin.site.register(TechData)

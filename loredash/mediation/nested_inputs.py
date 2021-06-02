@@ -249,7 +249,7 @@ schemas_old = {
                     }    
             }
         }, #weather
-    'pysam_daotk': {
+    'daotk': {
         'defocus': {
             'type': 'list',
             'schema': {
@@ -410,7 +410,7 @@ schemas_old = {
             'required': True,
             'meta': {'label': 'PC HTF inlet temperature [C]'}
             }
-        }, # pysam_daotk
+        }, # daotk
     'dispatch_opt': {
         'A_V': {
             'type': 'float',

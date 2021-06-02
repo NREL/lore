@@ -18,38 +18,32 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from pathlib import Path
-from mediation import mediator
-import multiprocessing
 import datetime
+import multiprocessing
+from mediation import mediator
+import mediation.plant as plant_
 
-# TODO(odow): the purpose of this code is to populate the database so we have
-# things to plot. But it shouldn't go here, because this gets run on a `migrate`
-# call, and initially, we don't have a database to store the results in! It
-# should probably just go somewhere so it gets run when the root site is hit.
-#
-# python manage.py migrate
-# python manage.py migrate
-def _RunOnce():
+# TODO: Ensure database migration happens before this code is run. It is currently
+# run on a 'migrate', which initially fails because no database has yet been created.
+def init_and_mediate():
     parent_dir = str(Path(__file__).parents[1])
     default_weather_file = parent_dir + "/data/daggett_ca_34.865371_-116.783023_psmv3_60_tmy.csv"
     plant_config_path = parent_dir + "/data/plant_config.json"
     m = mediator.Mediator(
+        params=mediator.mediator_params,
         plant_config_path = plant_config_path,
-        override_with_weather_file_location = False,
+        plant_design=plant_.plant_design,                       # TODO: does this need to be a parameter?
         weather_file = default_weather_file,
-        preprocess_pysam = True,
-        preprocess_pysam_on_init = True,
         update_interval = datetime.timedelta(seconds = 5),
-        simulation_timestep = datetime.timedelta(minutes = 5),
     )
-    result = m.ModelPreviousDayAndAddToDb()
-    result = m.RunOnce()
+    result = m.model_previous_day_and_add_to_db()
+    # result = m.RunOnce()          #TODO: reenable and get this working
     return
+
 try:
-    _RunOnce()
+    init_and_mediate()
 except Exception as err:
-    print("Oops! Migration failed because we don't have a database yet. Try running that command again.")
-    pass
+    print("Migration failed because database has not yet been created. Try running that command again.")
 
 # This is the main production code where the mediator runs continuously
 # update_interval = 10     # seconds
@@ -68,6 +62,3 @@ urlpatterns = [
 
 if settings.DEBUG is True:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
-
-
-
