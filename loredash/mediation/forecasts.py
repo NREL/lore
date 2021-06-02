@@ -1,4 +1,5 @@
 import datetime
+import numpy
 import os
 import pandas
 import pytz
@@ -107,12 +108,21 @@ class SolarForecast:
         )[['dni']]
         data.index = pandas.to_datetime(data.index)
         data['clear_sky'] = self.plant_location.get_clearsky(data.index)['dni']
-        # Drop any rows at which NDFD predicts essentially zero DNI, or the
-        # clear-sky is zero (e.g., night-time).
-        data = data[(data['dni'] > 5) & (data['clear_sky'] > 5)]
         # Map the values to a normalized dni/clear-sky ratio space to allow us
         # to convert the median estimate from NDFD to a probabilistic estimate.
         data['ratio'] = data['dni'] / data['clear_sky']
+        # To avoid weirdness, ignore rows in early morning and early evening.
+        # We will impute their values from neighbours.
+        data.loc[data['clear_sky'] < 200, 'ratio'] = numpy.nan
+        # Clean up the ratio by imputing any NaNs that arose to the nearest
+        # non-NaN value. This means we assume that the start of the day acts
+        # like the earliest observation, and the end of the day looks like the
+        # last observation.
+        data.interpolate(method = 'linear', inplace = True)
+        # However, nearest only works when there are non-NaN values either side.
+        # For the first and last NaNs, use bfill and ffill:
+        data.fillna(method = 'bfill', inplace = True)
+        data.fillna(method = 'ffill', inplace = True)
         return data
     
     def _toUTC(self, t):
@@ -153,7 +163,7 @@ class SolarForecast:
         self._updateDatabase(
             datetime_start = pandas.Timestamp(
                  datetime.datetime.now(pytz.timezone(self.plant_location.tz)),
-             ),
+            ),
         )
         return self.latestForecast(resolution = resolution, horizon = horizon)
 
