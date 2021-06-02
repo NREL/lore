@@ -7,6 +7,7 @@ import pytest
 # run the server. As a work-around, use the current database on disk.
 # 
 # TODO(odow): remove this setup when we don't need an initialized database.
+# TODO: move this file's contents to tests.py
 from django.conf import settings
 @pytest.fixture(scope='session')
 def django_db_setup():
