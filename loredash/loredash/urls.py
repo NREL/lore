@@ -20,8 +20,12 @@ from django.conf.urls.static import static
 from pathlib import Path
 import datetime
 import multiprocessing
+from pyinstrument import Profiler
+
 from mediation import mediator
 import mediation.plant as plant_
+
+RUN_PROFILER = False
 
 # TODO: Ensure database migration happens before this code is run. It is currently
 # run on a 'migrate', which initially fails because no database has yet been created.
@@ -40,12 +44,20 @@ def init_and_mediate():
     # result = m.RunOnce()          #TODO: reenable and get this working
     return
 
+if RUN_PROFILER:
+    profiler = Profiler()
+    profiler.start()
+
 try:
     init_and_mediate()
 except OSError as err:
     print("ERROR: OS error: {0}".format(err))
 except Exception as err:
     print("ERROR: {0}".format(err))
+
+if RUN_PROFILER:
+    profiler.stop()
+    profiler.open_in_browser()
 
 # This is the main production code where the mediator runs continuously
 # update_interval = 10     # seconds

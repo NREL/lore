@@ -3,6 +3,7 @@
 	"python.analysis.extraPaths": [
 		"**/.loredash/mediation",
 		"**/.librtdispatch",
+		"C:\\Users\\mboyd\\AppData\\Local\\Continuum\\miniconda3\\envs\\loredash\\Lib\\site-packages\\",
 	],
 	"files.exclude": {
         "**/.git": true,
