@@ -2,6 +2,8 @@ import datetime
 import os
 import pandas
 import pytz
+import warnings
+warnings.filterwarnings('ignore', message="The forecast module algorithms and features are highly experimental.")   # silence this warning from pvlib
 from pvlib import forecast
 from pvlib import location
 
