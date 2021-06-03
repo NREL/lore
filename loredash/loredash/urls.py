@@ -42,8 +42,10 @@ def init_and_mediate():
 
 try:
     init_and_mediate()
+except OSError as err:
+    print("ERROR: OS error: {0}".format(err))
 except Exception as err:
-    print("ERROR: Migration failed. Database has not yet been created. Try rerunning command.")
+    print("ERROR: {0}".format(err))
 
 # This is the main production code where the mediator runs continuously
 # update_interval = 10     # seconds
