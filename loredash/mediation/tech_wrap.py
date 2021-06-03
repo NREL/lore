@@ -71,7 +71,7 @@ class TechWrap:
 
         self.ssc.set(plant_state)
 
-        #NOTE: this pads the weather data to 8760 if its length is less than that:
+        #NOTE: this also pads the weather data to 8760 if its length is less than that:
         self.set_weather_data(weather_dataframe=weather_dataframe, solar_resource_data=solar_resource_data)
 
         # set times:
@@ -210,8 +210,13 @@ class TechWrap:
             solar_resource_data_input = solar_resource_data
 
         if solar_resource_data_input is not None:
-            weather_schema = data_validator.weather_schema      # validate
-            validated_solar_resource_data = weather_schema(solar_resource_data_input)
+            #TODO: re-enable the following validation. Note that this is also called from
+            #      dispatch_wrap via estimates_for_dispatch_model(). From a profiler run,
+            #      the following validation, just from estimates_for_dispatch_model(),
+            #      took over half the total program execution time.
+            validated_solar_resource_data = solar_resource_data_input
+            # weather_schema = data_validator.weather_schema      # validate
+            # validated_solar_resource_data = weather_schema(solar_resource_data_input)
 
             # the number of records must be a integer multiple of 8760
             # see: sam_dev/ssc/ssc/common.cpp, line 1272
