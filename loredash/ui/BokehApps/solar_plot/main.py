@@ -20,7 +20,9 @@ from theme import theme as _loredash_ui_theme
 LOREDASH_UI_THEME = _loredash_ui_theme.json
 
 def latestData(queue):
-    p = plant.plant_design      # TODO: don't grab plant_design from plant.py as it may be overwritten by mediator and external config file
+    # TODO: don't grab plant_design from plant.py as it may be overwritten by
+    # mediator and external config file
+    p = plant.plant_design
     forecaster = forecasts.SolarForecast(
         p['latitude'],
         p['longitude'],

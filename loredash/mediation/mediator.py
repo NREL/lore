@@ -12,6 +12,8 @@ import librtdispatch.util as util
 from mediation.plant import Revenue
 from data.mspt_2020_defaults import default_ssc_params
 
+import pytz
+
 from mediation import forecasts
 
 class Mediator:
@@ -65,21 +67,47 @@ class Mediator:
         dispatch_wrap_params.update(self.params)                                                    # include mediator params in with dispatch_wrap_params
         self.dispatch_wrap = dispatch_wrap.DispatchWrap(plant=self.plant, params=dispatch_wrap.dispatch_wrap_params)
 
+    def _validate_plant_local_time(self, time):
+        """
+        A helper function that validates the given `time` is localized to the
+        timezone of the plant.
+        """
+        assert(time.tzinfo.zone == self.plant.design['timezone_string'])
+        return
     
-    def run_once(self, datetime_start=None, datetime_end=None):
+    def run_once(self, datetime_start, datetime_end):
         """
-        Get data from external plant and weather interfaces and run
-        entire set of submodels, saving data to database
+        Get data from external plant and weather interfaces and run entire set
+        of submodels, saving data to database.
 
-        datetime_start = beginning of first timestep
-        datetime_end = end of last timestep
+        ## Parameters
 
-        if datetime_start = none, the timestep including the current time will be run
-        e.g., if current clock time is 17:43 and the simulation_timestep = 5 minutes,
-        the timestep from 17:40 to 17:45 will be run, meaning:
-            datetime_start = 17:40
-            datetime_end = 17:45
+         * `datetime_start`: beginning of first timestep.
+         * `datetime_end`: end of last timestep
+
+        These parameters must be in plant-local time.
         """
+        # Make sure to localize the datetimes!
+        if datetime_start.tzinfo is None:
+            print("""
+            Hey! Avoid calling `run_once` with non-localized datetimes. That's a
+            recipe for bugs, because `datetime.now()` might be in the future at
+            the plant!
+            """)
+            datetime_start = datetime_start.replace(
+                tzinfo = pytz.timezone(self.plant.design['timezone_string']),
+            )
+        if datetime_end.tzinfo is None:
+            print("""
+            Hey! Avoid calling `run_once` with non-localized datetimes. That's a
+            recipe for bugs, because `datetime.now()` might be in the future at
+            the plant!
+            """)
+            datetime_end = datetime_end.replace(
+                tzinfo = pytz.timezone(self.plant.design['timezone_string']),
+            )
+        self._validate_plant_local_time(datetime_start)
+        self._validate_plant_local_time(datetime_end)
 
         # Code Design:
         # Step 0: Normalize timesteps to even intervals, even if they are given
@@ -112,12 +140,16 @@ class Mediator:
         #       a. Update previous timestep cache with current timestep cache and then clear current cache
 
 
-        # Step 0: Normalize timesteps to even intervals, even if they are given
-        datetime_start, datetime_end = self.normalize_timesteps(datetime_start, datetime_end)
-
+        # Step 0: Normalize timesteps to even intervals
+        datetime_start, datetime_end = normalize_timesteps(
+            datetime_start,
+            datetime_end,
+            timestep = self.simulation_timestep.seconds / 60,
+        )
 
         # Step 1, Thread 1:
-        # a. Call virtual/real plant to get plant operating state and any local weather data
+        # a. Call virtual/real plant to get plant operating state and any local
+        #    weather data
         plant_state = self.plant.get_state()
 
         # b. Validate these data
@@ -134,6 +166,11 @@ class Mediator:
             datetime_end,
             tmy3_path = self.weather_file,
         )
+
+        # TODO(odow): keep pushing timezones through the code.
+        datetime_start = datetime_start.replace(tzinfo = None)
+        datetime_end = datetime_end.replace(tzinfo = None)
+
         clearsky_data = get_clearsky_data(                          # TODO: call an equivalent function from forecasts.py
             clearsky_file=self.params['clearsky_file'],
             datetime_start=datetime_start,
@@ -187,24 +224,6 @@ class Mediator:
         self.bulk_add_to_db_table(validated_outputs)                                                 # add to database
 
         return 0
-
-
-    def normalize_timesteps(self, datetime_start, datetime_end):
-        datetime_now = datetime.datetime.now()
-        if isinstance(datetime_start, datetime.datetime):
-            datetime_start = round_minutes(datetime_start, 'down', self.simulation_timestep.seconds/60)
-            if isinstance(datetime_end, datetime.datetime):
-                datetime_end = round_minutes(datetime_end, 'up', self.simulation_timestep.seconds/60)
-            else:
-                datetime_end = datetime_start + self.simulation_timestep
-        else:
-            datetime_start = round_minutes(datetime_now, 'down', self.simulation_timestep.seconds/60)    # the start of the time interval currently in
-            datetime_end = datetime_start + self.simulation_timestep        # disregard a given datetime_end if there is no given datetime_start
-
-        print("Datetime now = {datetime}".format(datetime=datetime_now))
-        print("Start datetime = {datetime}".format(datetime=datetime_start))
-        print("End datetime = {datetime}".format(datetime=datetime_end))
-        return datetime_start, datetime_end
 
     def run_continuously(self, update_interval=5):
         """Continuously get data from external plant and weather interfaces and run
@@ -269,18 +288,36 @@ class Mediator:
         except Exception as err:
             raise(err)
     
-    def get_weather_df(self, datetime_start, datetime_end, tmy3_path):
-        data = tmy3_to_df(tmy3_path, datetime_start, datetime_end)
-        start_time = data.index[0].to_pydatetime().astimezone()
-        # Short-cut here: if the horizon is small use the latest forecast.
-        # If you're passing in a longer horizon, you probably just want the TMY
-        # data.
-        if len(data) < 60:
+    def get_weather_df(
+        self,
+        datetime_start,
+        datetime_end,
+        tmy3_path,
+        update_forecast = False,
+    ):
+        """
+        Return a dataframe of weather data in 1h resolution (measured on the
+        hour) covering the time-span given by datetime_start and datetime_end.
+
+        These dates are given in plant-local time!
+
+        If `update_forecast`, replace the DNI data with the latest NDFD forecast
+        from the `forecasts` submodule.
+        """
+        self._validate_plant_local_time(datetime_start)
+        self._validate_plant_local_time(datetime_end)
+        # The TMY file is in local time, so strip the tzinfo objects.
+        data = tmy3_to_df(
+            tmy3_path,
+            datetime_start.replace(tzinfo = None),
+            datetime_end.replace(tzinfo = None),
+        )
+        if update_forecast:
+            # Re-localize the timezone, bassed on the first hour returned from
+            # the TMY file.
+            start = data.index[0].replace(tzinfo=datetime_start.tzinfo)
             solar_forecast = self.forecaster.getForecast(
-                # Make sure to localize the timezone! This takes the
-                # timezone-free datetime_start and converts it into the
-                # computers current timezone.
-                datetime_start = start_time,
+                datetime_start = start,
                 # Match the length of data from the TMY file.
                 horizon = pd.Timedelta(hours = len(data)),
                 # The TMY file is in hours.
@@ -323,6 +360,18 @@ def round_minutes(dt, direction, minute_resolution):
     new_minute = (dt.minute // minute_resolution + (1 if direction == 'up' and not on_interval else 0)) * minute_resolution
     new_time_old_seconds = dt + datetime.timedelta(minutes=new_minute - dt.minute)
     return new_time_old_seconds.replace(second=0, microsecond=0)
+
+def normalize_timesteps(datetime_start, datetime_end, timestep):
+    """
+    Normalize the start and end datetimes to an integer multiple of the
+    `timestep` [minutes].
+    """
+    new_start = round_minutes(datetime_start, 'down', timestep)
+    new_end = round_minutes(datetime_end, 'up', timestep)
+    print("Old start datetime = {datetime}".format(datetime = datetime_start))
+    print("Start datetime = {datetime}".format(datetime = new_start))
+    print("End datetime = {datetime}".format(datetime = new_end))
+    return new_start, new_end
 
 def tmy3_to_df(tmy3_path, datetime_start=None, datetime_end=None):
     """does not work for end dates more than one year after start date"""
