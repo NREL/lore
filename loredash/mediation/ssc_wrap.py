@@ -22,7 +22,6 @@ def ssc_wrap(wrapper, tech_name, financial_name, defaults_name=None, defaults=No
         result = result.replace(' ', '')
         return result
 
-    # print('Process ID = ', os.getpid())
     if wrapper == 'pyssc':
         return PysscWrap(tech_name, financial_name, defaults)
     elif wrapper == 'pysam':

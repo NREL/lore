@@ -332,7 +332,7 @@ class DispatchParams:
         if plant.design['pc_config'] == 1: # User-defined cycle
             self.set_linearized_params_from_udpc_inputs(plant)
         else:
-            print ('Warning: Dispatch optimization parameters are currently only set up for user-defined power cycle. Defaulting to constant efficiency vs load')
+            print ('WARNING: Dispatch optimization parameters are currently only set up for user-defined power cycle. Defaulting to constant efficiency vs load')
             self.etap = self.eta_des  
             self.Wdotl = self.Ql*self.eta_des  
             self.Wdotu = self.Qu*self.eta_des
@@ -532,7 +532,7 @@ class DispatchParams:
             # TODO: Need actual ambient temperature correction for cycle efficiency (ssc dispatch model interpolates from a table of points calculated at off-design ambient T, full load, design HTF T)
             self.etaamb = np.ones(n)  
             self.etac = np.ones(n)     
-            print ('Dispatch cycle ambient T corrections are currently only set up for a user-defined cycle. Using default values (1.0) at all time points')
+            print ('WARNING: Dispatch cycle ambient T corrections are currently only set up for a user-defined cycle. Using default values (1.0) at all time points')
 
         return
     
@@ -1234,7 +1234,7 @@ class DispatchWrap:
         """
 
         offset30 = True
-        print ('Updating weather forecast:', date)
+        # print ('Updating weather forecast:', date)  #TODO: ensure this datetime is consistent with actual datetime
         nextdate = date + datetime.timedelta(days = 1) # Forecasts issued at 4pm PST on a given day (PST) are labeled at midnight (UTC) on the next day 
         wfdata = util.read_weather_forecast(nextdate, offset30)
         t = int(util.get_time_of_year(date)/3600)   # Time of year (hr)

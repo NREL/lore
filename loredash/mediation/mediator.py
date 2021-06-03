@@ -2,19 +2,16 @@ from django.conf import settings
 from django.db import IntegrityError
 import sys, os
 sys.path.insert(1, os.path.join(sys.path[0], '..'))
-import time, copy, datetime, math
+import time, copy, datetime, math, pytz
 from twisted.internet.task import LoopingCall
 from twisted.internet import reactor
 import pandas as pd
-from mediation import tech_wrap, data_validator, dispatch_wrap, models
-import mediation.plant as plant_
+
 import librtdispatch.util as util
-from mediation.plant import Revenue
 from data.mspt_2020_defaults import default_ssc_params
-
-import pytz
-
-from mediation import forecasts
+from mediation import tech_wrap, data_validator, dispatch_wrap, models, forecasts
+import mediation.plant as plant_
+from mediation.plant import Revenue
 
 class Mediator:
     tech_wrap = None
@@ -68,49 +65,25 @@ class Mediator:
         self.dispatch_wrap = dispatch_wrap.DispatchWrap(plant=self.plant, params=dispatch_wrap.dispatch_wrap_params)
 
     def _validate_plant_local_time(self, time):
-        """
-        A helper function that validates the given `time` is localized to the
+        """A helper function that validates the given `time` is localized to the
         timezone of the plant.
         """
         assert(time.tzinfo.zone == self.plant.design['timezone_string'])
         return
     
     def run_once(self, datetime_start, datetime_end):
-        """
-        Get data from external plant and weather interfaces and run entire set
+        """Get data from external plant and weather interfaces and run entire set
         of submodels, saving data to database.
 
-        ## Parameters
-
-         * `datetime_start`: beginning of first timestep.
-         * `datetime_end`: end of last timestep
-
-        These parameters must be in plant-local time.
+        Args:
+            datetime_start: beginning of first timestep, in plant-local time
+            datetime_end:   end of last timestep, in plant-local time
+        Returns:
+            0 if successful
+        Raises:
         """
-        # Make sure to localize the datetimes!
-        if datetime_start.tzinfo is None:
-            print("""
-            Hey! Avoid calling `run_once` with non-localized datetimes. That's a
-            recipe for bugs, because `datetime.now()` might be in the future at
-            the plant!
-            """)
-            datetime_start = datetime_start.replace(
-                tzinfo = pytz.timezone(self.plant.design['timezone_string']),
-            )
-        if datetime_end.tzinfo is None:
-            print("""
-            Hey! Avoid calling `run_once` with non-localized datetimes. That's a
-            recipe for bugs, because `datetime.now()` might be in the future at
-            the plant!
-            """)
-            datetime_end = datetime_end.replace(
-                tzinfo = pytz.timezone(self.plant.design['timezone_string']),
-            )
-        self._validate_plant_local_time(datetime_start)
-        self._validate_plant_local_time(datetime_end)
-
         # Code Design:
-        # Step 0: Normalize timesteps to even intervals, even if they are given
+        # Step 0: Normalize timesteps to even intervals and enforce timestep localization
         #
         # Step 1:
         #   Thread 1:
@@ -140,12 +113,21 @@ class Mediator:
         #       a. Update previous timestep cache with current timestep cache and then clear current cache
 
 
-        # Step 0: Normalize timesteps to even intervals
+        # Step 0: Normalize timesteps to even intervals and enforce timestep localization
+        if datetime_start.tzinfo is None or datetime_end.tzinfo is None or \
+            datetime_start.tzinfo != datetime_end.tzinfo:
+            print("WARNING: Timesteps in run_once were not properly localized.")
+            datetime_start = datetime_start.replace(
+                tzinfo = pytz.timezone(self.plant.design['timezone_string']))
+            datetime_end = datetime_end.replace(
+                tzinfo = pytz.timezone(self.plant.design['timezone_string']))
+        self._validate_plant_local_time(datetime_start)
+        self._validate_plant_local_time(datetime_end)
+
         datetime_start, datetime_end = normalize_timesteps(
             datetime_start,
             datetime_end,
-            timestep = self.simulation_timestep.seconds / 60,
-        )
+            timestep = self.simulation_timestep.seconds / 60)
 
         # Step 1, Thread 1:
         # a. Call virtual/real plant to get plant operating state and any local
@@ -205,8 +187,7 @@ class Mediator:
             datetime_end,
             self.simulation_timestep,
             plant_state,
-            weather_dataframe=weather_dataframe,
-        )
+            weather_dataframe=weather_dataframe)
         print("Generated Energy [kWh]= ", tech_outputs["annual_energy"])
 
         # c. Validate output data
@@ -237,8 +218,7 @@ class Mediator:
         reactor.run()
 
     def model_previous_day_and_add_to_db(self):
-        """
-        Simulate previous day and add to database
+        """Simulate previous day and add to database
         e.g.:
         if current time is 17:43 and simulation_timestep = 5 minutes:
             it will model from 17:40 yesterday (start of timestep)
@@ -288,15 +268,8 @@ class Mediator:
         except Exception as err:
             raise(err)
     
-    def get_weather_df(
-        self,
-        datetime_start,
-        datetime_end,
-        tmy3_path,
-        update_forecast = False,
-    ):
-        """
-        Return a dataframe of weather data in 1h resolution (measured on the
+    def get_weather_df(self, datetime_start, datetime_end, tmy3_path, update_forecast=False):
+        """Return a dataframe of weather data in 1h resolution (measured on the
         hour) covering the time-span given by datetime_start and datetime_end.
 
         These dates are given in plant-local time!
@@ -310,8 +283,7 @@ class Mediator:
         data = tmy3_to_df(
             tmy3_path,
             datetime_start.replace(tzinfo = None),
-            datetime_end.replace(tzinfo = None),
-        )
+            datetime_end.replace(tzinfo = None))
         if update_forecast:
             # Re-localize the timezone, bassed on the first hour returned from
             # the TMY file.
@@ -347,8 +319,7 @@ def round_time(dt, second_resolution):
     return dt + datetime.timedelta(0,rounding-seconds,0)
 
 def round_minutes(dt, direction, minute_resolution):
-    """
-    Round to nearest minute interval
+    """Round to nearest minute interval
     e.g.:
         dt = datetime.datetime(2021, 1, 4, 15, 22, 0, 9155)
         direction = up
@@ -362,15 +333,14 @@ def round_minutes(dt, direction, minute_resolution):
     return new_time_old_seconds.replace(second=0, microsecond=0)
 
 def normalize_timesteps(datetime_start, datetime_end, timestep):
-    """
-    Normalize the start and end datetimes to an integer multiple of the
-    `timestep` [minutes].
+    """Normalize the start and end datetimes to an integer multiple of the
+    timestep [minutes].
     """
     new_start = round_minutes(datetime_start, 'down', timestep)
     new_end = round_minutes(datetime_end, 'up', timestep)
-    print("Old start datetime = {datetime}".format(datetime = datetime_start))
-    print("Start datetime = {datetime}".format(datetime = new_start))
-    print("End datetime = {datetime}".format(datetime = new_end))
+    print("Requested start:  {datetime}".format(datetime = datetime_start))
+    print("Normalized start: {datetime}".format(datetime = new_start))
+    print("Normalized end:   {datetime}".format(datetime = new_end))
     return new_start, new_end
 
 def tmy3_to_df(tmy3_path, datetime_start=None, datetime_end=None):
