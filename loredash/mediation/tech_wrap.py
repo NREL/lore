@@ -10,6 +10,9 @@ import json
 from mediation import data_validator, ssc_wrap
 
 class TechWrap:
+    """A wrapper providing higher-level function calls to the DAOTk power tower
+    (custom tcsmolten_salt) model in SSC
+    """
     parent_dir = str(Path(__file__).parents[1])
     design_path = parent_dir+"/data/field_design_debugging_only.json"
     MIN_ONE_HOUR_SIMS = True        # used to circumvent SSC bug

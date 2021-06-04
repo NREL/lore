@@ -20,7 +20,7 @@ from django.conf.urls.static import static
 from pathlib import Path
 import datetime
 import multiprocessing
-from pyinstrument import Profiler
+from pyinstrument import Profiler       # can also profile Django, see: https://github.com/joerick/pyinstrument
 
 from mediation import mediator
 import mediation.plant as plant_

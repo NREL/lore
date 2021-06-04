@@ -10,8 +10,10 @@ PYSAM_MODULE_NAME = 'PySAM_DAOtk'
 SSCDLL_PATH = os.path.join(os.path.abspath(os.path.dirname(__file__)), "ssc.dll")
 # SSCDLL_PATH = os.path.join(os.environ.get('SAMNTDIR'),'deploy/x64/sscd.dll')
 
-# Factory method for ssc wrappers
 def ssc_wrap(wrapper, tech_name, financial_name, defaults_name=None, defaults=None):
+    """Factory method for ssc wrappers
+    Returns an SscWrap object for an ssc interface via either PySSC or PySAM
+    """
     #TODO:  Flatten the dictionaries returned by PysamWrap::execute and PysamWrap::export_params
     #TODO:  Add a function to replace the defaults parameter. If there's a defaults_name specified and
     #       wrapper is pyssc, create a PysamWrap first and run export_params.
@@ -28,8 +30,10 @@ def ssc_wrap(wrapper, tech_name, financial_name, defaults_name=None, defaults=No
         return PysamWrap(format_name(tech_name), format_name(financial_name), defaults_name)
 
 
-# Abstract parent class of ssc wrappers
 class SscWrap(metaclass=abc.ABCMeta):
+    """Abstract parent class of ssc wrappers
+    Includes wrapper functions for calls to ssc (any models)
+    """
     @abc.abstractmethod
     def set(self, param_dict):
         return

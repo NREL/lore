@@ -18,9 +18,13 @@ import librtdispatch.util as util
 try:
     from mediation import data_validator
 except:
-    from loredash.mediation import data_validator       # if running from case_study.py
+    from loredash.mediation import data_validator       # if running from case_study.py TODO: remove?
 
 class Plant:
+    """Represents a real plant. Includes attributes that characterize the plant or
+    those used in preprocessing for calculating them. Also includes methods to determine
+    the real plant state.
+    """
     def __init__(self, design, initial_state):
         self.design = {}
         self.flux_maps = {
