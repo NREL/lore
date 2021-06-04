@@ -1,12 +1,8 @@
 from django.conf import settings
 import sys, os
 sys.path.insert(1, os.path.join(sys.path[0], '..'))
-
 from voluptuous import Schema, Required, Optional, Range, And, Or, DefaultTo, SetTo, Any, Coerce, Maybe, ALLOW_EXTRA, All, REMOVE_EXTRA, Number, Invalid
-try:
-    from mediation import nested_inputs
-except:
-    from loredash.mediation import nested_inputs    # if running from case_study.py
+
 
 kBigNumber = 1.0e10
 kEpsilon = 1.0e-10

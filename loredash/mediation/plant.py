@@ -8,17 +8,12 @@ dir_path = os.path.join(
     '..',                                        # /lore
 )
 sys.path.insert(1, dir_path)
-
 from enum import Enum
 import numpy as np
 import pandas as pd
 import datetime, rapidjson
-import librtdispatch.util as util
 
-try:
-    from mediation import data_validator
-except:
-    from loredash.mediation import data_validator       # if running from case_study.py TODO: remove?
+from mediation import data_validator, util
 
 class Plant:
     """Represents a real plant. Includes attributes that characterize the plant or
@@ -382,7 +377,7 @@ plant_design = {
     'solarm':                       None,           # = self.Qrec * self.design_eff / self.P_ref
 
     # Solar field
-    'heliostat_field_file':         '../../librtdispatch/input_files/default_layout.csv',   # TODO: This the field layout with a fixed z-coordinate.
+    'heliostat_field_file':         '../data/default_layout.csv',   # TODO: This the field layout with a fixed z-coordinate.
                                                                                                     # Could update to call through SolarPILOT API with actual z-coordinates?
                                                                                                     # (but model validation cases suggest this is not terribly important)
     'helio_positions':              [],

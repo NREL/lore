@@ -7,9 +7,8 @@ from twisted.internet.task import LoopingCall
 from twisted.internet import reactor
 import pandas as pd
 
-import librtdispatch.util as util
 from data.mspt_2020_defaults import default_ssc_params
-from mediation import tech_wrap, data_validator, dispatch_wrap, models, forecasts
+from mediation import tech_wrap, data_validator, dispatch_wrap, models, forecasts, util
 import mediation.plant as plant_
 from mediation.plant import Revenue
 
@@ -454,7 +453,7 @@ mediator_params = {
                                                                     # 'ssc_heuristic' = allow ssc heuristic (no consideration of TOD price) to control cycle dispatch
 
     # Price
-    'price_multiplier_file':                '../../librtdispatch/prices_flat.csv',
+    'price_multiplier_file':                '../data/prices_flat.csv',
 	'ppa_multiplier_model':			        1,
 	'price_steps_per_hour':			        1,                      # Number of steps per hour in electricity price multipliers
 	'avg_price':					        138,                    # Average electricity price ($/MWh):  CD original PPA was $138/MWh
@@ -462,7 +461,8 @@ mediator_params = {
     'avg_price_disp_storage_incentive':     0.0,                    # Average electricity price ($/MWh) used in dispatch model storage inventory incentive
 
     # Field, receiver, and cycle simulation options
-    'clearsky_file':                        './model-validation/input_files/weather_files/clearsky_pvlib_ineichen_1min_2018.csv',   # Expected clear-sky DNI from Ineichen model (via pvlib). 
+    # 'clearsky_file':                        './model-validation/input_files/weather_files/clearsky_pvlib_ineichen_1min_2018.csv',   # Expected clear-sky DNI from Ineichen model (via pvlib). 
+    'clearsky_file':                        '../data/clearsky_pvlib_ineichen_1min_2018.csv',             # Expected clear-sky DNI from Ineichen model (via pvlib). 
     'CD_mflow_path1_file':                  './model-validation/input_files/mflow_path1_2018_1min.csv',  # File containing CD data for receiver path 1 mass flow rate (note, all values are zeros on days without data)
     'CD_mflow_path2_file':                  './model-validation/input_files/mflow_path2_2018_1min.csv',  # File containing CD data for receiver path 2 mass flow rate (note, all values are zeros on days without data)
     'CD_raw_data_direc':                    './input_files/CD_raw',                                      # Directory containing raw data files from CD

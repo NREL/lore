@@ -8,12 +8,7 @@ import pyomo.environ as pe
 from pyomo.opt import TerminationCondition
 import datetime
 
-try:
-    import librtdispatch.util as util
-    import librtdispatch.dispatch_model as dispatch_model
-except:     # if called from case_study
-    from librtdispatch import util
-    from librtdispatch import dispatch_model
+from mediation import util, dispatch_model
 
 
 dispatch_wrap_params = {
@@ -888,7 +883,7 @@ class DispatchWrap:
         # self.plant = None                             # Plant design and operating properties
         
         self.user_defined_cycle_input_file = '../../librtdispatch/udpc_noTamb_dependency.csv'  # Only required if cycle_type is user_defined
-        self.ground_truth_weather_file = './model-validation/input_files/weather_files/ssc_weatherfile_1min_2018.csv'    # Weather file derived from CD data: DNI, ambient temperature,
+        self.ground_truth_weather_file = '../data/ssc_weatherfile_1min_2018.csv'               # Weather file derived from CD data: DNI, ambient temperature,
                                                                                                                          #  wind speed, etc. are averaged over 4 CD weather stations,
                                                                                                                          #  after filtering DNI readings for bad measurements. 
 
