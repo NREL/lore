@@ -31,8 +31,6 @@ PySAM is a Python library for calling modules in NREL's SAM software, and it's D
 	#!/bin/sh
 
 	export SSCDIR=/io/ssc
-	export SAMNTDIR=/io/sam
-	export PYSAMDIR=/io/pysam
 
 	/opt/python/cp37-cp37m/bin/pip install cmake 
 	ln -s /opt/python/cp37-cp37m/bin/cmake /usr/bin/cmake
