@@ -49,6 +49,7 @@ class Mediator:
             p['elevation'],
         )
         #TODO: Also add an equivalent call of the following to Forecasts. Need this set for the later calc_flux_eta_maps()
+        #      (JM) I don't think this is needed here anymore? rec_clearsky_dni is replaced in run_once, and is no longer needed in calc_flux_eta_maps()
         clearsky_data = get_clearsky_data(
             clearsky_file=self.params['clearsky_file'],
             datetime_start=datetime.datetime(self.params['start_date_year'], 1, 1, 0),

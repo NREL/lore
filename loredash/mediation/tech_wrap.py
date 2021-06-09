@@ -24,8 +24,8 @@ class TechWrap:
         self.ssc.set(dispatch_wrap_params)
         if not 'solar_resource_data' in plant.design:       # solar_resource_data is where location info is set in ssc
             plant.design['solar_resource_data'] = TechWrap.create_solar_resource_data_var(plant.design)
-        self.ssc.set(plant.design)
         self.ssc.set(params)            # what are these exactly?
+        self.ssc.set(plant.design)      # Updating from plant.design last to overwrite any plant design defaults in params
         self.set_weather_data(tmy_file_path=weather_file)
 
         if (__name__ == "__main__" or settings.DEBUG) == True:
@@ -40,13 +40,16 @@ class TechWrap:
                                                                        timedelta=datetime.timedelta(hours=1))
         datetime_end = datetime_start                                           # run for just first timestep of year
         self.ssc.set({'field_model_type': 2})                                   # generate flux and eta maps but don't optimize field or tower
+        original_values = {k:self.ssc.get(k) for k in ['is_dispatch_targets', 'rec_clearsky_model']}
+        self.ssc.set({'is_dispatch_targets':False, 'rec_clearsky_model': 1})    # Set parameters so that input arrays for dispatch targets and clearsky DNI are unnecessary (these aren't needed for flux map calculations anyway)
         tech_outputs = self.simulate(datetime_start, datetime_end, None, plant_state=plant_state, solar_resource_data=solar_resource_data)
+        self.ssc.set(original_values)                                           # Revert back to original specifications 
         eta_map = tech_outputs["eta_map_out"]                                   # get maps and set for subsequent runs
         flux_maps = [r[2:] for r in tech_outputs['flux_maps_for_import']]       # Don't include first two columns
         A_sf_in = tech_outputs["A_sf"]
         flux_eta_maps = {'eta_map': eta_map, 'flux_maps': flux_maps, 'A_sf_in': A_sf_in}
         self.ssc.set(flux_eta_maps)
-
+        
         if __name__ == "__main__" or settings.DEBUG is True:
             self._save_design_to_file()
 
@@ -100,20 +103,22 @@ class TechWrap:
 
         N_weather_data = len(self.ssc.get('solar_resource_data')['year'])
         resize_list('sf_adjust:hourly', N_weather_data)
-        resize_list('rec_clearsky_dni', N_weather_data)
+        if self.ssc.get('rec_clearsky_model') == 0:  # Input array for clearsky DNI is only needed if rec_clearsky_model is 0
+            resize_list('rec_clearsky_dni', N_weather_data)
 
-        N_timesteps = ceil((self.ssc.get('time_stop') - self.ssc.get('time_start')) / 3600. * self.ssc.get('time_steps_per_hour'))
-        resize_list('q_pc_target_su_in', N_timesteps)
-        resize_list('q_pc_target_on_in', N_timesteps)
-        resize_list('q_pc_max_in', N_timesteps)
-        resize_list('is_rec_su_allowed_in', N_timesteps)
-        resize_list('is_rec_sb_allowed_in', N_timesteps)
-        resize_list('is_pc_su_allowed_in', N_timesteps)
-        resize_list('is_pc_sb_allowed_in', N_timesteps)
-        try:
-            resize_list('is_ignore_elec_heat_dur_off', N_timesteps)    # NOT SET
-        except:
-            pass
+        if self.ssc.get('is_dispatch_targets'):  # Input arrays for dispatch targets 
+            N_timesteps = ceil((self.ssc.get('time_stop') - self.ssc.get('time_start')) / 3600. * self.ssc.get('time_steps_per_hour'))
+            resize_list('q_pc_target_su_in', N_timesteps)
+            resize_list('q_pc_target_on_in', N_timesteps)
+            resize_list('q_pc_max_in', N_timesteps)
+            resize_list('is_rec_su_allowed_in', N_timesteps)
+            resize_list('is_rec_sb_allowed_in', N_timesteps)
+            resize_list('is_pc_su_allowed_in', N_timesteps)
+            resize_list('is_pc_sb_allowed_in', N_timesteps)
+            try:
+                resize_list('is_ignore_elec_heat_dur_off', N_timesteps)    # NOT SET
+            except:
+                pass
         ###########################################################################################
 
         tech_outputs = self.ssc.execute()
