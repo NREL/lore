@@ -411,8 +411,6 @@ plant_design = {
     'Flow_type':                    1,
     'crossover_shift':              -1,             # Shift flow crossover to match CD (3 panels before cross, 4 panels after).
     'eta_pump':                     0.85,           # Receiver pump efficiency, set to approx. match pump parasitic from CD data (peak power ~5.25 MWe) but this seems like a low efficiency
-    'header_sizing':                [609.6, 2.54, 3.353, 32],   # Header sizing ([OD(mm), wall (mm), length (m), material])
-    'crossover_header_sizing':      [406.4, 12.7, 30.18, 2],    # Crossover header sizing ([OD(mm), wall (mm), length (m), material])  
     'rec_absorptance':              0.94,           # Receiver solar absorptance
     'epsilon':                      0.88,           # Receiver IR emissivity
     'hl_ffact':                     1.0,            # Heat loss mutlipler in receiver code
