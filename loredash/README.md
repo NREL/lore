@@ -15,6 +15,7 @@ For production testing, the web server [Waitress](https://docs.pylonsproject.org
 		3. File -> Refresh
 		4. Close
 		5. If this fails, restart your computer.
+	3. Open Settings -> General and check "Use the WSL 2 based engine". Follow the instructions to install if needed.
 3. Open the Images section in Docker Desktop and delete any prior lore images (if not the first time testing)
 4. Right-click the Docker tray icon and switch to Linux containers if needed (if there’s an option that says ‘Switch to Windows containers..’ then you’re already set)
 5. Create a new folder outside of the lore repo and copy to it `docker-compose.yml`
