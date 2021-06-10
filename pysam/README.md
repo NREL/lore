@@ -3,6 +3,48 @@
 PySAM is a Python library for calling modules in NREL's SAM software, and it's DAO-Tk version described here is for use with LORE.
 
 
+## Compiling just a Linux SSC library file (libssc.so) when using PySSC instead of PySAM
+1. Checkout desired ssc branch (i.e., mjwagner2/ssc:daotk-develop)
+2. Build Release version of SSC (to at least verify no errors in Windows build), but first unload the following projects:
+	* TCSConsole
+	* SDKtool
+3. Install Docker, start Docker Desktop, and switch to Linux containers if needed. Open Settings -> General and check "Use the WSL 2 based engine". Follow the instructions to install if needed.
+
+	*NOTE:* If Docker does not have enough memory to start Linux containers:
+	1. Download [RAMMap](https://docs.microsoft.com/en-us/sysinternals/downloads/rammap) from the Microsoft Sysinternals tool set
+	2. In RAMMap, select: `Empty -> Empty Working Sets` then `File -> Refresh`
+4. Pull the manylinux1 container by opening a command prompt and running:
+	```
+	docker pull quay.io/pypa/manylinux1_x86_64
+	```
+5. In a command prompt, cd to `.../sam_dev/`
+6. Run:
+	```
+	docker run --rm -dit -v %cd%:/io quay.io/pypa/manylinux1_x86_64 /sbin/init
+	```
+7. Run/start a manylinux container based on the built image by running the following command, replacing with the output id from the above command.
+	```
+	docker exec -it <id> bash -l
+	```
+8. Paste the following commands into the bash window (right-clicking pastes). NOTE: copy the trailing end-of-line character, or you will have to press Enter once the last command is reached.
+	```
+	#!/bin/sh
+
+	export SSCDIR=/io/ssc
+
+	/opt/python/cp37-cp37m/bin/pip install cmake 
+	ln -s /opt/python/cp37-cp37m/bin/cmake /usr/bin/cmake
+
+	mkdir -p /io/build_linux_ssc
+	cd /io/build_linux_ssc
+	rm -rf *
+	cmake ${SSCDIR} -DCMAKE_BUILD_TYPE=Export -Dskip_tools=1 -DSAMAPI_EXPORT=1 -Dskip_tests=1 ../ssc/
+	make -j 6
+	
+	```
+9. Ctrl-D to exit shell prompt
+10. Find the compiled Linux library `libssc.so` in `/sam_dev/build_linux_ssc/ssc`
+
 ## Installing the DAO-Tk Version of PySAM (in a fresh environment)
 1. Create new environment, initializing with Python 3.7
 ```

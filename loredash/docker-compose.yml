@@ -31,6 +31,8 @@ services:
         depends_on:
             - migration
             - plots
+        # environment:
+            # - FILE_UPLOAD_MAX_MEMORY_SIZE=102400        # add this to avoid 'dashboard exited with code 247'. Originally used 102400.
     plots:
         image: matthewtboyd/lore
         networks:
