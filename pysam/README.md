@@ -8,7 +8,7 @@ PySAM is a Python library for calling modules in NREL's SAM software, and it's D
 2. Build Release version of SSC (to at least verify no errors in Windows build), but first unload the following projects:
 	* TCSConsole
 	* SDKtool
-3. Install Docker, start Docker Desktop, and switch to Linux containers if needed
+3. Install Docker, start Docker Desktop, and switch to Linux containers if needed. Open Settings -> General and check "Use the WSL 2 based engine". Follow the instructions to install if needed.
 
 	*NOTE:* If Docker does not have enough memory to start Linux containers:
 	1. Download [RAMMap](https://docs.microsoft.com/en-us/sysinternals/downloads/rammap) from the Microsoft Sysinternals tool set
