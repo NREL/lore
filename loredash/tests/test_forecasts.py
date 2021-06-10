@@ -100,3 +100,33 @@ def test_getForecast():
     )
     assert(len(data) == 24 * 60)
     return
+
+def test_getClearSky():
+    forecaster = forecasts.SolarForecast(
+        38.2,
+        -117.4,
+        'US/Pacific',
+        100.0,
+    )
+    # Choose a start time that is not current, but that NDFD will still have
+    # data for.
+    datetime_start = datetime.datetime.now(pytz.timezone('US/Pacific'))
+    data = forecaster.getClearSky(
+        datetime_start = datetime_start - pandas.Timedelta(hours = 24),
+        horizon = pandas.Timedelta(hours = 24),
+        resolution = pandas.Timedelta(minutes = 1),
+    )
+    assert(type(data) == list)
+    assert(len(data) == 24 * 60)
+    assert(600 < max(data) < 1500)
+    assert(min(data) == 0.0)
+    data = forecaster.getClearSky(
+        datetime_start = datetime_start - pandas.Timedelta(hours = 24),
+        horizon = pandas.Timedelta(hours = 48),
+        resolution = pandas.Timedelta(minutes = 60),
+    )
+    assert(type(data) == list)
+    assert(len(data) == 48)
+    assert(600 < max(data) < 1500)
+    assert(min(data) == 0.0)
+    return

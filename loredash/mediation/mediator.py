@@ -48,14 +48,6 @@ class Mediator:
             p['timezone_string'],
             p['elevation'],
         )
-        #TODO: Also add an equivalent call of the following to Forecasts. Need this set for the later calc_flux_eta_maps()
-        #      (JM) I don't think this is needed here anymore? rec_clearsky_dni is replaced in run_once, and is no longer needed in calc_flux_eta_maps()
-        clearsky_data = get_clearsky_data(
-            clearsky_file=self.params['clearsky_file'],
-            datetime_start=datetime.datetime(self.params['start_date_year'], 1, 1, 0),
-            duration=datetime.timedelta(days=365),
-            timestep=datetime.timedelta(hours=1))
-        self.tech_wrap.set({'rec_clearsky_dni': clearsky_data})
 
         self.plant.update_flux_maps(self.tech_wrap.calc_flux_eta_maps(self.plant.get_design(), self.plant.get_state()))
 
@@ -149,16 +141,17 @@ class Mediator:
             tmy3_path = self.weather_file,
         )
 
+        clearsky_data = self.forecaster.getClearSky(
+            datetime_start,
+            horizon = datetime_end - datetime_start,
+            resolution = self.simulation_timestep,
+        )
+        # Set here in anticipated need by dispatch model
+        self.tech_wrap.set({'rec_clearsky_dni': clearsky_data})
+
         # TODO(odow): keep pushing timezones through the code.
         datetime_start = datetime_start.replace(tzinfo = None)
         datetime_end = datetime_end.replace(tzinfo = None)
-
-        clearsky_data = get_clearsky_data(                          # TODO: call an equivalent function from forecasts.py
-            clearsky_file=self.params['clearsky_file'],
-            datetime_start=datetime_start,
-            duration=datetime_end - datetime_start,
-            timestep=self.simulation_timestep)
-        self.tech_wrap.set({'rec_clearsky_dni': clearsky_data})    # Set here in anticipated need by dispatch model
 
         # Step 2, Thread 1:
         # a. Call dispatch model, (which includes the 'f_estimates...' tech_wrap function to get estimates) and update inputs for next call
@@ -403,29 +396,6 @@ def get_weatherfile_location(tmy3_path):
         'timezone': int(df_meta['Time Zone'][0]),
         'elevation': float(df_meta['Elevation'][0])
     }
-
-
-#TODO: Remove this function and replace with one in forecasts.py
-def get_clearsky_data(clearsky_file, datetime_start=None, duration=None, timestep=None):
-    """output array must be equal in length to the weather data to satisfy ssc"""
-    if datetime_start is None:
-        datetime_start = datetime.datetime(2018, 1, 1)
-    if duration is None:
-        duration = datetime.timedelta(days=365)
-    if timestep is None:
-        timestep = datetime.timedelta(minutes=1)
-
-    CLEARSKY_DAYS_GENERATED = 365
-    steps_per_hour = 1/(timestep.total_seconds()/3600)
-    clearsky_data = util.get_clearsky_data(clearsky_file, steps_per_hour).tolist()
-    assert(len(clearsky_data) == steps_per_hour * 24 * CLEARSKY_DAYS_GENERATED)
-    df = pd.DataFrame(clearsky_data, columns=['clearsky_data'])
-    df.index = pd.date_range(start=datetime_start,
-                             end=datetime_start + datetime.timedelta(days=CLEARSKY_DAYS_GENERATED) - timestep,
-                             freq=timestep)
-
-    df_out = df[datetime_start:(datetime_start + duration - timestep)]
-    return list(df_out['clearsky_data'])
 
 # This is duplicated in case_study.py
 mediator_params = {

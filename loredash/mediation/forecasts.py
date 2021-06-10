@@ -272,3 +272,17 @@ class SolarForecast:
             raw_data['forecast_for'].map(lambda x: self._toLocal(x))
         raw_data.set_index('forecast_for', inplace=True)
         return self._processData(raw_data, resolution, horizon)
+
+    def getClearSky(
+        self,
+        datetime_start,
+        horizon,
+        resolution,
+    ):
+        start = pandas.Timestamp(datetime_start)
+        datetime_range = pandas.date_range(
+            start = start,
+            end = start + horizon - pandas.Timedelta(resolution),
+            freq = pandas.Timedelta(resolution),
+        )
+        return list(self.plant_location.get_clearsky(datetime_range)['dni'])
