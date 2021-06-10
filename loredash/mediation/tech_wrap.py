@@ -286,20 +286,16 @@ class TechWrap:
         return plant_state
 
 
-    def estimates_for_dispatch_model(self, plant_design, toy, horizon, weather_data, N_pts_horizon, clearsky_data, start_pt):
-        def time_of_year_to_datetime(year, seconds_since_newyears):
-            return datetime.datetime(int(year), 1, 1, 0, 0, 0) + datetime.timedelta(seconds=seconds_since_newyears)
+    def estimates_for_dispatch_model(self, plant_state, datetime_start, horizon, weather_dataframe, N_pts_horizon, clearsky_data, start_pt):
 
         # Backup parameters (to revert back after simulation)  ->  can I just copy self.tech_model and not have to backup and revert?
         param_names = ['is_dispatch_targets', 'tshours', 'is_rec_startup_trans', 'rec_su_delay', 'rec_qf_delay']
         original_params = {key:self.ssc.get(key) for key in param_names}
 
         # Set parameters
-        datetime_start = time_of_year_to_datetime(weather_data['year'][0], toy)
-        datetime_end = datetime_start + datetime.timedelta(seconds=horizon)     # horizon is in seconds
+        datetime_end = datetime_start + datetime.timedelta(hours=horizon)    
         timestep = datetime.timedelta(hours=1/self.ssc.get('time_steps_per_hour'))
-        plant_state = plant_design                                              # TODO: plant_design contains all parameters. Could filter.
-        solar_resource_data=weather_data
+        plant_state = plant_state                                              # TODO: plant_design contains all parameters. Could filter.
         self.ssc.set({
             'is_dispatch_targets': False,
             'tshours': 100,                                                     # Inflate TES size so that there is always "somewhere" to put receiver output
@@ -316,7 +312,7 @@ class TechWrap:
             'is_pc_sb_allowed_in': [0],
             })
 
-        results = self.simulate(datetime_start, datetime_end, timestep, plant_state=plant_state, solar_resource_data=solar_resource_data)
+        results = self.simulate(datetime_start, datetime_end, timestep, plant_state=plant_state, weather_dataframe = weather_dataframe)
         
         # Revert back to original parameters
         self.ssc.set(original_params)

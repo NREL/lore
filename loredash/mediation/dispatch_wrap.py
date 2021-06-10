@@ -24,11 +24,6 @@ dispatch_wrap_params = {
     'use_linear_dispatch_at_night':         False,                  # Revert to the linear dispatch model when all of the time-horizon in the nonlinear model is at night.
     'night_clearsky_cutoff':                100.,                   # Cutoff value for clear-sky DNI defining "night"
 
-    # Weather forecasts
-	'forecast_issue_time':			        16,                     # Time at which weather forecast is issued (hr, 0-23), assumed to be in standard time.  Forecasts issued at midnight UTC 
-	'forecast_steps_per_hour':		        1,                      # Number of time steps per hour in weather forecasts
-    'forecast_update_frequency':            24,                     # Weather forecast update interval (hr)
-
     # Day-ahead schedule targets
 	'use_day_ahead_schedule':		        True,                   # Use day-ahead generation targets
 	'day_ahead_schedule_from':		        'calculated',           # 'calculated' = calculate day-ahead schedule during solution, 'NVE'= use NVE-provided schedule for CD
@@ -862,10 +857,8 @@ class DispatchWrap:
         self.dispatch_inputs = {
             'ursd_last':                        None,
             'yrsd_last':                        None,
-            'weather_data_for_dispatch':        None,
             'current_day_schedule':             None,
             'next_day_schedule':                None,
-            'current_forecast_weather_data':    None,
             'schedules':                        None,
             'horizon':                          3600,          # [s]   TODO: what should this really be?
         }
@@ -883,9 +876,7 @@ class DispatchWrap:
         # self.plant = None                             # Plant design and operating properties
         
         self.user_defined_cycle_input_file = '../../librtdispatch/udpc_noTamb_dependency.csv'  # Only required if cycle_type is user_defined
-        self.ground_truth_weather_file = '../data/ssc_weatherfile_1min_2018.csv'               # Weather file derived from CD data: DNI, ambient temperature,
-                                                                                                                         #  wind speed, etc. are averaged over 4 CD weather stations,
-                                                                                                                         #  after filtering DNI readings for bad measurements. 
+
 
         ## DISPATCH PERSISTING INTERMEDIARIES ############################################################################################################
         self.first_run = True                           # Is this the first time run() is called?
@@ -904,7 +895,6 @@ class DispatchWrap:
         ## SSC OUTPUTS ###################################################################################################################################
         self.results = None                             # Results
 
-        self.weather_data_for_dispatch = []
         self.current_day_schedule = []                  # Committed day-ahead generation schedule for current day (MWe)
         self.next_day_schedule = []                     # Predicted day-ahead generation schedule for next day (MWe)
         self.schedules = []                             # List to store all day-ahead generation schedules (MWe)
@@ -936,7 +926,7 @@ class DispatchWrap:
         self.total_cycle_net = 0                        # Total net generation by cycle (GWhe)
 
         params['clearsky_data'] = util.get_clearsky_data(params['clearsky_file'], params['time_steps_per_hour'])   # legacy call. TODO: cleanup?
-        params['solar_resource_data'] = util.get_ground_truth_weather_data(self.ground_truth_weather_file, params['time_steps_per_hour'])
+
 
         self.plant = plant                              # Plant design and operating properties
         self.params = params
@@ -950,7 +940,6 @@ class DispatchWrap:
         self.use_transient_model = params['is_rec_model_trans']
         self.use_transient_startup = params['is_rec_startup_trans']
         self.price_data = params['dispatch_factors_ts']
-        self.ground_truth_weather_data = params['solar_resource_data']
 
         # Initialize and adjust above parameters
         self.initialize()
@@ -967,23 +956,10 @@ class DispatchWrap:
             print ('Warning: Receiver flow is controlled from CD data, but field tracking fraction is controlled by ssc. Temperatures will likely be unrealistically high')
 
 
-        self.weather_data_for_dispatch = util.create_empty_weather_data(self.ground_truth_weather_data, self.ssc_time_steps_per_hour)
         self.current_day_schedule = np.zeros(24*self.day_ahead_schedule_steps_per_hour)
         self.next_day_schedule = np.zeros(24*self.day_ahead_schedule_steps_per_hour)
         if int(util.get_time_of_day(self.start_date)) == 0 and self.use_day_ahead_schedule and self.day_ahead_schedule_from == 'calculated':
             self.schedules.append(None)
-        
-        # TODO: Fix spanning years. The 'date' must be of the same year as the weather data, and not at the very end of year
-        self.current_forecast_weather_data = DispatchWrap.update_forecast_weather_data(
-                date=self.start_date - datetime.timedelta(hours = 24-self.forecast_issue_time),
-                current_forecast_weather_data=util.create_empty_weather_data(self.ground_truth_weather_data, self.ssc_time_steps_per_hour),
-                ssc_time_steps_per_hour=self.ssc_time_steps_per_hour,
-                forecast_steps_per_hour=self.forecast_steps_per_hour,
-                ground_truth_weather_data=self.ground_truth_weather_data,
-                forecast_issue_time=self.forecast_issue_time,
-                day_ahead_schedule_time=self.day_ahead_schedule_time,
-                clearsky_data=self.clearsky_data
-                )
 
 
         self.is_initialized = True
@@ -994,15 +970,18 @@ class DispatchWrap:
         self.dispatch_inputs['horizon'] -= int(timestep.seconds)
 
     #--- Run simulation
-    def run(self, start_date, timestep_days,
+    def run(self, start_date, timestep_days, weather_dataframe,
             f_estimates_for_dispatch_model, initial_plant_state=None):
-        """horizon = [s]"""
+
+        # Define horizon for this call to the dispatch optimization horizon (use specified 'dispatch_horizon' unless weather data is not available for the full horizon)
+        weather_timestep = (weather_dataframe.index[1]-weather_dataframe.index[0]).total_seconds()                     # Time step in weather data frame (s)
+        weather_horizon = (weather_dataframe.index[-1]-weather_dataframe.index[0]).total_seconds() + weather_timestep  # Total duration of weather available for simulation relative to simulation start_date (s)
+        horizon = int(min(weather_horizon, self.params['dispatch_horizon']*3600)/3600.)              
+        
+
         retvars = self.default_disp_stored_vars
-        horizon = self.dispatch_inputs['horizon']
         ursd_last=self.dispatch_inputs['ursd_last']
         yrsd_last=self.dispatch_inputs['yrsd_last']
-        current_forecast_weather_data=self.dispatch_inputs['current_forecast_weather_data'],
-        weather_data_for_dispatch=self.dispatch_inputs['weather_data_for_dispatch']
         schedules=self.dispatch_inputs['schedules']
         current_day_schedule=self.dispatch_inputs['current_day_schedule']
         next_day_schedule=self.dispatch_inputs['next_day_schedule']
@@ -1010,18 +989,14 @@ class DispatchWrap:
         if self.first_run == True:
             if ursd_last is None: ursd_last = self.ursd_last
             if yrsd_last is None: yrsd_last = self.yrsd_last
-            if weather_data_for_dispatch is None: weather_data_for_dispatch = self.weather_data_for_dispatch
             if current_day_schedule is None: current_day_schedule = self.current_day_schedule
             if next_day_schedule is None: next_day_schedule = self.next_day_schedule
             if schedules is None: schedules = self.schedules
-            if current_forecast_weather_data is None: current_forecast_weather_data = self.current_forecast_weather_data
 
             self.first_run == False
 
         time = self.current_time = self.start_date = start_date
         self.sim_days = timestep_days
-        self.current_forecast_weather_data = current_forecast_weather_data
-        self.weather_data_for_dispatch = weather_data_for_dispatch
         self.schedules = schedules
         self.current_day_schedule = current_day_schedule
         self.next_day_schedule = next_day_schedule
@@ -1061,19 +1036,6 @@ class DispatchWrap:
         horizon_update = int(self.dispatch_horizon_update*3600)
         freq = int(self.dispatch_frequency*3600)                    # Frequency of rolling horizon update (s)
 
-        #--- Update "forecasted" weather data (if relevant)
-        if self.is_optimize and (tod == self.forecast_issue_time*3600):
-            self.current_forecast_weather_data = DispatchWrap.update_forecast_weather_data(
-                date=time,
-                current_forecast_weather_data=self.current_forecast_weather_data,
-                ssc_time_steps_per_hour=self.ssc_time_steps_per_hour,
-                forecast_steps_per_hour=self.forecast_steps_per_hour,
-                ground_truth_weather_data=self.ground_truth_weather_data,
-                forecast_issue_time=self.forecast_issue_time,
-                day_ahead_schedule_time=self.day_ahead_schedule_time,
-                clearsky_data=self.clearsky_data
-                )
-
         #--- Update stored day-ahead generation schedule for current day (if relevant)
         if tod == 0 and self.use_day_ahead_schedule:
             self.next_day_schedule = [0 for s in self.next_day_schedule]
@@ -1091,23 +1053,13 @@ class DispatchWrap:
         #--- Run dispatch optimization (if relevant)
         if self.is_optimize:
 
-            #--- Update weather to use in dispatch optimization for this optimization horizon
-            self.weather_data_for_dispatch = update_dispatch_weather_data(
-                weather_data = self.weather_data_for_dispatch,
-                replacement_real_weather_data = self.ground_truth_weather_data,
-                replacement_forecast_weather_data = self.current_forecast_weather_data,
-                datetime = time,
-                total_horizon = horizon/3600.,      # [s]
-                dispatch_horizon = self.dispatch_weather_horizon
-                )
-
             #--- Run ssc for dispatch estimates: (using weather forecast time resolution for weather data and specified ssc time step)
-            npts_horizon = int(horizon/3600 * nph)
+            npts_horizon = int(horizon* nph)
             R_est = f_estimates_for_dispatch_model(
-                plant_design = D,
-                toy = toy,
-                horizon = horizon,      # [s]
-                weather_data = self.weather_data_for_dispatch,
+                plant_state = self.plant.state,
+                datetime_start = start_date,
+                horizon = horizon,     
+                weather_dataframe = weather_dataframe,
                 N_pts_horizon = npts_horizon,
                 clearsky_data = self.clearsky_data,
                 start_pt = startpt
@@ -1117,7 +1069,7 @@ class DispatchWrap:
             disp_in = setup_dispatch_model(
                 R_est = R_est,
                 freq = freq,
-                horizon = horizon,      # [s]
+                horizon = horizon,      
                 include_day_ahead_in_dispatch = include_day_ahead_in_dispatch,
                 dispatch_params = self.dispatch_params,
                 dispatch_steplength_array = self.dispatch_steplength_array,
@@ -1170,7 +1122,7 @@ class DispatchWrap:
                         day_ahead_schedule_time = self.day_ahead_schedule_time
                         )
 
-                    weather_at_day_ahead_schedule = get_weather_at_day_ahead_schedule(self.weather_data_for_dispatch, startpt, npts_horizon)
+                    weather_at_day_ahead_schedule = get_weather_at_day_ahead_schedule(weather_dataframe, startpt, npts_horizon)
                     self.weather_at_schedule.append(weather_at_day_ahead_schedule)  # Store weather used at the point in time the day ahead schedule was generated
 
                 #--- Set ssc dispatch targets
@@ -1194,8 +1146,6 @@ class DispatchWrap:
             'Rdisp': Rdisp,
             'ursd_last': ursd_last,
             'yrsd_last': yrsd_last,
-            'current_forecast_weather_data': self.current_forecast_weather_data,
-	        'weather_data_for_dispatch': self.weather_data_for_dispatch,
             'schedules': self.schedules,
 	        'current_day_schedule': self.current_day_schedule,
 	        'next_day_schedule': self.next_day_schedule
@@ -1210,76 +1160,9 @@ class DispatchWrap:
         return dispatch_outputs
 
 
-    @staticmethod
-    def update_forecast_weather_data(date, current_forecast_weather_data, ssc_time_steps_per_hour, forecast_steps_per_hour, ground_truth_weather_data,
-                                        forecast_issue_time, day_ahead_schedule_time, clearsky_data):
-        """
-        Inputs:
-            date
-            current_forecast_weather_data
-            ssc_time_steps_per_hour
-            forecast_steps_per_hour
-            ground_truth_weather_data
-            forecast_issue_time
-            day_ahead_schedule_time
-            clearsky_data
-
-        Outputs:
-            current_forecast_weather_data
-        """
-
-        offset30 = True
-        # print ('Updating weather forecast:', date)  #TODO: ensure this datetime is consistent with actual datetime
-        nextdate = date + datetime.timedelta(days = 1) # Forecasts issued at 4pm PST on a given day (PST) are labeled at midnight (UTC) on the next day 
-        wfdata = util.read_weather_forecast(nextdate, offset30)
-        t = int(util.get_time_of_year(date)/3600)   # Time of year (hr)
-        pssc = int(t*ssc_time_steps_per_hour) 
-        nssc_per_wf = int(ssc_time_steps_per_hour / forecast_steps_per_hour)
-        
-        #---Update forecast data in full weather file: Assuming forecast points are on half-hour time points, valid for the surrounding hour, with the first point 30min prior to the designated forecast issue time
-        if not offset30:  # Assume forecast points are on the hour, valid for the surrounding hour
-            n = len(wfdata['dn'])
-            for j in range(n): # Time points in weather forecast
-                q  = pssc + nssc_per_wf/2  if j == 0 else pssc + nssc_per_wf/2 + (j-1)*nssc_per_wf/2  # First point in annual weather data (at ssc time resolution) for forecast time point j
-                nuse = nssc_per_wf/2 if j==0 else nssc_per_wf 
-                for k in ['dn', 'wspd', 'tdry', 'rhum', 'pres']:
-                    val =  wfdata[k][j] if k in wfdata.keys() else ground_truth_weather_data[k][pssc]  # Use current ground-truth value for full forecast period if forecast value is not available            
-                    for i in range(nuse):  
-                        current_forecast_weather_data[k][q+i] = val   
-                
-        else: # Assume forecast points are on the half-hour, valid for the surrounding hour, with the first point 30min prior to the designated forecast issue time
-            n = len(wfdata['dn']) - 1
-            for j in range(n): 
-                q = pssc + j*nssc_per_wf
-                for k in ['dn', 'wspd', 'tdry', 'rhum', 'pres']:
-                    val =  wfdata[k][j+1] if k in wfdata.keys() else ground_truth_weather_data[k][pssc]  # Use current ground-truth value for full forecast period if forecast value is not available            
-                    for i in range(nssc_per_wf):  
-                        current_forecast_weather_data[k][q+i] = val
-
-        #--- Extrapolate forecasts to be complete for next-day dispatch scheduling (if necessary)
-        forecast_duration = n*forecast_steps_per_hour if offset30 else (n-0.5)*forecast_steps_per_hour
-        if forecast_issue_time > day_ahead_schedule_time:
-            hours_avail = forecast_duration - (24 - forecast_issue_time) - day_ahead_schedule_time  # Hours of forecast available at the point the day ahead schedule is due
-        else:
-            hours_avail = forecast_duration - (day_ahead_schedule_time - forecast_issue_time)
-            
-        req_hours_avail = 48 - day_ahead_schedule_time 
-        if req_hours_avail >  hours_avail:  # Forecast is not available for the full time required for the day-ahead schedule
-            qf = pssc + int((n-0.5)*nssc_per_wf) if offset30 else pssc + (n-1)*nssc_per_wf   # Point in annual arrays corresponding to last point forecast time point
-            cratio = 0.0 if wfdata['dn'][-1]<20 else wfdata['dn'][-1] / max(clearsky_data[qf], 1.e-6)  # Ratio of actual / clearsky at last forecast time point
-            
-            nmiss = int((req_hours_avail - hours_avail) * ssc_time_steps_per_hour)  
-            q = pssc + n*nssc_per_wf if offset30 else pssc + int((n-0.5)*nssc_per_wf ) 
-            for i in range(nmiss):
-                current_forecast_weather_data['dn'][q+i] = clearsky_data[q+i] * cratio    # Approximate DNI in non-forecasted time periods from expected clear-sky DNI and actual/clear-sky ratio at latest available forecast time point
-                for k in ['wspd', 'tdry', 'rhum', 'pres']:  
-                    current_forecast_weather_data[k][q+i] = current_forecast_weather_data[k][q-1]  # Assume latest forecast value applies for the remainder of the time period
-
-        return current_forecast_weather_data
-
 
 def reupdate_ssc_constants(D, params):
-    D['solar_resource_data'] = params['solar_resource_data']
+    #D['solar_resource_data'] = params['solar_resource_data']
     D['dispatch_factors_ts'] = params['dispatch_factors_ts']
 
     D['ppa_multiplier_model'] = params['ppa_multiplier_model']
@@ -1314,28 +1197,6 @@ def reupdate_ssc_constants(D, params):
 
 
 
-
-def update_dispatch_weather_data(weather_data, replacement_real_weather_data, replacement_forecast_weather_data, datetime, total_horizon, dispatch_horizon):
-        """
-        Replace select metrics in weather_data with those from the real and forecast weather data, depending on dispatch horizons
-        """
-        minutes_per_timestep = weather_data['minute'][1] - weather_data['minute'][0]
-        timesteps_per_hour = 1 / minutes_per_timestep * 60
-
-        t = int(util.get_time_of_year(datetime)/3600)        # Time of year (hr)
-        p = int(t*timesteps_per_hour)                        # First time index in weather arrays
-        n = int(total_horizon * timesteps_per_hour)                # Number of time indices in horizon (to replace)
-        for j in range(n):
-            for k in ['dn', 'wspd', 'tdry', 'rhum', 'pres']:
-                hr = j/timesteps_per_hour
-                if dispatch_horizon == -1 or hr < dispatch_horizon:
-                    weather_data[k][p+j] = replacement_real_weather_data[k][p+j]    
-                else:
-                    weather_data[k][p+j] = replacement_forecast_weather_data[k][p+j]
-
-        return weather_data
-
-
 def setup_dispatch_model(R_est, freq, horizon, include_day_ahead_in_dispatch,
     dispatch_params, plant, nonlinear_model_time, use_linear_dispatch_at_night,
     clearsky_data, night_clearky_cutoff, dispatch_steplength_array, dispatch_steplength_end_time,
@@ -1343,7 +1204,6 @@ def setup_dispatch_model(R_est, freq, horizon, include_day_ahead_in_dispatch,
     avg_purchase_price, day_ahead_tol_plus, day_ahead_tol_minus, startpt, toy,
     tod, current_day_schedule, day_ahead_pen_plus, day_ahead_pen_minus,
     dispatch_horizon, night_clearsky_cutoff, ursd_last, yrsd_last):
-    """horizon = [s]"""
 
     #--- Set dispatch optimization properties for this time horizon using ssc estimates
     ##########
@@ -1366,7 +1226,7 @@ def setup_dispatch_model(R_est, freq, horizon, include_day_ahead_in_dispatch,
         if clearsky_data[startpt:endpt].max() <= night_clearsky_cutoff:
             nonlinear_time = 0.0
 
-    dispatch_params.set_dispatch_time_arrays(dispatch_steplength_array, dispatch_steplength_end_time, horizon/3600., nonlinear_time, disp_time_weighting)
+    dispatch_params.set_dispatch_time_arrays(dispatch_steplength_array, dispatch_steplength_end_time, horizon, nonlinear_time, disp_time_weighting)
     dispatch_params.set_default_grid_limits()
     dispatch_params.P = util.translate_to_variable_timestep([p/1000. for p in price], sscstep/3600., dispatch_params.Delta)  # $/kWh
     dispatch_params.avg_price = avg_price/1000.
@@ -1418,6 +1278,6 @@ def get_day_ahead_schedule(day_ahead_schedule_steps_per_hour, Delta, Delta_e, ne
         return None
 
 
-def get_weather_at_day_ahead_schedule(weather_data_for_dispatch, startpt, npts_horizon):
-    return {k:weather_data_for_dispatch[k][startpt:startpt+npts_horizon] for k in ['dn', 'tdry', 'wspd']}
+def get_weather_at_day_ahead_schedule(weather_df, npts_horizon):
+    return {k: list(weather_df[k][0:npts_horizon])  for k in ['DNI', 'Temperature', 'Wind Speed']}
 

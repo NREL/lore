@@ -165,6 +165,7 @@ class Mediator:
         dispatch_outputs = self.dispatch_wrap.run(
             start_date=datetime_start,
             timestep_days=(datetime_end - datetime_start).days,                             # not timestep but actually duration in days
+            weather_dataframe = weather_dataframe,
             f_estimates_for_dispatch_model=self.tech_wrap.estimates_for_dispatch_model,
             initial_plant_state=plant_state
         )
