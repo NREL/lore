@@ -296,10 +296,11 @@ class Mediator:
                 # The TMY file is in hours.
                 resolution = pd.Timedelta(hours = 1),
             )
-            # The indices of the two dataframes are confusing. Convert the
-            # forecast to a list, and use the median forecast. We could consider
-            # doing something else here in future.
-            data['DNI'] = list(solar_forecast['0.5'])
+            data['DNI'] = list(solar_forecast['dni'])
+            data['DHI'] = list(solar_forecast['dhi'])
+            data['GNI'] = list(solar_forecast['gni'])
+            data['Wind Speed'] = list(solar_forecast['wind_speed'])
+            data['Temperature'] = list(solar_forecast['temp_air'])
         return data
 
 def mediate_continuously(update_interval=5):
