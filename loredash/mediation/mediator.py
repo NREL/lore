@@ -101,10 +101,9 @@ class Mediator:
         if datetime_start.tzinfo is None or datetime_end.tzinfo is None or \
             datetime_start.tzinfo != datetime_end.tzinfo:
             print("WARNING: Timesteps in run_once were not properly localized.")
-            datetime_start = datetime_start.replace(
-                tzinfo = pytz.timezone(self.plant.design['timezone_string']))
-            datetime_end = datetime_end.replace(
-                tzinfo = pytz.timezone(self.plant.design['timezone_string']))
+            _tz = pytz.timezone(self.plant.design['timezone_string'])
+            datetime_start = _tz.localize(datetime_start)
+            datetime_end = _tz.localize(datetime_end)
         self._validate_plant_local_time(datetime_start)
         self._validate_plant_local_time(datetime_end)
 
@@ -131,14 +130,14 @@ class Mediator:
             datetime_end=datetime_start + datetime.timedelta(hours=self.dispatch_wrap.dispatch_horizon),
             timestep=datetime.timedelta(minutes=min(self.dispatch_wrap.dispatch_steplength_array)),
             tmy3_path=self.weather_file,
-            update_forecast=True)
+            use_forecast=True)
 
         weather_simulate = self.get_weather_df(
             datetime_start=datetime_start,
             datetime_end=datetime_end,
             timestep=datetime.timedelta(hours=1/self.params['time_steps_per_hour']),
             tmy3_path=self.weather_file,
-            update_forecast=False)          # TODO: this update_forecast should probably be True too. Can we optimize these two get_weather_df calls
+            use_forecast=False)          # TODO: this use_forecast should probably be True too. Can we optimize these two get_weather_df calls
                                             #       since getting the forecasts takes significant time?
 
         # Set clearsky data
@@ -267,55 +266,77 @@ class Mediator:
         except Exception as err:
             raise(err)
     
-    def get_weather_df(self, datetime_start, datetime_end, timestep, tmy3_path, update_forecast=False):
-        """Return a dataframe of weather data at `timestep` resolution covering the time-span
-        given by datetime_start and datetime_end. Datetimes are in plant-local time.
+    def _toTMYTime(self, time):
+        "Convert a time to TMY timezone, which uses a fixed offset."
+        fixed_tz = pytz.FixedOffset(60 * self.plant.design['timezone'])
+        return time.astimezone(fixed_tz).replace(tzinfo=None)
 
-        If `update_forecast`, replace the DNI data with the latest NDFD forecast
+    def get_weather_df(
+        self,
+        datetime_start,
+        datetime_end,
+        timestep,
+        tmy3_path,
+        use_forecast=False,
+    ):
+        """Return a dataframe of weather data at `timestep` resolution (of
+        at-most 1 hour) covering the time-span given by datetime_start and
+        datetime_end. Datetimes are in plant-local time.
+
+        If `use_forecast`, replace the DNI data with the latest NDFD forecast
         from the forecasts submodule.
         """
         self._validate_plant_local_time(datetime_start)
         self._validate_plant_local_time(datetime_end)
+        assert(timestep.total_seconds() <= 3600)
+        # Get the TMY data.
         data = tmy3_to_df(
             tmy3_path,
-            datetime_start.replace(tzinfo = None),          # strip tzinfo as it's local time
-            datetime_end.replace(tzinfo = None))            # strip tzinfo as it's local time
-
-        # Resample/upscale data into finer timesteps, filling with previous value
-        assert(timestep.total_seconds() <= 3600)
-        freq_orig = pd.to_timedelta(to_offset(pd.infer_freq(data.index)))
+            datetime_start.replace(tzinfo=None),
+            datetime_end.replace(tzinfo=None),
+        )
+        # Resample data into finer timesteps, filling with previous value.
         data = data.resample(timestep).pad()
-
         # Extrapolate out last point, filling with last value
         dates = data.index
-        dates = dates.union(pd.date_range(                  # extend datetime index
-            start=dates[-1] + dates.freq,
-            periods=freq_orig/dates.freq - 1,
-            freq=dates.freq))
+        n_periods = pd.to_timedelta(to_offset(pd.infer_freq(data.index))) / dates.freq - 1
+        dates = dates.union(
+            pd.date_range(
+                start=dates[-1] + dates.freq,
+                periods=n_periods,
+                freq=dates.freq,
+            ),
+        )
         data = data.reindex(dates)
-        data = data.interpolate(method='pad')               # fill new NaNs at end with last value
-
-        if update_forecast:
-            #TODO: fix how the DNI is being zeroed out
-            # Re-localize the timezone, based on the first hour returned from the TMY file.
-            start = data.index[0].replace(tzinfo=datetime_start.tzinfo)
+        data.fillna(method = 'ffill', inplace = True)
+        # Re-localize the datetimes again.
+        #  - First add the FixedOffset to the index
+        #  - Then convert the FixedOffset back to the plant timezone
+        tz = pytz.FixedOffset(60 * self.plant.design['timezone'])
+        data.index = data.index.tz_localize(tz).tz_convert(datetime_start.tzinfo)
+        if use_forecast:
             tic = time.process_time()
             solar_forecast = self.forecaster.getForecast(
-                datetime_start = start,
-                horizon = data.index[-1] - data.index[0] + data.index.freq,
-                resolution = timestep,
-            )
+                datetime_start=data.index[0],
+                horizon=data.index[-1] - data.index[0] + data.index.freq,
+                resolution=timestep)
             toc = time.process_time()
             print("Generating forecast took {seconds:.2f} seconds".format(seconds=toc-tic))
-            data['DNI'] = list(solar_forecast['dni'])
-            data['DHI'] = list(solar_forecast['dhi'])
-            data['GNI'] = list(solar_forecast['gni'])
-            data['Wind Speed'] = list(solar_forecast['wind_speed'])
-            data['Temperature'] = list(solar_forecast['temp_air'])
-            # TODO
-            # data = data.round({'Clear Sky DNI': 0})    # round away decimal points TODO: move this operation to forecasts
-        else:
-            data['Clear Sky DNI'] = [0] * len(data.index)   #TODO: do something proper here?
+            # Annoying issue: if we ask NDFD for a forecast beginning at time T,
+            # it may give us one starting in some period T+N. It's a but
+            # confusing, but we just need to take the first 0:-N elements of
+            # solar_forecast as the N:end elements of `data`.
+            offset = int((solar_forecast.index[0] - data.index[0]) / timestep)
+            key_map = {
+                'dni': 'DNI',
+                'dhi': 'DHI',
+                'ghi': 'GHI',
+                'wind_speed': 'Wind Speed',
+                'temp_air': 'Ambient Temperature',
+                'clear_sky': 'Clear Sky DNI',
+            }
+            for (k, v) in key_map.items():
+                data.loc[data.index[offset:], v] = list(solar_forecast[k])[:-offset]
         return data
 
 def mediate_continuously(update_interval=5):
