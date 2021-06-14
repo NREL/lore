@@ -6,6 +6,8 @@ import time, copy, datetime, math, pytz
 from twisted.internet.task import LoopingCall
 from twisted.internet import reactor
 import pandas as pd
+from pandas.tseries.frequencies import to_offset
+import numpy as np
 
 from data.mspt_2020_defaults import default_ssc_params
 from mediation import tech_wrap, data_validator, dispatch_wrap, models, forecasts, util
@@ -38,16 +40,13 @@ class Mediator:
             params=default_ssc_params,                                          # already a copy so tech_wrap cannot edit
             plant=copy.deepcopy(self.plant),                                    # copy so tech_wrap cannot edit
             dispatch_wrap_params=dispatch_wrap.dispatch_wrap_params.copy(),     # copy so tech_wrap cannot edit
-            weather_file=None
-            )
-        # Initialize forecasts
-        p = plant_.plant_design
+            weather_file=None)
+
         self.forecaster = forecasts.SolarForecast(
-            p['latitude'],
-            p['longitude'],
-            p['timezone_string'],
-            p['elevation'],
-        )
+            self.plant.design['latitude'],
+            self.plant.design['longitude'],
+            self.plant.design['timezone_string'],
+            self.plant.design['elevation'])
 
         self.plant.update_flux_maps(self.tech_wrap.calc_flux_eta_maps(self.plant.get_design(), self.plant.get_state()))
 
@@ -55,13 +54,6 @@ class Mediator:
         dispatch_wrap_params = dispatch_wrap.dispatch_wrap_params                                   # TODO: replace with a path to a JSON config file
         dispatch_wrap_params.update(self.params)                                                    # include mediator params in with dispatch_wrap_params
         self.dispatch_wrap = dispatch_wrap.DispatchWrap(plant=self.plant, params=dispatch_wrap.dispatch_wrap_params)
-
-    def _validate_plant_local_time(self, time):
-        """A helper function that validates the given `time` is localized to the
-        timezone of the plant.
-        """
-        assert(time.tzinfo.zone == self.plant.design['timezone_string'])
-        return
     
     def run_once(self, datetime_start, datetime_end):
         """Get data from external plant and weather interfaces and run entire set
@@ -134,12 +126,25 @@ class Mediator:
 
         # Step 1, Thread 2:
         # a. Get weather data and forecasts
-        # Internall, get_weather_df gets the forecasts.
-        weather_dataframe = self.get_weather_df(
-            datetime_start,
-            datetime_end,
-            tmy3_path = self.weather_file,
-        )
+        weather_dispatch = self.get_weather_df(
+            datetime_start=datetime_start,
+            datetime_end=datetime_start + datetime.timedelta(hours=self.dispatch_wrap.dispatch_horizon),
+            timestep=datetime.timedelta(minutes=min(self.dispatch_wrap.dispatch_steplength_array)),
+            tmy3_path=self.weather_file,
+            update_forecast=True)
+
+        weather_simulate = self.get_weather_df(
+            datetime_start=datetime_start,
+            datetime_end=datetime_end,
+            timestep=datetime.timedelta(hours=1/self.params['time_steps_per_hour']),
+            tmy3_path=self.weather_file,
+            update_forecast=False)          # TODO: this update_forecast should probably be True too. Can we optimize these two get_weather_df calls
+                                            #       since getting the forecasts takes significant time?
+
+        # Set clearsky data
+        clearsky_data = np.array(weather_dispatch['Clear Sky DNI'])
+        clearsky_data_padded = np.pad(clearsky_data, (0, 365*24*60 - len(clearsky_data)), 'constant', constant_values=(0, 0))   #TODO fix this hack
+        self.tech_wrap.set({'rec_clearsky_dni': clearsky_data_padded})
 
         clearsky_data = self.forecaster.getClearSky(
             datetime_start,
@@ -158,7 +163,7 @@ class Mediator:
         dispatch_outputs = self.dispatch_wrap.run(
             start_date=datetime_start,
             timestep_days=(datetime_end - datetime_start).days,                             # not timestep but actually duration in days
-            weather_dataframe = weather_dataframe,
+            weather_dataframe=weather_dispatch,
             f_estimates_for_dispatch_model=self.tech_wrap.estimates_for_dispatch_model,
             initial_plant_state=plant_state
         )
@@ -181,7 +186,7 @@ class Mediator:
             datetime_end,
             self.simulation_timestep,
             plant_state,
-            weather_dataframe=weather_dataframe)
+            weather_dataframe=weather_simulate)
         print("Generated Energy [kWh]= ", tech_outputs["annual_energy"])
 
         # c. Validate output data
@@ -227,6 +232,13 @@ class Mediator:
                                                                             # (as noted for "time_stop" on line 1004 in cmod_tcsmolten_salt.cpp)
         self.run_once(datetime_start_prev_day, datetime_end_current_day)
         return 0
+    
+    def _validate_plant_local_time(self, time):
+        """A helper function that validates the given `time` is localized to the
+        timezone of the plant.
+        """
+        assert(time.tzinfo.zone == self.plant.design['timezone_string'])
+        return
 
     def bulk_add_to_db_table(self, records):
         n_records = len(records['time_hr'])
@@ -262,37 +274,54 @@ class Mediator:
         except Exception as err:
             raise(err)
     
-    def get_weather_df(self, datetime_start, datetime_end, tmy3_path, update_forecast=False):
-        """Return a dataframe of weather data in 1h resolution (measured on the
-        hour) covering the time-span given by datetime_start and datetime_end.
-
-        These dates are given in plant-local time!
+    def get_weather_df(self, datetime_start, datetime_end, timestep, tmy3_path, update_forecast=False):
+        """Return a dataframe of weather data at `timestep` resolution covering the time-span
+        given by datetime_start and datetime_end. Datetimes are in plant-local time.
 
         If `update_forecast`, replace the DNI data with the latest NDFD forecast
-        from the `forecasts` submodule.
+        from the forecasts submodule.
         """
         self._validate_plant_local_time(datetime_start)
         self._validate_plant_local_time(datetime_end)
-        # The TMY file is in local time, so strip the tzinfo objects.
         data = tmy3_to_df(
             tmy3_path,
-            datetime_start.replace(tzinfo = None),
-            datetime_end.replace(tzinfo = None))
+            datetime_start.replace(tzinfo = None),          # strip tzinfo as it's local time
+            datetime_end.replace(tzinfo = None))            # strip tzinfo as it's local time
+
+        # Resample/upscale data into finer timesteps, filling with previous value
+        assert(timestep.total_seconds() <= 3600)
+        freq_orig = pd.to_timedelta(to_offset(pd.infer_freq(data.index)))
+        data = data.resample(timestep).pad()
+
+        # Extrapolate out last point, filling with last value
+        dates = data.index
+        dates = dates.union(pd.date_range(                  # extend datetime index
+            start=dates[-1] + dates.freq,
+            periods=freq_orig/dates.freq - 1,
+            freq=dates.freq))
+        data = data.reindex(dates)
+        data = data.interpolate(method='pad')               # fill new NaNs at end with last value
+
         if update_forecast:
-            # Re-localize the timezone, bassed on the first hour returned from
-            # the TMY file.
+            #TODO: fix how the DNI is being zeroed out
+            # Re-localize the timezone, based on the first hour returned from the TMY file.
             start = data.index[0].replace(tzinfo=datetime_start.tzinfo)
+            tic = time.process_time()
             solar_forecast = self.forecaster.getForecast(
-                datetime_start = start,
-                # Match the length of data from the TMY file.
-                horizon = pd.Timedelta(hours = len(data)),
-                # The TMY file is in hours.
-                resolution = pd.Timedelta(hours = 1),
-            )
+                datetime_start=start,
+                horizon=data.index[-1] - data.index[0] + data.index.freq,
+                resolution=timestep)
+            toc = time.process_time()
+            print("Generating forecast took {seconds:.2f} seconds".format(seconds=toc-tic))
+
             # The indices of the two dataframes are confusing. Convert the
-            # forecast to a list, and use the median forecast. We could consider
-            # doing something else here in future.
+            # forecast to a list, and use the median forecast.
+            # TODO: We could consider doing something else here in future.
             data['DNI'] = list(solar_forecast['0.5'])
+            data['Clear Sky DNI'] = list(solar_forecast['clear_sky'])
+            # data = data.round({'Clear Sky DNI': 0})    # round away decimal points TODO: move this operation to forecasts
+        else:
+            data['Clear Sky DNI'] = [0] * len(data.index)   #TODO: do something proper here?
         return data
 
 def mediate_continuously(update_interval=5):
@@ -402,7 +431,7 @@ mediator_params = {
     'start_date_year':                      2018,                   # TODO: Remove the need for this somewhat arbitrary year
 
     # Control conditions
-	'time_steps_per_hour':			        60,			            # Simulation time resolution in ssc (1min)   DUPLICATED to: ssc_time_steps_per_hour
+	'time_steps_per_hour':			        12,			            # Simulation time resolution in ssc (1min)   DUPLICATED to: ssc_time_steps_per_hour
 	'is_dispatch':					        0,                      # Always disable dispatch optimization in ssc
 	'is_dispatch_targets':			        True,		            # True if (is_optimize or control_cycle == 'CD_data')
     'is_optimize':					        True,                   # Use dispatch optimization

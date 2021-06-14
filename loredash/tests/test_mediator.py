@@ -53,6 +53,7 @@ def test_get_weather_df():
     weather = m.get_weather_df(
         datetime_start,
         datetime_start + datetime.timedelta(days = 7),
+        datetime.timedelta(hours=1),
         m.weather_file,
     )
     assert(len(weather) == 169 == 7 * 24 + 1)
@@ -63,6 +64,7 @@ def test_get_weather_df():
         m.get_weather_df(
             datetime_start,
             datetime_start + datetime.timedelta(days = 1),
+            datetime.timedelta(hours=1),
             m.weather_file,
             update_forecast = True,
         )
@@ -71,11 +73,13 @@ def test_get_weather_df():
     tmy_weather = m.get_weather_df(
         datetime_start,
         datetime_start + datetime.timedelta(days = 2),
+        datetime.timedelta(hours=1),
         m.weather_file,
     )
     forecast_weather = m.get_weather_df(
         datetime_start,
         datetime_start + datetime.timedelta(days = 2),
+        datetime.timedelta(hours=1),
         m.weather_file,
         update_forecast = True,
     )

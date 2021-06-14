@@ -41,11 +41,11 @@ class TechWrap:
         datetime_end = datetime_start                                           # run for just first timestep of year
         self.ssc.set({'field_model_type': 2})                                   # generate flux and eta maps but don't optimize field or tower
         original_values = {k:self.ssc.get(k) for k in ['is_dispatch_targets', 'rec_clearsky_model']}
-        self.ssc.set({'is_dispatch_targets':False, 'rec_clearsky_model': 1})    # Set parameters so that input arrays for dispatch targets and clearsky DNI are unnecessary (these aren't needed for flux map calculations anyway)
+        self.ssc.set({'is_dispatch_targets':False, 'rec_clearsky_model': 1})    # set so unneeded dispatch targets and clearsky DNI are not required
         tech_outputs = self.simulate(datetime_start, datetime_end, None, plant_state=plant_state, solar_resource_data=solar_resource_data)
-        self.ssc.set(original_values)                                           # Revert back to original specifications 
+        self.ssc.set(original_values)                                           # revert back to original specifications
         eta_map = tech_outputs["eta_map_out"]                                   # get maps and set for subsequent runs
-        flux_maps = [r[2:] for r in tech_outputs['flux_maps_for_import']]       # Don't include first two columns
+        flux_maps = [r[2:] for r in tech_outputs['flux_maps_for_import']]       # don't include first two columns
         A_sf_in = tech_outputs["A_sf"]
         flux_eta_maps = {'eta_map': eta_map, 'flux_maps': flux_maps, 'A_sf_in': A_sf_in}
         self.ssc.set(flux_eta_maps)
@@ -228,6 +228,7 @@ class TechWrap:
 
             # the number of records must be a integer multiple of 8760
             # see: sam_dev/ssc/ssc/common.cpp, line 1272
+            # TODO: verify that SSC is reading from the start of the weather data array at non-New Year's start datetimes
             diff = len(validated_solar_resource_data['dn']) % 8760
             if diff > 0:
                 padding = [0] * (8760 - diff)

@@ -15,9 +15,9 @@ dispatch_wrap_params = {
     # Dispatch optimization
 	'dispatch_frequency':			        1,                      # Frequency of dispatch re-optimization (hr)
 	'dispatch_weather_horizon':		        2,                      # Time point in hours (relative to start of optimization horizon) defining the transition from actual weather to forecasted weather used in the dispatch model. Set to 0 to use forecasts for the full horizon, set to -1 to use actual weather for the full horizon, or any value > 0 to combine actual/forecasted weather
-    'dispatch_horizon':                     48.,                    # Dispatch time horizon (hr) 
+    'dispatch_horizon':                     48.,                    # Time into future from start of current timestep that dispatch model is modeling (hr)
     'dispatch_horizon_update':              24.,                    # Frequency of dispatch time horizon update (hr) -> set to the same value as dispatch_frequency for a fixed-length horizon 
-    'dispatch_steplength_array':            [5, 15, 60],            # Dispatch time step sizes (min)
+    'dispatch_steplength_array':            [5, 15, 60],            # Dispatch time step sizes used in the variable timestep operations (min)
     'dispatch_steplength_end_time':         [1, 4, 48],             # End time for dispatch step lengths (hr)
     'nonlinear_model_time':                 4.0,                    # Amount of time to apply nonlinear dispatch model (hr) (not currently used)
     'disp_time_weighting':                  0.999,                  # Dispatch time weighting factor. 
@@ -925,9 +925,6 @@ class DispatchWrap:
         self.total_cycle_gross = 0                      # Total gross generation by cycle (GWhe)
         self.total_cycle_net = 0                        # Total net generation by cycle (GWhe)
 
-        params['clearsky_data'] = util.get_clearsky_data(params['clearsky_file'], params['time_steps_per_hour'])   # legacy call. TODO: cleanup?
-
-
         self.plant = plant                              # Plant design and operating properties
         self.params = params
 
@@ -1010,6 +1007,9 @@ class DispatchWrap:
         D.update(self.plant.flux_maps)
         D['time_start'] = int(util.get_time_of_year(self.start_date))
         D['time_stop'] = int(util.get_time_of_year(self.start_date) + self.sim_days*24*3600)
+        clearsky_data = np.array(weather_dataframe['Clear Sky DNI'])
+        clearsky_data_padded = np.pad(clearsky_data, (0, len(self.dispatch_factors_ts) - len(clearsky_data)), 'constant', constant_values=(0, 0))
+        self.params['clearsky_data'] = clearsky_data_padded
         reupdate_ssc_constants(D, self.params)
 
         #-------------------------------------------------------------------------
@@ -1061,7 +1061,7 @@ class DispatchWrap:
                 horizon = horizon,     
                 weather_dataframe = weather_dataframe,
                 N_pts_horizon = npts_horizon,
-                clearsky_data = self.clearsky_data,
+                clearsky_data = clearsky_data_padded,
                 start_pt = startpt
             )
 
@@ -1078,7 +1078,7 @@ class DispatchWrap:
                 plant = self.plant,
                 nonlinear_model_time = self.nonlinear_model_time,
                 use_linear_dispatch_at_night = self.use_linear_dispatch_at_night,
-                clearsky_data = self.clearsky_data,
+                clearsky_data = clearsky_data_padded,
                 night_clearky_cutoff = self.night_clearsky_cutoff,
                 disp_time_weighting = self.disp_time_weighting,
                 price = self.price_data[startpt:startpt+npts_horizon],          # [$/MWh] Update prices for this horizon
