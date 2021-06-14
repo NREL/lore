@@ -32,7 +32,7 @@ def test_tmy3_to_df():
         datetime_start,
         datetime_start + datetime.timedelta(days = 7)
     )
-    assert(len(data) == 24 * 7 + 1)
+    assert(len(data) == 169 == 24 * 7 + 1)
     # Check that the TMY file is in local time!
     assert(sum(data[0:4]['DNI']) == 0)
     # Check that the DNI is in W/m^2
@@ -66,25 +66,34 @@ def test_get_weather_df():
             datetime_start + datetime.timedelta(days = 1),
             datetime.timedelta(hours=1),
             m.weather_file,
-            update_forecast = True,
+            use_forecast = True,
         )
     # Test getting one day of weather with the current forecast.
     datetime_start = datetime.datetime.now(tzinfo)
     tmy_weather = m.get_weather_df(
         datetime_start,
         datetime_start + datetime.timedelta(days = 2),
-        datetime.timedelta(hours=1),
+        datetime.timedelta(hours=0.5),
         m.weather_file,
     )
     forecast_weather = m.get_weather_df(
         datetime_start,
         datetime_start + datetime.timedelta(days = 2),
-        datetime.timedelta(hours=1),
+        datetime.timedelta(hours=0.5),
         m.weather_file,
-        update_forecast = True,
+        use_forecast = True,
     )
     assert(len(tmy_weather) == len(forecast_weather))
     assert(sum(tmy_weather['DNI']) != sum(forecast_weather['DNI']))
+    assert(sum(tmy_weather['DNI']) > 100)
+    assert(not tmy_weather['DNI'].isnull().values.any())
+    assert(sum(forecast_weather['DNI']) > 100)
+    assert(not forecast_weather['DNI'].isnull().values.any())
+    # Check that they are linked up timezone-wise. (If it's not sunny in the TMY
+    # file, it isn't sunny in the forecast.)
+    for (tmy, forecast) in zip(tmy_weather['DNI'], forecast_weather['DNI']):
+        if tmy < 100:
+            assert(forecast < 100)
     return
 
 def test_normalize_timesteps():
