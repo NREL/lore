@@ -318,7 +318,7 @@ class Mediator:
             tic = time.process_time()
             solar_forecast = self.forecaster.getForecast(
                 datetime_start=data.index[0],
-                horizon=data.index[-1] - data.index[0] + data.index.freq,
+                horizon=data.index[-1] - data.index[0] + to_offset(pd.infer_freq(data.index)),
                 resolution=timestep)
             toc = time.process_time()
             print("Generating forecast took {seconds:.2f} seconds".format(seconds=toc-tic))
