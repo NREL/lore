@@ -8,6 +8,7 @@ LABEL maintainer="NREL - Thermal Sciences"
 ENV PYTHONUNBUFFERED 1
 
 # Replicate a virtualenv, see here for why:  https://pythonspeed.com/articles/activate-virtualenv-dockerfile/
+# Also see: https://pythonspeed.com/articles/activate-conda-dockerfile/
 # ENV VIRTUAL_ENV=/loredash
 # RUN python -m venv $VIRTUAL_ENV
 # ENV PATH="$VIRTUAL_ENV:$PATH"
@@ -17,6 +18,9 @@ COPY ./requirements.txt /requirements.txt
 RUN apt-get -qq update
 RUN apt-get -qq install gcc
 RUN pip install -r /requirements.txt
+
+# Install coinor-cbc solver for Pyomo (Windows uses cbc.exe)
+RUN apt-get install -y coinor-cbc
 
 # Create a folder in the image called 'loredash', make that the working directory in the image, and copy everything
 #  into that image folder
