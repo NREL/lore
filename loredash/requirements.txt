@@ -39,6 +39,7 @@ pyct==0.4.8
 Pygments==2.7.4
 PyHamcrest==2.0.2
 PyInquirer==1.0.3
+pyinstrument==3.4.2
 Pyomo==6.0
 pyparsing==2.4.7
 pytest==6.2.4
