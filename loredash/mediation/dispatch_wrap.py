@@ -912,12 +912,22 @@ class DispatchWrap:
     def run(self, datetime_start, weather_dataframe,
             f_estimates_for_dispatch_model, update_interval, initial_plant_state):
         '''update_interval = frequency (hr) at which dispatch optimization will be re-run'''
-
-        # Define horizon for this call to the dispatch optimization horizon (use specified 'dispatch_horizon' unless weather data is not available for the full horizon)
+        
         weather_timestep = (weather_dataframe.index[1]-weather_dataframe.index[0]).total_seconds()                     # Time step in weather data frame (s)
-        weather_horizon = (weather_dataframe.index[-1]-weather_dataframe.index[0]).total_seconds() + weather_timestep  # Total duration of weather available for simulation relative to simulation start_date (s)
+       
+        #--- Update weather_dataframe such that first point coincides with datetime_start.  
+        # Assumes that values in weather_dataframe starts at the beginning of the hour containing datetime_start
+        # TODO: Is this consistent with data coming from weather forecasts?
+        weather_dataframe_loc = deepcopy(weather_dataframe)
+        n = int(datetime_start.minute*60 / weather_timestep)   # Point in weather data corresponding to datetime_start
+        weather_dataframe_loc.drop(weather_dataframe_loc.index[[i for i in range(n)]], inplace = True)
+
+        #--- Define horizon for this call to the dispatch optimization horizon (use specified 'dispatch_horizon' unless weather data is not available for the full horizon)
+        weather_horizon = (weather_dataframe_loc.index[-1]-weather_dataframe_loc.index[0]).total_seconds() + weather_timestep  # Total duration of weather available for simulation relative to simulation start_date (s)
         horizon = int(min(weather_horizon, self.params['dispatch_horizon']*3600)/3600.)              
         
+ 
+
         retvars = self.default_disp_stored_vars
 
         if self.first_run == True:
@@ -932,7 +942,8 @@ class DispatchWrap:
 
         self.plant.state = initial_plant_state
 
-        clearsky_data = np.array(weather_dataframe['Clear Sky DNI'])
+        clearsky_data = np.array(weather_dataframe_loc['Clear Sky DNI'])
+        np.nan_to_num(clearsky_data, copy = False, nan = 0.0)  # TODO: Where are the nan values coming from?
         clearsky_data_padded = np.pad(clearsky_data, (0, len(self.price_data) - len(clearsky_data)), 'constant', constant_values=(0, 0))
         self.params['clearsky_data'] = clearsky_data_padded
 
@@ -966,7 +977,7 @@ class DispatchWrap:
             plant_state = self.plant.state,
             datetime_start = datetime_start,
             horizon = horizon,     
-            weather_dataframe = weather_dataframe,
+            weather_dataframe = weather_dataframe_loc,
             N_pts_horizon = npts_horizon,    # TODO: These last three inputs shouldn't be needed once clearsky DNI is replaced 
             clearsky_data = clearsky_data_padded,
             start_pt = startpt
@@ -1010,7 +1021,7 @@ class DispatchWrap:
                     day_ahead_schedule_time = self.params['day_ahead_schedule_time']
                     )
 
-                weather_at_day_ahead_schedule = get_weather_at_day_ahead_schedule(weather_dataframe, startpt, npts_horizon)
+                weather_at_day_ahead_schedule = get_weather_at_day_ahead_schedule(weather_dataframe_loc, startpt, npts_horizon)
                 self.weather_at_schedule.append(weather_at_day_ahead_schedule)  # Store weather used at the point in time the day ahead schedule was generated
 
             #--- Set ssc dispatch targets
