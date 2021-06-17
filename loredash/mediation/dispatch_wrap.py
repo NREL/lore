@@ -8,7 +8,7 @@ import pyomo.environ as pe
 from pyomo.opt import TerminationCondition
 import datetime
 
-from mediation import util, dispatch_model
+from mediation import dispatch_model
 
 
 dispatch_wrap_params = {
@@ -490,9 +490,9 @@ class DispatchParams:
         Qin = S['Q_thermal']*1000
         if require_Qin_nonzero:
             Qin = np.maximum(0.0, S['Q_thermal']*1000)
-        self.Qin = util.translate_to_variable_timestep(Qin, sscstep, self.Delta)
+        self.Qin = translate_to_variable_timestep(Qin, sscstep, self.Delta)
         ratio = [0 if S['clearsky'][i] < 0.01 else min(1.0, S['beam'][i]/S['clearsky'][i]) for i in range(n)]   # Ratio of actual to clearsky DNI 
-        self.F = util.translate_to_variable_timestep(ratio, sscstep, self.Delta)
+        self.F = translate_to_variable_timestep(ratio, sscstep, self.Delta)
         self.F = np.minimum(self.F, 1.0)
         self.Q_cls = self.Qin / np.maximum(1.e-6, self.F)
 
@@ -503,12 +503,12 @@ class DispatchParams:
             self.delta_rs[t] = min(1., max(self.Er / max(self.Qin[t]*self.Delta[t], 1.), self.Drsu/self.Delta[t]))
             self.delta_cs[t] = min(1., self.Ec/(self.Qc*self.Delta[t]) )
         
-        self.P_field_rec = util.translate_to_variable_timestep((S['P_tower_pump']+S['pparasi'])*1000, sscstep, self.Delta)
+        self.P_field_rec = translate_to_variable_timestep((S['P_tower_pump']+S['pparasi'])*1000, sscstep, self.Delta)
 
         # Set time-series ambient temperature corrections
         if design['pc_config'] == 1: # User-defined cycle
             # TODO: Note that current user-defined cycle neglects ambient T effects
-            Tdry = util.translate_to_variable_timestep(S['tdry'], sscstep, self.Delta)
+            Tdry = translate_to_variable_timestep(S['tdry'], sscstep, self.Delta)
             etamult, wmult = self.get_ambient_T_corrections_from_udpc_inputs(design, Tdry)
      
             #TODO: Make sure these should be efficiency values and not mulipliers
@@ -535,7 +535,7 @@ class DispatchParams:
 
     def set_linearized_params_from_udpc_inputs(self, plant):
         q_pb_design = plant.get_cycle_thermal_rating()  #MWt
-        D = util.interpret_user_defined_cycle_data(plant.design['ud_ind_od'])
+        D = interpret_user_defined_cycle_data(plant.design['ud_ind_od'])
         eta_adj_pts = [plant.design['ud_ind_od'][p][3]/plant.design['ud_ind_od'][p][4] for p in range(len(plant.design['ud_ind_od'])) ]
         xpts = D['mpts']
         step = xpts[1] - xpts[0]
@@ -560,7 +560,7 @@ class DispatchParams:
     # Use off-design ambient T performance in user-defined cycle data to interpolate of ambient temperature corrections. Assumes off-design tempertures are specified at a constant interval
     def get_ambient_T_corrections_from_udpc_inputs(self, design, Tamb):
         n = len(Tamb)  # Tamb = set of ambient temperature points for each dispatch time step
-        D = util.interpret_user_defined_cycle_data(design['ud_ind_od'])
+        D = interpret_user_defined_cycle_data(design['ud_ind_od'])
         
         Tambpts = np.array(D['Tambpts'])
         i0 = 3*D['nT']+3*D['nm']+D['nTamb']  # first index in udpc data corresponding to performance at design point HTF T, and design point mass flow
@@ -750,7 +750,7 @@ class DispatchSoln:
             vals = getattr(self, k)
             if (type(vals) == type([]) or type(vals) == type(np.array(1))) and len(vals) >= len(inds):
                 vals = [vals[i] for i in inds]
-                R[k] = util.translate_to_fixed_timestep(vals, dt, sscstep)  
+                R[k] = translate_to_fixed_timestep(vals, dt, sscstep)  
         return R 
     
     def get_value_at_time(self, disp_params, time, name):
@@ -839,7 +839,7 @@ class DispatchTargets:
         # Translate to fixed ssc timestep and limit arrays to the desired time horizon (length of dispatch target input arrays in ssc needs to match the designated simulation time))
         npts = int(horizon / sscstep)
         for k in D.keys():
-            vals = util.translate_to_fixed_timestep(D[k], dt, sscstep)  # Translate from variable dispatch timestep to fixed ssc time step
+            vals = translate_to_fixed_timestep(D[k], dt, sscstep)  # Translate from variable dispatch timestep to fixed ssc time step
             vals = [vals[j] for j in range(npts)]                     # Truncate to only the points needed for the ssc solution
             if k in ['is_rec_su_allowed_in', 'is_rec_sb_allowed_in', 'is_pc_su_allowed_in', 'is_pc_sb_allowed_in']:  # Set binary inputs
                 vals = [1 if v > 0.001 else 0 for v in vals]
@@ -1082,7 +1082,7 @@ class DispatchWrap:
     
         #--- Set time-indexed parameters in dispatch inputs
         self.dispatch_params.set_default_grid_limits()
-        self.dispatch_params.P = util.translate_to_variable_timestep([p/1000. for p in price], sscstep/3600., self.dispatch_params.Delta)  # $/kWh
+        self.dispatch_params.P = translate_to_variable_timestep([p/1000. for p in price], sscstep/3600., self.dispatch_params.Delta)  # $/kWh
         self.dispatch_params.avg_price = self.params['avg_price']/1000.
         self.dispatch_params.avg_price_disp_storage_incentive = self.params['avg_price_disp_storage_incentive'] / 1000.  # $/kWh  # Only used in storage inventory incentive -> high values cause the solutions to max out storage rather than generate electricity
         self.dispatch_params.avg_purchase_price = self.params['avg_purchase_price']/1000    # $/kWh 
@@ -1165,7 +1165,7 @@ def get_day_ahead_schedule(day_ahead_schedule_steps_per_hour, Delta, Delta_e, ne
         diff = np.abs(disp_steps[inds] - day_ahead_step)
         next_day_schedule = wnet[inds]
         if diff.max() > 1.e-3:
-            next_day_schedule = util.translate_to_fixed_timestep(wnet[inds], disp_steps[inds], day_ahead_step) 
+            next_day_schedule = translate_to_fixed_timestep(wnet[inds], disp_steps[inds], day_ahead_step) 
         return next_day_schedule
     else:
         return None
@@ -1179,3 +1179,82 @@ def get_time_of_day(date):
         
 def get_time_of_year(date):
     return (date - datetime.datetime(date.year,1,1,0,0,0)).total_seconds()
+
+
+
+# Translate arrays from a fixed timestep (dt_fixed) to variable timestep (dt_var)
+# Assumes that all variable timesteps are an integer multiple of the fixed timstep, or vice versa, and that end points of fixed and variable timesteps coincide
+def translate_to_variable_timestep(data, dt_fixed, dt_var):
+    n = len(dt_var)  
+    dt_fixed_sec = int(ceil(dt_fixed*3600 - 0.0001))
+    data_var = np.zeros(n)
+    s = 0
+    j = 0
+    while j<n:
+        dt_sec = int(ceil(dt_var[j]*3600 - 0.0001))
+        if dt_sec > dt_fixed_sec:  # Variable timestep is larger than fixed timestep, apply average of all fixed timesteps contained within the variable timestep
+            n_fixed_per_var = int(dt_sec / dt_fixed_sec)
+            for i in range(n_fixed_per_var):
+                data_var[j] += data[s+i]/n_fixed_per_var 
+            j +=1
+            s += n_fixed_per_var
+        else:  # Variable timestep is shorter than fixed timestep, repeat fixed timestep value for all variable timesteps within the interval
+            t = 0
+            while t < dt_fixed_sec - 0.0001:
+                data_var[j] = data[s]
+                t += dt_var[j]*3600
+                j+=1
+            s+=1
+    return data_var
+
+
+# Translate arrays from a variable timestep (dt_var) to a fixed timestep (dt_fixed)
+# Assumes that all variable timesteps are an integer multiple of the fixed timstep, or vice versa, and that end points of fixed and variable timesteps coincide
+def translate_to_fixed_timestep(data, dt_var, dt_fixed):
+    n = len(dt_var)
+    dte = np.cumsum(dt_var)  
+    dt_fixed_sec = int(ceil(dt_fixed*3600 - 0.0001))
+    horizon = int(ceil(dte[-1]* 3600 - 0.0001))  # Full dispatch time horizon (s)
+    n_fixed = int(horizon / dt_fixed_sec)  # Number of fixed time steps in horizon
+    data_fixed = np.zeros(n_fixed)
+    s = 0
+    j = 0
+    while j<n:
+        dt_sec = int(ceil(dt_var[j]*3600 - 0.0001))
+        if dt_sec >= dt_fixed_sec:  # Variable timestep is larger than fixed timestep, repeat value at variable timestep for each fixed timestep in the interval
+            n_per_var = int(dt_sec / dt_fixed_sec)  
+            for i in range(n_per_var):
+                data_fixed[s+i] = data[j]
+            s += n_per_var 
+            j+=1
+
+        else:  # Fixed timestep is larger than variable timestep, apply average of all variable timesteps contained within fixed timestep
+            t = 0
+            while t < dt_fixed_sec - 0.0001:
+                data_fixed[s] += data[j] * (dt_var[j] / dt_fixed)
+                t += dt_var[j]*3600
+                j+=1
+            s+=1
+    return data_fixed
+
+def interpret_user_defined_cycle_data(ud_ind_od):
+    data = np.array(ud_ind_od)
+        
+    i0 = 0
+    nT = np.where(np.diff(data[i0::,0])<0)[0][0] + 1 
+    Tpts = data[i0:i0+nT,0]
+    mlevels = [data[j,1] for j in [i0,i0+nT,i0+2*nT]]
+    
+    i0 = 3*nT
+    nm = np.where(np.diff(data[i0::,1])<0)[0][0] + 1 
+    mpts = data[i0:i0+nm,1]
+    Tamblevels = [data[j,2] for j in [i0,i0+nm,i0+2*nm]]
+    
+    i0 = 3*nT + 3*nm
+    nTamb = np.where(np.diff(data[i0::,2])<0)[0][0] + 1 
+    Tambpts = data[i0:i0+nTamb,2]
+    Tlevels = [data[j,0] for j in [i0,i0+nm,i0+2*nm]]
+    
+    return {'nT':nT, 'Tpts':Tpts, 'Tlevels':Tlevels, 'nm':nm, 'mpts':mpts, 'mlevels':mlevels, 'nTamb':nTamb, 'Tambpts':Tambpts, 'Tamblevels':Tamblevels}
+
+
