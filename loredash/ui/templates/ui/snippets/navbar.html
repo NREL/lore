@@ -32,7 +32,7 @@
             <a href="{% url 'forecast' %}"><i class="fas fa-chart-line"></i>Forecast</a>
         </li>
 
-        <!-- History -->
+        {% comment %} <!-- History -->
         <li class="nav-btn">
             <a href="{% url 'history' %}"><i class="fas fa-chart-bar"></i>History</a>
         </li>
@@ -44,7 +44,7 @@
 
         <!-- User settings -->
         <li class="nav-btn">
-            <a href="{% url 'settings' %}"><i class="fas fa-cogs"></i>User Settings</a>
+            <a href="{% url 'settings' %}"><i class="fas fa-cogs"></i>User Settings</a> {% endcomment %}
         </li>
     </ul>
 </div>
