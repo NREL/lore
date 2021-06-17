@@ -38,7 +38,11 @@ services:
         networks:
             app_net:
                 ipv4_address: 10.10.10.11
-        command: >
+        command:
+            # check-unused-sessions: [ms] how often to check the different websocket sessions activity, default=17000
+            # unused-session-lifetime: [ms] how often that websocket session will stay open before closing, default=15000
+            # num-procs: cannot be more than 1 on Windows
+            >
             sh -c "python -m bokeh serve
             ./ui/BokehApps/dashboard_plot
             ./ui/BokehApps/historical_dashboard_plot
@@ -49,7 +53,12 @@ services:
             ./ui/BokehApps/probability_table.py
             ./ui/BokehApps/sliders.py
             ./ui/BokehApps/__init__.py
-            --allow-websocket-origin 127.0.0.1:8000 --address 10.10.10.11 --port 5006"
+            --allow-websocket-origin 127.0.0.1:8000
+            --address 10.10.10.11
+            --port 5006
+            --check-unused-sessions 17000
+            --unused-session-lifetime 600000
+            --num-procs 2"
         #   allow connections from IP:PORT, and host plotting server on IP and PORT
         container_name: plotting_server
         # Also not mapping to a local volume here as well
