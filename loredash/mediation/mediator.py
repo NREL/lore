@@ -127,8 +127,8 @@ class Mediator:
         # a. Get weather data and forecasts
         weather_dispatch = self.get_weather_df(
             datetime_start=datetime_start,
-            datetime_end=datetime_start + datetime.timedelta(hours=self.dispatch_wrap.dispatch_horizon),
-            timestep=datetime.timedelta(minutes=min(self.dispatch_wrap.dispatch_steplength_array)),
+            datetime_end=datetime_start + datetime.timedelta(hours=self.dispatch_wrap.params['dispatch_horizon']),
+            timestep=datetime.timedelta(minutes=min(self.dispatch_wrap.params['dispatch_steplength_array'])),
             tmy3_path=self.weather_file,
             use_forecast=True)
 
@@ -153,13 +153,12 @@ class Mediator:
         # Step 2, Thread 1:
         # a. Call dispatch model, (which includes the 'f_estimates...' tech_wrap function to get estimates) and update inputs for next call
         dispatch_outputs = self.dispatch_wrap.run(
-            start_date=datetime_start,
-            timestep_days=(datetime_end - datetime_start).days,                             # not timestep but actually duration in days
+            datetime_start=datetime_start,
             weather_dataframe=weather_dispatch,
             f_estimates_for_dispatch_model=self.tech_wrap.estimates_for_dispatch_model,
+            update_interval = 1.0/self.params['time_steps_per_hour'],
             initial_plant_state=plant_state
         )
-        self.dispatch_wrap.update_inputs(dispatch_outputs, self.simulation_timestep)        # TODO: add to end of run()?
 
         # b. Validate these data
             #TODO: Add this

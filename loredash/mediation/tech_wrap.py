@@ -303,14 +303,6 @@ class TechWrap:
             'is_rec_startup_trans': False,
             'rec_su_delay': 0.001,                                              # Simulate with no start-up time to get total available solar energy
             'rec_qf_delay': 0.001,
-
-            'q_pc_target_su_in': [0],
-            'q_pc_target_on_in': [0],
-            'q_pc_max_in': [0],
-            'is_rec_su_allowed_in': [0],
-            'is_rec_sb_allowed_in': [0],
-            'is_pc_su_allowed_in': [0],
-            'is_pc_sb_allowed_in': [0],
             })
 
         results = self.simulate(datetime_start, datetime_end, timestep, plant_state=plant_state, weather_dataframe = weather_dataframe)
