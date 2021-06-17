@@ -29,6 +29,9 @@ ENV SITE_DIR=/site/
 RUN install -g app -o app -d ${SITE_DIR}
 WORKDIR $SITE_DIR
 
+# Add local package installation location to image PATH
+ENV PATH="${SITE_DIR}.local/bin:${PATH}"
+
 # Copy files from current directory into image directory ${SITE_DIR},
 #  specifying group and user ownership
 COPY --chown=app:app . ${SITE_DIR}
