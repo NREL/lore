@@ -89,11 +89,14 @@ def test_get_weather_df():
     assert(not tmy_weather['DNI'].isnull().values.any())
     assert(sum(forecast_weather['DNI']) > 100)
     assert(not forecast_weather['DNI'].isnull().values.any())
-    # Check that they are linked up timezone-wise. (If it's not sunny in the TMY
-    # file, it isn't sunny in the forecast.)
+    # Check that they are linked up timezone-wise. (If it's sunny in the 
+    # forecast, it must be sunny in the TMY file too.
+    # It 's a little tricky with some tolerances (what if the forecast is all 
+    # 0 today?), but we use the rule the that the forecast shouldn't exceed the
+    # TMY by too much. The most likely reason is that the forecast high when the 
+    # TMY is off (at night).
     for (tmy, forecast) in zip(tmy_weather['DNI'], forecast_weather['DNI']):
-        if tmy < 100:
-            assert(forecast < 100)
+        assert(forecast - tmy < 400)
     return
 
 def test_normalize_timesteps():
