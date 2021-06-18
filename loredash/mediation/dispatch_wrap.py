@@ -910,8 +910,12 @@ class DispatchWrap:
     def run(self, datetime_start, weather_dataframe,
             f_estimates_for_dispatch_model, update_interval, initial_plant_state):
         '''update_interval = frequency (hr) at which dispatch optimization will be re-run'''
-        
-        weather_timestep = (weather_dataframe.index[1]-weather_dataframe.index[0]).total_seconds()                     # Time step in weather data frame (s)
+        # Notes: The ssc simulation time resolution is assumed to be <= the shortest dispatch time step
+        #         All dispatch time steps and time horizons are assumed to be an integer multiple of the ssc time step
+
+
+
+        weather_timestep = (weather_dataframe.index[1]-weather_dataframe.index[0]).total_seconds()    # Time step in weather data frame (s)
        
         #--- Update weather_dataframe such that first point coincides with datetime_start.  
         # Assumes that values in weather_dataframe starts at the beginning of the hour containing datetime_start
@@ -922,11 +926,17 @@ class DispatchWrap:
 
         #--- Define horizon for this call to the dispatch optimization horizon (use specified 'dispatch_horizon' unless weather data is not available for the full horizon)
         weather_horizon = (weather_dataframe_loc.index[-1]-weather_dataframe_loc.index[0]).total_seconds() + weather_timestep  # Total duration of weather available for simulation relative to simulation start_date (s)
-        horizon = int(min(weather_horizon, self.params['dispatch_horizon']*3600)/3600.)              
+        horizon = int(min(weather_horizon, self.params['dispatch_horizon']*3600)/3600.)    # hr          
         
+        #--- Define time step arrays for dispatch optimization
+        dispatch_steplength_end_time = self.params['dispatch_steplength_end_time']
+        if horizon != self.params['dispatch_horizon']:
+            horizon_minutes = int(horizon*60 / self.params['dispatch_steplength_array'][0]) * self.params['dispatch_steplength_array'][0]  # Horizon rounded to nearest integer multiple of shortest dispatch time step
+            end_time_minutes = calculate_time_steps(horizon_minutes, self.params['dispatch_steplength_array'], [t*60 for t in self.params['dispatch_steplength_end_time']])
+            dispatch_steplength_end_time  = [t/60 for t in end_time_minutes]
 
+        #--- Initialize schedules, plant state, shut-down state parameters, and clear-sky data
         retvars = self.default_disp_stored_vars
-
         if self.first_run == True:
             self.current_day_schedule = None
             self.next_day_schedule = None
@@ -939,7 +949,6 @@ class DispatchWrap:
             ursd0 = self.ursd0  # Receiver accumulated energy for shutdown (taken from last dispatch solution for now)
             yrsd0 = self.yrsd0  # Receiver binary shutdown state (taken from last dispatch solution for now)       
                  
-
         self.plant.state = initial_plant_state
 
         clearsky_data = np.array(weather_dataframe_loc['Clear Sky DNI'])
@@ -947,12 +956,6 @@ class DispatchWrap:
         clearsky_data_padded = np.pad(clearsky_data, (0, len(self.price_data) - len(clearsky_data)), 'constant', constant_values=(0, 0))
         self.params['clearsky_data'] = clearsky_data_padded
 
-        #-------------------------------------------------------------------------
-        # Run simulation in a rolling horizon   
-        #      The ssc simulation time resolution is assumed to be <= the shortest dispatch time step
-        #      All dispatch time steps and time horizons are assumed to be an integer multiple of the ssc time step
-        #      Time at which the weather forecast is updated coincides with the start of an optimization interval
-        #      Time at which the day-ahead generation schedule is due coincides with the start of an optimization interval
 
         #--- Calculate time-related values
         tod = int(get_time_of_day(datetime_start))        # Current time of day (s)
@@ -997,7 +1000,7 @@ class DispatchWrap:
             ssc_estimates = ssc_estimates,
             horizon = horizon,      
             dispatch_steplength_array = self.params['dispatch_steplength_array'],
-            dispatch_steplength_end_time = self.params['dispatch_steplength_end_time'],
+            dispatch_steplength_end_time = dispatch_steplength_end_time,
             clearsky_data = clearsky_data_padded,
             price = self.price_data[startpt:startpt+npts_horizon],          # [$/MWh] Update prices for this horizon
             ursd0 = ursd0,
@@ -1141,6 +1144,35 @@ def get_day_ahead_schedule(day_ahead_schedule_steps_per_hour, Delta, Delta_e, ne
 
 def get_weather_at_day_ahead_schedule(weather_df, npts_horizon):
     return {k: list(weather_df[k][0:npts_horizon])  for k in ['DNI', 'Temperature', 'Wind Speed']}
+
+
+def calculate_time_steps(horizon, step_size, target_step_end_time):
+    # Set number of each dispatch time step to maintain the largest number of each step (within the target number of steps), subject to integer requirements on the number of steps of each duration
+    # Assumes: (1) All time step lengths are an integer multiple of the shortest time step
+    #          (2) horizon is an integer multiple of the smallest time step size
+    #          (2) Step sizes increase monotonically
+    
+    target_steps, steps, end_time = [np.zeros_like(step_size) for j in range(3)]
+    for j in range(len(step_size)):
+        start = 0 if j == 0 else target_step_end_time[j-1]
+        target_steps[j] = int((target_step_end_time[j] - start) / step_size[j])   # Target number of steps of each length
+        
+    remaining_horizon = horizon
+    for j in range(len(step_size)-1):
+        n2 = (remaining_horizon - step_size[j]*target_steps[j]) / step_size[j+1]  # Number of steps (s+1) within remaining horizon after target number of steps (s)
+        n = int((remaining_horizon - ceil(n2)*step_size[j+1]) / step_size[j])     # Number of steps (s) that are possible to maintain integer number of remaining steps
+        steps[j] = n
+        start = 0 if j == 0 else end_time[j-1]
+        end_time[j] = start + n*step_size[j]
+        remaining_horizon -= n * step_size[j]     
+    steps[-1] = int(remaining_horizon / step_size[-1])
+    end_time[-1] = end_time[-2] + steps[-1]* step_size[-1]
+    if horizon != end_time[-1]:
+        print ('WARNING: Dispatch model time step arrays do not match required horizon')
+    return end_time.tolist()
+
+
+
 
 def get_time_of_day(date):
     return (date- datetime.datetime(date.year,date.month,date.day,0,0,0)).total_seconds()
