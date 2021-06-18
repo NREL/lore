@@ -1180,7 +1180,17 @@ def get_time_of_day(date):
 def get_time_of_year(date):
     return (date - datetime.datetime(date.year,1,1,0,0,0)).total_seconds()
 
-
+# Update annual array to a new timestep (assuming integer multiple of new timesteps in old timestep or vice versa)
+def translate_to_new_timestep(data, old_timestep, new_timestep):
+    n = len(data)
+    if new_timestep > old_timestep:  # Average over consecutive timesteps
+        nperavg = int(new_timestep / old_timestep)
+        nnew = int(n/nperavg)
+        newdata = np.reshape(np.array(data), (nnew, nperavg)).mean(1)
+    else:  # Repeat consecutive timesteps
+        nrepeat = int(old_timestep / new_timestep)
+        newdata = np.repeat(data, nrepeat)
+    return newdata.tolist()
 
 # Translate arrays from a fixed timestep (dt_fixed) to variable timestep (dt_var)
 # Assumes that all variable timesteps are an integer multiple of the fixed timstep, or vice versa, and that end points of fixed and variable timesteps coincide

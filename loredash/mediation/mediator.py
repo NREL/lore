@@ -10,7 +10,7 @@ from pandas.tseries.frequencies import to_offset
 import numpy as np
 
 from data.mspt_2020_defaults import default_ssc_params
-from mediation import tech_wrap, data_validator, dispatch_wrap, models, forecasts, util
+from mediation import tech_wrap, data_validator, dispatch_wrap, models, forecasts
 import mediation.plant as plant_
 from mediation.plant import Revenue
 
@@ -451,7 +451,10 @@ def get_clearsky_data(clearsky_file, datetime_start=None, duration=None, timeste
 
     CLEARSKY_DAYS_GENERATED = 365
     steps_per_hour = 1/(timestep.total_seconds()/3600)
-    clearsky_data = util.get_clearsky_data(clearsky_file, steps_per_hour).tolist()
+    clearsky_data = np.genfromtxt(os.path.join(os.path.dirname(__file__), clearsky_file))
+    if steps_per_hour != 60: 
+        clearsky_data = np.array(dispatch_wrap.translate_to_new_timestep(clearsky_data, 1./60, 1./steps_per_hour))
+    clearsky_data = clearsky_data.tolist()
     assert(len(clearsky_data) == steps_per_hour * 24 * CLEARSKY_DAYS_GENERATED)
     df = pd.DataFrame(clearsky_data, columns=['clearsky_data'])
     df.index = pd.date_range(start=datetime_start,
