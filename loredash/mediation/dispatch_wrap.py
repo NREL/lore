@@ -871,11 +871,9 @@ class DispatchWrap:
         self.yrsd0 = 0
         self.current_day_schedule = None                # Committed day-ahead generation schedule for current day (MWe)
         self.next_day_schedule = None                   # Predicted day-ahead generation schedule for next day (MWe)
+        self.date_for_current_day_schedule = None       # Datetime of first point in schedule stored in self.current_day_schedule
+        self.date_for_next_day_schedule = None          # Datetime of first point in schedule stored in self.next_day_schedule
         
-        # Tracking of schedules and associated weather for debugging TODO: probably can delete this
-        self.schedules = []                             # List to store all day-ahead generation schedules (MWe)
-        self.weather_at_schedule = []                   # List to store weather data at the point in time the day-ahead schedule was generated
-
         ## SSC OUTPUTS ###################################################################################################################################
         self.results = None                             # Results
 
@@ -926,19 +924,21 @@ class DispatchWrap:
         weather_horizon = (weather_dataframe_loc.index[-1]-weather_dataframe_loc.index[0]).total_seconds() + weather_timestep  # Total duration of weather available for simulation relative to simulation start_date (s)
         horizon = int(min(weather_horizon, self.params['dispatch_horizon']*3600)/3600.)              
         
- 
 
         retvars = self.default_disp_stored_vars
 
         if self.first_run == True:
-            self.current_day_schedule = None   #TODO: Should update if schedule is read from external source
+            self.current_day_schedule = None
             self.next_day_schedule = None
+            self.date_for_current_day_schedule = None
+            self.date_for_next_day_schedule = None
             ursd0 = None
             yrsd0 = None
             self.first_run == False
         else:
             ursd0 = self.ursd0  # Receiver accumulated energy for shutdown (taken from last dispatch solution for now)
-            yrsd0 = self.yrsd0  # Receiver binary shutdown state (taken from last dispatch solution for now)            
+            yrsd0 = self.yrsd0  # Receiver binary shutdown state (taken from last dispatch solution for now)       
+                 
 
         self.plant.state = initial_plant_state
 
@@ -960,16 +960,23 @@ class DispatchWrap:
         nph = int(self.params['time_steps_per_hour'])     # Number of time steps per hour
         startpt = int(toy/3600)*nph                       # Start point in annual arrays
         sscstep = 3600/nph                                # ssc time step (s)
+        date_today = datetime.datetime(datetime_start.year, datetime_start.month, datetime_start.day)
 
         #--- Update stored day-ahead generation schedule for current day (if relevant)
-        if self.params['use_day_ahead_schedule'] and tod == 0:  # TODO: Need better triggering for time... might not be called exactly at midnight
-            if self.params['day_ahead_schedule_from'] == 'calculated':
-                self.current_day_schedule = deepcopy(self.next_day_schedule)
-            elif self.params['day_ahead_schedule_from'] == 'external':
+        if self.params['use_day_ahead_schedule']:
+
+            if self.params['day_ahead_schedule_from'] == 'external' and self.current_day_schedule is None:
                 self.current_day_schedule = self.get_external_day_ahead_schedule(datetime_start)   # TODO: Not currently set up.  Do we need to keep this functionality?
-            self.schedules.append(self.current_day_schedule)  # TODO: Probably makes sense to get rid of schedule tracking
-            self.next_day_schedule = None
-            
+
+            elif self.params['day_ahead_schedule_from'] == 'calculated' and self.date_for_current_day_schedule != date_today:   # The schedule stored in current_day_schedule is not for today (or one doesn't exist)
+                if self.date_for_next_day_schedule == date_today:    # Schedule stored in next_day_schedule is for today
+                    self.current_day_schedule = deepcopy(self.next_day_schedule)
+                    self.date_for_current_day_schedule = self.date_for_next_day_schedule
+                    self.next_day_schedule = None
+                    self.date_for_next_day_schedule = None
+                else:
+                    self.current_day_schedule = None
+                    self.date_for_current_day_schedule = None
 
         #--- Run ssc for dispatch estimates
         npts_horizon = int(horizon* nph)
@@ -991,7 +998,6 @@ class DispatchWrap:
             horizon = horizon,      
             dispatch_steplength_array = self.params['dispatch_steplength_array'],
             dispatch_steplength_end_time = self.params['dispatch_steplength_end_time'],
-            include_day_ahead_in_dispatch = include_day_ahead_in_dispatch,
             clearsky_data = clearsky_data_padded,
             price = self.price_data[startpt:startpt+npts_horizon],          # [$/MWh] Update prices for this horizon
             ursd0 = ursd0,
@@ -1012,17 +1018,19 @@ class DispatchWrap:
 
             # TODO: make the time triggering more robust; shouldn't be an '==' as the program may be offline at the time or running at intervals
             #  that won't exactly hit it
-            if self.params['use_day_ahead_schedule'] and self.params['day_ahead_schedule_from'] == 'calculated' and tod/3600 == self.params['day_ahead_schedule_time']:
-                self.next_day_schedule = get_day_ahead_schedule(
-                    day_ahead_schedule_steps_per_hour = self.params['day_ahead_schedule_steps_per_hour'],
-                    Delta = self.dispatch_params.Delta,
-                    Delta_e = self.dispatch_params.Delta_e,
-                    net_electrical_output = dispatch_soln.net_electrical_output,
-                    day_ahead_schedule_time = self.params['day_ahead_schedule_time']
-                    )
 
-                weather_at_day_ahead_schedule = get_weather_at_day_ahead_schedule(weather_dataframe_loc, startpt, npts_horizon)
-                self.weather_at_schedule.append(weather_at_day_ahead_schedule)  # Store weather used at the point in time the day ahead schedule was generated
+            # Update calculated schedule for next day (if relevant). Assume schedule must be committed within 1hr of designated time (arbitrary...)
+            if self.params['use_day_ahead_schedule'] and self.params['day_ahead_schedule_from'] == 'calculated':
+                if tod/3600 >= self.params['day_ahead_schedule_time'] and tod/3600 < self.params['day_ahead_schedule_time']+1:            # Within the time window to commit next-day schedule
+                    if self.next_day_schedule is None or self.date_for_next_day_schedule != date_today + datetime.timedelta(hours = 24):  # Next-day schedule doesn't already exist (or one exists, but is left-over from a different day)
+                        self.next_day_schedule = get_day_ahead_schedule(
+                            day_ahead_schedule_steps_per_hour = self.params['day_ahead_schedule_steps_per_hour'],
+                            Delta = self.dispatch_params.Delta,
+                            Delta_e = self.dispatch_params.Delta_e,
+                            net_electrical_output = dispatch_soln.net_electrical_output,
+                            day_ahead_schedule_time = self.params['day_ahead_schedule_time']
+                            )
+                        self.date_for_next_day_schedule = date_today + datetime.timedelta(hours = 24)
 
             #--- Set ssc dispatch targets
             ssc_dispatch_targets = DispatchTargets(dispatch_soln, self.plant, self.dispatch_params, sscstep, horizon)
@@ -1060,7 +1068,7 @@ class DispatchWrap:
         return nonlinear_time
 
     def setup_dispatch_model(self, datetime_start, ssc_estimates, horizon, dispatch_steplength_array, dispatch_steplength_end_time,
-        include_day_ahead_in_dispatch, clearsky_data, price, ursd0, yrsd0):
+        clearsky_data, price, ursd0, yrsd0):
         '''horizon in [hr]'''
         #--- Set dispatch optimization properties for this time horizon using ssc estimates
 
@@ -1092,7 +1100,7 @@ class DispatchWrap:
         self.dispatch_params.set_estimates_from_ssc_data(self.plant.design, ssc_estimates, sscstep/3600.) 
         
         #--- Set day-ahead schedule in dispatch parameters
-        if include_day_ahead_in_dispatch:  
+        if self.current_day_schedule is not None:
             day_ahead_horizon = 24 - int(tod/3600)   # Number of hours of day-ahead schedule to use.  This probably only works in the dispatch model if time horizons are updated at integer multiples of an hour
             use_schedule = [self.current_day_schedule[s]*1000 for s in range(24-day_ahead_horizon, 24)]   # kWhe
             self.dispatch_params.set_day_ahead_schedule(use_schedule, self.params['day_ahead_pen_plus']/1000, self.params['day_ahead_pen_minus']/1000)
@@ -1102,46 +1110,6 @@ class DispatchWrap:
         dispatch_model_inputs.transition = 0   #Transition index between nonlinear/linear models. TODO: Once nonlinear model is available, need to update this to correspond to nonlinear_time 
 
         return dispatch_model_inputs
-
-
-
-# TODO: Is this used anywhere?
-def reupdate_ssc_constants(D, params):
-    #D['solar_resource_data'] = params['solar_resource_data']
-    D['dispatch_factors_ts'] = params['dispatch_factors_ts']
-
-    D['ppa_multiplier_model'] = params['ppa_multiplier_model']
-    D['time_steps_per_hour'] = params['time_steps_per_hour']
-    D['is_rec_model_trans'] = params['is_rec_model_trans']
-    D['is_rec_startup_trans'] = params['is_rec_startup_trans']
-    D['rec_control_per_path'] = params['rec_control_per_path']
-    D['field_model_type'] = params['field_model_type']
-    D['eta_map_aod_format'] = params['eta_map_aod_format']
-    D['is_rec_to_coldtank_allowed'] = params['is_rec_to_coldtank_allowed']
-    D['is_dispatch'] = params['is_dispatch']
-    D['is_dispatch_targets'] = params['is_dispatch_targets']
-
-    #--- Set field control parameters
-    if params['control_field'] == 'CD_data':
-        D['rec_su_delay'] = params['rec_su_delay']
-        D['rec_qf_delay'] = params['rec_qf_delay']
-
-    #--- Set receiver control parameters
-    if params['control_receiver'] == 'CD_data':
-        D['is_rec_user_mflow'] = params['is_rec_user_mflow']
-        D['rec_su_delay'] = params['rec_su_delay']
-        D['rec_qf_delay'] = params['rec_qf_delay']
-    elif params['control_receiver'] == 'ssc_clearsky':
-        D['rec_clearsky_fraction'] = params['rec_clearsky_fraction']
-        D['rec_clearsky_model'] = params['rec_clearsky_model']
-        D['rec_clearsky_dni'] = params['clearsky_data'].tolist()
-    elif params['control_receiver'] == 'ssc_actual_dni':
-        D['rec_clearsky_fraction'] = params['rec_clearsky_fraction']
-
-    return
-
-
-
 
 
 
