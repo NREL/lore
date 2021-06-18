@@ -26,7 +26,7 @@ Forecast
       {% include "ui/snippets/card.html" with plot_script=solar_script %}
 
     </div>
-    <div class="tables row row-cols-2">
+    {% comment %} <div class="tables row row-cols-2">
 
       <!-- Probability Data Table -->
       {% include "ui/snippets/card.html" with plot_script=probability_table_script %}
@@ -34,7 +34,7 @@ Forecast
       <!-- Estimates Data Table -->
       {% include "ui/snippets/card.html" with plot_script=estimates_table_script %}
 
-    </div>
+    </div> {% endcomment %}
   </div>
 </div>
 {% endblock %}

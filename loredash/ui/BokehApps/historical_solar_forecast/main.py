@@ -22,7 +22,7 @@ import re
 from scipy.signal import savgol_filter
 
 # Asyncronous Access to Django DB
-from ui.models import ForecastsSolarData as fsd         # TODO: replace ForecastsMarketData with the real data model table
+from mediation.models import SolarForecastData as fsd         # TODO: replace ForecastsMarketData with the real data model table
 from threading import Thread
 import queue
 
@@ -30,7 +30,7 @@ TIMESTAMP = 'Timestamp'
 
 # TODO: Replace this with the mapping for the real data model table
 PLOT_LABELS_FOR_DATA_COLS = {
-    TIMESTAMP: 'timestamp',
+    TIMESTAMP: 'forecast_for',
 }
 
 data_labels_forecast_solar = list(map(lambda col: col.name, fsd._meta.get_fields()))
@@ -45,7 +45,7 @@ bands = {}
 
 def getForecastSolarData(_range, queue):
     # TODO: replace data_labels_forecast_solar[1:] with the labels, including the timestamp
-    queryset = fsd.objects.filter(timestamp__range=_range).values_list(*(data_labels_forecast_solar[1:]))
+    queryset = fsd.objects.filter(forecast_for__range=_range).values_list(*(data_labels_forecast_solar[1:]))
     df = pd.DataFrame.from_records(queryset)
     if not df.empty:
         df.columns = data_labels_forecast_solar[1:]     # TODO: do the same here
@@ -81,12 +81,12 @@ def make_dataset(_start_date, _end_date, _distribution):
 
     for col_name in base_data_labels[3:]:
         val_arr = np.array(cds.data[col_name])
-        val_minus_arr = np.array(cds.data[col_name+'_minus'])/100
-        val_plus_arr = np.array(cds.data[col_name+'_plus'])/100
-        cds.data[col_name+'_lower'] = list(\
-            val_arr - np.multiply(val_arr, val_minus_arr))
-        cds.data[col_name+'_upper'] = list(\
-            val_arr + np.multiply(val_arr, val_plus_arr))
+        # val_minus_arr = np.array(cds.data[col_name+'_minus'])/100
+        # val_plus_arr = np.array(cds.data[col_name+'_plus'])/100
+        # cds.data[col_name+'_lower'] = list(\
+        #     val_arr - np.multiply(val_arr, val_minus_arr))
+        # cds.data[col_name+'_upper'] = list(\
+        #     val_arr + np.multiply(val_arr, val_plus_arr))
 
     if _distribution == "Smoothed":
         window, order = 51, 3
@@ -229,12 +229,12 @@ def live_update():
         # Add _lower and _upper columns for plotting
         for col_name in base_data_labels[3:]:
             val_arr = np.array(current_data_df[col_name])
-            val_minus_arr = np.array(current_data_df[col_name+'_minus'])/100
-            val_plus_arr = np.array(current_data_df[col_name+'_plus'])/100
-            current_data_df[col_name+'_lower'] = list(\
-                val_arr - np.multiply(val_arr, val_minus_arr))
-            current_data_df[col_name+'_upper'] = list(\
-                val_arr + np.multiply(val_arr, val_plus_arr))
+            # val_minus_arr = np.array(current_data_df[col_name+'_minus'])/100
+            # val_plus_arr = np.array(current_data_df[col_name+'_plus'])/100
+            # current_data_df[col_name+'_lower'] = list(\
+            #     val_arr - np.multiply(val_arr, val_minus_arr))
+            # current_data_df[col_name+'_upper'] = list(\
+            #     val_arr + np.multiply(val_arr, val_plus_arr))
 
         src.stream(current_data_df)
         df_temp = src.to_df().drop([0]).drop('index', axis=1)

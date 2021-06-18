@@ -6,8 +6,7 @@ For production testing, the web server [Waitress](https://docs.pylonsproject.org
 
 
 ## Run via remotely hosted Docker image
-1. Request Docker Hub repository access to @Matthew-Boyd
-2. Start Docker Desktop
+1. Start Docker Desktop
 	1. Download and install from [docker.com](https://www.docker.com/products/docker-desktop)
 	2. Start Docker Desktop. If you get a not-enough-memory error:
 		1. Download and run [RAMMap](https://docs.microsoft.com/en-us/sysinternals/downloads/rammap)
@@ -16,22 +15,22 @@ For production testing, the web server [Waitress](https://docs.pylonsproject.org
 		4. Close
 		5. If this fails, restart your computer.
 	3. Open Settings -> General and check "Use the WSL 2 based engine". Follow the instructions to install if needed.
-3. Open the Images section in Docker Desktop and delete any prior lore images (if not the first time testing)
-4. Right-click the Docker tray icon and switch to Linux containers if needed (if there’s an option that says ‘Switch to Windows containers..’ then you’re already set)
-5. Create a new folder outside of the lore repo and copy to it `docker-compose.yml`
-6. Open a terminal (e.g., Anaconda Prompt) and change directory to this new folder
-7. Create and activate a fresh python environment via:
+2. Open the Images section in Docker Desktop and delete any prior lore images (if not the first time testing)
+3. Right-click the Docker tray icon and switch to Linux containers if needed (if there’s an option that says ‘Switch to Windows containers..’ then you’re already set)
+4. Create a new folder outside of the lore repo and copy to it `docker-compose.yml`
+5. Open a terminal (e.g., Anaconda Prompt) and change directory to this new folder
+6. Create and activate a fresh python environment via:
 	```
 	conda create --name basic_3.8 python=3.8 -y
 	conda activate basic_3.8
 	```
-8. Execute:
+7. Execute:
 	```
 	docker pull amd64/python:3.8-slim-buster
 	docker pull matthewtboyd/lore:latest
 	docker-compose up dash
 	```
-9. Open a browser to:
+8. Open a browser to:
 	```
 	127.0.0.1:8000
 	```
@@ -46,6 +45,7 @@ For production testing, the web server [Waitress](https://docs.pylonsproject.org
 		3. File -> Refresh
 		4. Close
 		5. If this fails, restart your computer.
+	3. Open Settings -> General and check "Use the WSL 2 based engine". Follow the instructions to install if needed.
 2. Navigate in a terminal to `/lore/loredash`
 3. Run:
 	```

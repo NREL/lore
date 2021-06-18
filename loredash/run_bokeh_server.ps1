@@ -24,4 +24,8 @@ python -m bokeh serve `
     ./ui/BokehApps/probability_table.py `
     ./ui/BokehApps/sliders.py `
     ./ui/BokehApps/__init__.py `
-    --allow-websocket-origin 127.0.0.1:8000 --address 127.0.0.1 --port 5006
+    --allow-websocket-origin 127.0.0.1:8000 `
+	--address 127.0.0.1 `
+	--port 5006 `
+	--check-unused-sessions 17000 `
+    --unused-session-lifetime 600000
