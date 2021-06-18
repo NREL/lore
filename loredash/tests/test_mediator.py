@@ -57,7 +57,6 @@ def test_get_weather_df():
         m.weather_file,
     )
     assert(len(weather) == 169 == 7 * 24 + 1)
-    print(sum(weather['DNI'])  == 22216)
     # Test getting one day of weather. This should fail because it attempts to
     # get latest forecast, but the time is too old for the NDFD server.
     with pytest.raises(Exception) as err:
@@ -83,6 +82,13 @@ def test_get_weather_df():
         m.weather_file,
         use_forecast = True,
     )
+    for key in ['DNI', 'DHI', 'GHI', 'Wind Speed']:
+        assert(key in tmy_weather)
+        assert(key in forecast_weather)
+    assert('Ambient Temperature' in forecast_weather)
+    assert('Clear Sky DNI' in forecast_weather)
+    assert(not 'Ambient Temperature' in tmy_weather)
+    assert(not 'Clear Sky DNI' in tmy_weather)
     assert(len(tmy_weather) == len(forecast_weather))
     assert(sum(tmy_weather['DNI']) != sum(forecast_weather['DNI']))
     assert(sum(tmy_weather['DNI']) > 100)
