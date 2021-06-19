@@ -73,14 +73,16 @@ def makePlot():
     )
     plot.toolbar.active_drag = pan_tool
     plot.toolbar.active_scroll = wheel_zoom_tool
+    # Hide the toolbar
+    plot.toolbar_location = None
     clear_sky = plot.line(
         x = 'forecast_for',
         y = 'clear_sky',
         source = source,
         name = 'Clear sky',
         line_color = 'white',
-        line_dash = 'dashed',
-        line_width = 3,
+        line_dash = 'dotted',
+        line_width = 2,
     )
     best_guess = plot.line(
         x = 'forecast_for',
@@ -88,7 +90,7 @@ def makePlot():
         source = source,
         name = 'Best guess',
         line_color = colorcet.fire[200],
-        line_width = 5,
+        line_width = 3,
     )
     legend_items = [
         ('Clear sky', [clear_sky]),
@@ -105,7 +107,7 @@ def makePlot():
             name = name,
             source = source,
             level = 'underlay',
-            fill_alpha = 0.6,
+            fill_alpha = 0.4,
             fill_color = colorcet.fire[c],
         )
         legend_items.append((name, [varea]))
