@@ -99,4 +99,9 @@ def test_getForecast():
         resolution = pandas.Timedelta(minutes = 1),
     )
     assert(len(data) == 24 * 60)
+    assert('dni' in data)
+    assert('dhi' in data)
+    assert('ghi' in data)
+    assert('temp_air' in data)
+    assert('wind_speed' in data)
     return
