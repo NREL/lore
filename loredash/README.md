@@ -17,7 +17,7 @@ For production testing, the web server [Waitress](https://docs.pylonsproject.org
 	3. Open Settings -> General and check "Use the WSL 2 based engine". Follow the instructions to install if needed.
 2. Open the Images section in Docker Desktop and delete any prior lore images (if not the first time testing)
 3. Right-click the Docker tray icon and switch to Linux containers if needed (if there’s an option that says ‘Switch to Windows containers..’ then you’re already set)
-4. Create a new folder outside of the lore repo and copy to it `docker-compose.yml`
+4. Create a new folder outside of the lore repo and copy to it `docker-compose.yml` and the folder `nginx` from `/lore/loredash`
 5. Open a terminal (e.g., Anaconda Prompt) and change directory to this new folder
 6. Create and activate a fresh python environment via:
 	```
