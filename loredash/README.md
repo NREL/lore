@@ -28,11 +28,11 @@ For production testing, the web server [Waitress](https://docs.pylonsproject.org
 	```
 	docker pull amd64/python:3.8-slim-buster
 	docker pull matthewtboyd/lore:latest
-	docker-compose up dash
+	docker-compose up --build
 	```
 8. Open a browser to:
 	```
-	127.0.0.1:8000
+	127.0.0.1:1300
 	```
 
 
@@ -49,11 +49,11 @@ For production testing, the web server [Waitress](https://docs.pylonsproject.org
 2. Navigate in a terminal to `/lore/loredash`
 3. Run:
 	```
-	docker-compose up dash
+	docker-compose up --build
 	```
 4. Open a web browser to:
 	```
-	127.0.0.1:8000
+	127.0.0.1:1300
 	```
 
 ## Setup and run from Python
