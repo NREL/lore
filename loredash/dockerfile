@@ -7,6 +7,7 @@ LABEL maintainer="NREL - Thermal Energy Systems R&D \
                   matthew.boyd@nrel.gov" \
       version="1.0.0"
 
+ENV PYTHONDONTWRITEBYTECODE 1
 ENV PYTHONUNBUFFERED 1
 
 # See: http://www.djangocurrent.com/2018/02/docker-run-as-non-root-user.html
@@ -20,8 +21,17 @@ RUN apt-get -qq install gcc
 RUN apt-get -qq install -y coinor-cbc
 
 # Create a group and user, both named 'app', that this app will run as
+# '-r' means create a system account
+# '-g app' means add to group 'app'
+# '-d /site' means /site is the user's login directory
+# '-s /sbin/nologin' means /sbin/nologin is the user's login shell
+# '-c "Docker image user"' is just a comment, usually a description of the login
+# 'app' is the name of the user
 RUN groupadd -r app && \
     useradd -r -g app -d /site -s /sbin/nologin -c "Docker image user" app
+
+# Give user 'app' root privileges (leave commented, just for testing)
+# RUN usermod -aG sudo app
 
 # Create a base directory, specify ownership by 'app' user and 'app' group, and
 #  set this directory as WORKDIR
@@ -36,11 +46,11 @@ ENV PATH="${SITE_DIR}.local/bin:${PATH}"
 #  specifying group and user ownership
 COPY --chown=app:app . ${SITE_DIR}
 
-# Set all sub-directory permissions the same as base directory so new
+# Add all sub-directory group permissions (g+s) the same as base directory so new
 #  files and directory inherit from these sub-directories they're in
 RUN find ${SITE_DIR} -type d -exec chmod g+s {} \;
 
-# Set group write permission on base directory contents recursively
+# Add group write (g+w) permission on base directory contents recursively (-R)
 RUN chmod -R g+w ${SITE_DIR}
 
 # Switch to user named 'app'
@@ -49,6 +59,7 @@ USER app
 # Install requirements
 RUN pip install -r ${SITE_DIR}/requirements.txt
 
+CMD ["/bin/bash"]
 
 # TODO?: Replicate a virtualenv, see here for why:  https://pythonspeed.com/articles/activate-virtualenv-dockerfile/
 # Also see: https://pythonspeed.com/articles/activate-conda-dockerfile/

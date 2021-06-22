@@ -21,6 +21,7 @@ DEBUG = True
 
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+print("BASE_DIR: {bd}".format(bd=BASE_DIR))
 
 if DEBUG is True:
     DOTENV_FILE = 'dev.env'
@@ -39,6 +40,8 @@ os.environ["BOKEH_SECRET_KEY"] = env_config.get('BOKEH_SECRET_KEY')
 os.environ["BOKEH_SIGN_SESSIONS"] = "False"
 os.environ["BOKEH_RESOURCES"] = "cdn"
 
+# Denotes the hostnames that your server will listen to;
+#  not the hostnames of connecting hosts
 ALLOWED_HOSTS = ['localhost', '127.0.0.1', '0.0.0.0']
 
 SITE_ID = 1
@@ -154,6 +157,7 @@ if not DEBUG:
 STATICFILES_DIRS = [
     os.path.join(BASE_DIR, 'static/')
 ]
+print("STATICFILES_DIRS: {sfd}".format(sfd=os.path.join(BASE_DIR, 'static/')))
 
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 MEDIA_URL = '/media/'
