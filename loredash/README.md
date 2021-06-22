@@ -28,7 +28,7 @@ For production testing, the web server [Waitress](https://docs.pylonsproject.org
 	```
 	docker pull amd64/python:3.8-slim-buster
 	docker pull matthewtboyd/lore:latest
-	docker-compose up --build
+	docker-compose up
 	```
 8. Open a browser to:
 	```
