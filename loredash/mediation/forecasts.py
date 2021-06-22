@@ -3,8 +3,14 @@ import numpy
 import os
 import pandas
 import pytz
+
+# pvlib.forecasts issues a warning on init. Silence it.
 import warnings
-warnings.filterwarnings('ignore', message="The forecast module algorithms and features are highly experimental.")   # silence this warning from pvlib
+warnings.filterwarnings(
+    'ignore',
+    message = "The forecast module algorithms and features are highly experimental.",
+)
+
 from pvlib import forecast
 from pvlib import location
 
@@ -98,7 +104,7 @@ class SolarForecast:
         self.forecast_uncertainty = ForecastUncertainty(uncertainty_bands)
         return
     
-    def _rawData(self, datetime_start):
+    def _rawData(self, datetime_start, include_columns = ['dni']):
         # Sufficiently long time window for NDFD.
         datetime_end = datetime_start + pandas.Timedelta(days = 7)
         data = forecast.NDFD().get_processed_data(
@@ -107,7 +113,7 @@ class SolarForecast:
             datetime_start,
             datetime_end,
             how = 'clearsky_scaling',
-        )[['dni']]
+        )[include_columns]
         data.index = pandas.to_datetime(data.index)
         data['clear_sky'] = self.plant_location.get_clearsky(data.index)['dni']
         # Map the values to a normalized dni/clear-sky ratio space to allow us
@@ -169,12 +175,12 @@ class SolarForecast:
         )
         return self.latestForecast(resolution = resolution, horizon = horizon)
 
-    def _processData(
-        self,
-        raw_data,
-        resolution,
-        horizon,
-    ):
+    def _correctTime(self, raw_data, resolution, horizon):
+        """
+        Return a modified version of `raw_data`, imputed as necessary so that it
+        has the correct number of rows to match the resolution and horizon, as
+        measured from the first row in `raw_data`.
+        """
         data = raw_data.resample(resolution).mean()
         # Clean up the ratio by imputing any NaNs that arose to the nearest
         # non-NaN value. This means we assume that the start of the day acts
@@ -187,11 +193,14 @@ class SolarForecast:
         data.fillna(method = 'ffill', inplace = True)
         datetime_end = data.index[0] + horizon
         data = data[data.index < datetime_end]
+        return data
+
+    def _applyForecastUncertainty(self, data):
         # For each row (level = 0), convert the median ratio estimate into a
         # probabilistic ratio estimate.
         data = data.groupby(level = 0).apply(
             lambda df: self.forecast_uncertainty.forecast(
-                (df.index[0] - raw_data.index[0]).seconds / 3_600,
+                (df.index[0] - data.index[0]).seconds / 3_600,
                 df['ratio'][0],
             )
         )
@@ -226,8 +235,11 @@ class SolarForecast:
         horizon : pandas.Timedelta
             Length of the forecast window.
         """
-        raw_data = self._rawData(datetime_start)
-        return self._processData(raw_data, resolution, horizon)
+        raw_data = self._rawData(
+            datetime_start,
+            include_columns = ['dni', 'ghi', 'dhi', 'temp_air', 'wind_speed'],
+        )
+        return self._correctTime(raw_data, resolution, horizon)
 
     def latestForecast(
         self, 
@@ -271,4 +283,5 @@ class SolarForecast:
         raw_data['forecast_for'] = \
             raw_data['forecast_for'].map(lambda x: self._toLocal(x))
         raw_data.set_index('forecast_for', inplace=True)
-        return self._processData(raw_data, resolution, horizon)
+        data = self._correctTime(raw_data, resolution, horizon)
+        return self._applyForecastUncertainty(data)
