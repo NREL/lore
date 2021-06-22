@@ -1,4 +1,6 @@
 import sys, os
+
+from numpy.lib import twodim_base
 sys.path.insert(1, os.path.join(sys.path[0], '..'))
 
 from math import ceil, pi, log, isnan
@@ -317,13 +319,10 @@ class DispatchParams:
         self.delta_T_design = plant.design['T_htf_hot_des'] - plant.design['T_htf_cold_des']
         self.delta_T_max = max(abs(plant.design['alpha_b'] * self.delta_T_design), plant.design['T_hs_max'] - plant.design['T_cs_min'])
 
-        if plant.design['pc_config'] == 1: # User-defined cycle
-            self.set_linearized_params_from_udpc_inputs(plant)
-        else:
-            print ('WARNING: Dispatch optimization parameters are currently only set up for user-defined power cycle. Defaulting to constant efficiency vs load')
-            self.etap = self.eta_des  
-            self.Wdotl = self.Ql*self.eta_des  
-            self.Wdotu = self.Qu*self.eta_des
+        # Initial setup for part-load cycle efficiency (this will be over-written using power cycle off-design output tables from ssc)
+        self.etap = self.eta_des   
+        self.Wdotl = self.Ql*self.eta_des   
+        self.Wdotu = self.Qu*self.eta_des   
     
         self.W_delta_plus = (plant.design['pc_rampup']) * self.Wdotu 
         self.W_delta_minus = (plant.design['pc_rampdown']) * self.Wdotu 
@@ -485,7 +484,7 @@ class DispatchParams:
         return
 
     # Set dispatch inputs from ssc estimates, S = dictionary containing selected ssc data
-    def set_estimates_from_ssc_data(self, design, S, sscstep, require_Qin_nonzero = True):
+    def set_estimates_from_ssc_data(self, plant, S, sscstep, require_Qin_nonzero = True):
         n = len(S['Q_thermal'])
         Qin = S['Q_thermal']*1000
         if require_Qin_nonzero:
@@ -505,22 +504,9 @@ class DispatchParams:
         
         self.P_field_rec = translate_to_variable_timestep((S['P_tower_pump']+S['pparasi'])*1000, sscstep, self.Delta)
 
-        # Set time-series ambient temperature corrections
-        if design['pc_config'] == 1: # User-defined cycle
-            # TODO: Note that current user-defined cycle neglects ambient T effects
-            Tdry = translate_to_variable_timestep(S['tdry'], sscstep, self.Delta)
-            etamult, wmult = self.get_ambient_T_corrections_from_udpc_inputs(design, Tdry)
-     
-            #TODO: Make sure these should be efficiency values and not mulipliers
-            self.etaamb  = etamult * design['design_eff']
-            self.etac = wmult * design['ud_f_W_dot_cool_des']/100.
-
-            
-        else:
-            # TODO: Need actual ambient temperature correction for cycle efficiency (ssc dispatch model interpolates from a table of points calculated at off-design ambient T, full load, design HTF T)
-            self.etaamb = np.ones(n)  
-            self.etac = np.ones(n)     
-            print ('WARNING: Dispatch cycle ambient T corrections are currently only set up for a user-defined cycle. Using default values (1.0) at all time points')
+        # Set time-series power cycle ambient temperature corrections and cycle part-load efficiency
+        Tdb = translate_to_variable_timestep(S['tdry'], sscstep, self.Delta)
+        self.set_off_design_cycle_inputs(plant, Tdb, S)
 
         return
     
@@ -532,53 +518,80 @@ class DispatchParams:
         self.Cg_minus = [penalty_minus for j in range(n)]
         return 
     
+    # Set parameters in dispatch model for off-design cycle performance
+    def set_off_design_cycle_inputs(self, plant, Tdb, ssc_outputs):
+        is_ssc_tables = 'cycle_eff_load_table' in ssc_outputs and 'cycle_eff_Tdb_table' in ssc_outputs and 'cycle_wcond_Tdb_table' in ssc_outputs
+    
+        #--- Cycle part-load efficiency (not a function of time, but setting here to use outputs from ssc estimates)
+        if is_ssc_tables:
+            q_pb_design = plant.get_cycle_thermal_rating()
+            nload = len(ssc_outputs['cycle_eff_load_table'])
+            xpts = [ssc_outputs['cycle_eff_load_table'][i][0]/q_pb_design for i in range(nload)]    # Load fraction
+            etapts = [ssc_outputs['cycle_eff_load_table'][i][1] for i in range(nload)]              # Efficiency 
+            self.set_linearized_cycle_part_load_params(plant, xpts, etapts)
+        elif plant.design['pc_config'] == 1:    # Tables not returned from ssc, but can be taken from user-defined cycle inputs
+            D = interpret_user_defined_cycle_data(plant.design['ud_ind_od'])
+            k = 3*D['nT'] + D['nm']
+            xpts = D['mpts']   # Load fraction
+            etapts = [plant.design['design_eff'] * (plant.design['ud_ind_od'][k+p][3]/plant.design['ud_ind_od'][k+p][4]) for p in range(len(xpts))]  # Efficiency
+            self.set_linearized_cycle_part_load_params(plant, xpts, etapts)
+        else:
+            print ('WARNING: Dispatch optimization cycle part-load efficiency is not set up. Defaulting to constant efficiency vs load')
+            self.etap = self.eta_des                         
+            self.Wdotl = self.Ql*self.eta_des  
+            self.Wdotu = self.Qu*self.eta_des
 
-    def set_linearized_params_from_udpc_inputs(self, plant):
-        q_pb_design = plant.get_cycle_thermal_rating()  #MWt
-        D = interpret_user_defined_cycle_data(plant.design['ud_ind_od'])
-        eta_adj_pts = [plant.design['ud_ind_od'][p][3]/plant.design['ud_ind_od'][p][4] for p in range(len(plant.design['ud_ind_od'])) ]
-        xpts = D['mpts']
-        step = xpts[1] - xpts[0]
+        #--- Cycle ambient-temperature efficiency corrections
+        if is_ssc_tables:
+            nT = len(ssc_outputs['cycle_eff_Tdb_table'])
+            Tpts = [ssc_outputs['cycle_eff_Tdb_table'][i][0] for i in range(nT)]                                
+            etapts = [ssc_outputs['cycle_eff_Tdb_table'][i][1]* plant.design['design_eff'] for i in range(nT)]  # Efficiency
+            wcondfpts = [ssc_outputs['cycle_wcond_Tdb_table'][i][1] for i in range(nT)]                         # Fraction of cycle design gross output consumed by cooling
+            self.set_cycle_ambient_corrections(Tdb, Tpts, etapts, wcondfpts)
+        elif plant.design['pc_config'] == 1:          # Tables not returned from ssc, but can be taken from user-defined cycle inputs
+            D = interpret_user_defined_cycle_data(plant.design['ud_ind_od'])
+            k = 3*D['nT']+3*D['nm']+D['nTamb']  # first index in udpc data corresponding to performance at design point HTF T, and design point mass flow
+            npts = D['nTamb']
+            etapts = [ plant.design['design_eff'] * (plant.design['ud_ind_od'][j][3]/plant.design['ud_ind_od'][j][4]) for j in range(k, k+npts)]  # Efficiency
+            wcondfpts = [(plant.design['ud_f_W_dot_cool_des']/100.)*plant.design['ud_ind_od'][j][5] for j in range(k, k+npts)]                    # Fraction of cycle design gross output consumed by cooling
+            self.set_cycle_ambient_corrections(Tdb, D['Tambpts'], etapts, wcondfpts)
+        else:
+            print ('WARNING: Dispatch optimization cycle ambient T corrections are not set up. Using default values (1.0) at all time points')
+            n = len(Tdb)
+            self.etaamb = np.ones(n) * plant.design['design_eff']  # Design point efficiency at all ambient T
+            self.etac = np.zeros(n)                                # No condenser parasitic requirement
+        return
         
-        # Interpolate for cycle performance at specified min/max load points
+
+    def set_linearized_cycle_part_load_params(self, plant, xfpts, etapts):
+        q_pb_design = plant.get_cycle_thermal_rating()
         fpts = [plant.design['cycle_cutoff_frac'], plant.design['cycle_max_frac']]
+        step = xfpts[1] - xfpts[0]
         q, eta = [ [] for v in range(2)]
         for j in range(2):
-            p = max(0, min(int((fpts[j] - xpts[0]) / step), len(xpts)-2) )  # Find first point in user-defined array of load fractions for interpolation
-            i = 3*D['nT'] + D['nm'] + p    # Index of point in full list of udpc points (at design point ambient T)
-            eta_adj = eta_adj_pts[i] + (eta_adj_pts[i+1] - eta_adj_pts[i])/step * (fpts[j] - xpts[p])
-            eta.append(eta_adj * plant.design['design_eff'])
-            q.append(fpts[j]*q_pb_design * 1000.)
-
+            p = max(0, min(int((fpts[j] - xfpts[0]) / step), len(xfpts)-2) )               # Find first point in user-defined array of load fractions
+            eta.append(etapts[p] + (etapts[p+1] - etapts[p])/step * (fpts[j] - xfpts[p]))  
+            q.append(fpts[j]*q_pb_design * 1000.)  # kW
         etap = (q[1]*eta[1]-q[0]*eta[0])/(q[1]-q[0])
         b = q[1]*(eta[1] - etap)
         self.etap = etap
         self.Wdotl = b + self.Ql*self.etap
         self.Wdotu = b + self.Qu*self.etap
         return
-    
-    # Use off-design ambient T performance in user-defined cycle data to interpolate of ambient temperature corrections. Assumes off-design tempertures are specified at a constant interval
-    def get_ambient_T_corrections_from_udpc_inputs(self, design, Tamb):
-        n = len(Tamb)  # Tamb = set of ambient temperature points for each dispatch time step
-        D = interpret_user_defined_cycle_data(design['ud_ind_od'])
-        
-        Tambpts = np.array(D['Tambpts'])
-        i0 = 3*D['nT']+3*D['nm']+D['nTamb']  # first index in udpc data corresponding to performance at design point HTF T, and design point mass flow
-        npts = D['nTamb']
-        etapts = [ design['ud_ind_od'][j][3]/design['ud_ind_od'][j][4] for j in range(i0, i0+npts)]
-        wpts = [ design['ud_ind_od'][j][5] for j in range(i0, i0+npts)]
-        
-        etamult  = np.ones(n)
-        wmult = np.ones(n) 
-        Tstep = Tambpts[1] - Tambpts[0]
-        for j in range(n):
-            i = max(0, min( int((Tamb[j] - Tambpts[0]) / Tstep), npts-2) )
-            r = (Tamb[j] - Tambpts[i]) / Tstep
-            etamult[j] = etapts[i] + (etapts[i+1] - etapts[i])*r
-            wmult[j] = wpts[i] + (wpts[i+1] - wpts[i])*r
 
-        return etamult, wmult
-    
+    def set_cycle_ambient_corrections(self, Tdb, Tpts, etapts, wcondfpts):
+        n = len(Tdb)            # Tdb = set of ambient temperature points for each dispatch time step
+        npts = len(Tpts)        # Tpts = ambient temperature points with tabulated values
+        self.etaamb = np.ones(n)
+        self.etac = np.zeros(n) 
+        Tstep = Tpts[1] - Tpts[0]
+        for j in range(n):
+            i = max(0, min( int((Tdb[j] - Tpts[0]) / Tstep), npts-2) )
+            r = (Tdb[j] - Tpts[i]) / Tstep
+            self.etaamb[j] = etapts[i] + (etapts[i+1] - etapts[i])*r
+            self.etac[j] = wcondfpts[i] + (wcondfpts[i+1] - wcondfpts[i])*r
+        return
+
     def copy_and_format_indexed_inputs(self):
         """
         Return a copy of the dispatch params, first converting all lists and numpy arrays
@@ -1100,7 +1113,7 @@ class DispatchWrap:
         self.dispatch_params.day_ahead_tol_plus = self.params['day_ahead_tol_plus']*1000    # kWhe
         self.dispatch_params.day_ahead_tol_minus = self.params['day_ahead_tol_minus']*1000  # kWhe
 
-        self.dispatch_params.set_estimates_from_ssc_data(self.plant.design, ssc_estimates, sscstep/3600.) 
+        self.dispatch_params.set_estimates_from_ssc_data(self.plant, ssc_estimates, sscstep/3600.) 
         
         #--- Set day-ahead schedule in dispatch parameters
         if self.current_day_schedule is not None:
