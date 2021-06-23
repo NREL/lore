@@ -12,7 +12,6 @@ from enum import Enum
 import numpy as np
 import pandas as pd
 import datetime, rapidjson
-import json
 
 from mediation import data_validator, util
 
@@ -355,9 +354,6 @@ plant_initial_state = {
     'wdot0':                                0.,                                 # Cycle electricity generation (MWe)
     'qdot0':                                0.,                                 # Cycle thermal input (MWt)
 }
-
-with open("./../loredash/plant_design.json") as f:
-    plant_design = json.load(f)
 
 # TODO: move this out of plant.py . Maybe to a new financials.py file?
 class Revenue:

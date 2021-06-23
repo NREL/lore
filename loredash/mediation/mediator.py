@@ -8,6 +8,7 @@ from twisted.internet import reactor
 import pandas as pd
 from pandas.tseries.frequencies import to_offset
 import numpy as np
+import rapidjson
 
 from data.mspt_2020_defaults import default_ssc_params
 from mediation import tech_wrap, data_validator, dispatch_wrap, models, forecasts, util
@@ -18,8 +19,8 @@ class Mediator:
     tech_wrap = None
     validated_outputs_prev = None
 
-    def __init__(self, params, plant_config_path, plant_design, weather_file=None,
-                 update_interval=datetime.timedelta(seconds=5), start_date_year=2018):
+    def __init__(self, params, plant_design_path, weather_file=None,
+                 update_interval=datetime.timedelta(seconds=5)):
         self.params = params
         self.weather_file = weather_file
         self.update_interval = update_interval
@@ -30,6 +31,8 @@ class Mediator:
             self.params['price_steps_per_hour'],
             self.params['time_steps_per_hour'])
 
+        with open(plant_design_path) as f:
+            plant_design = rapidjson.load(f)
         self.plant = plant_.Plant(
             design=plant_design,
             initial_state=plant_.plant_initial_state)

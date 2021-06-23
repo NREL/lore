@@ -32,13 +32,12 @@ RUN_PROFILER = False
 def init_and_mediate():
     parent_dir = str(Path(__file__).parents[1])
     default_weather_file = parent_dir + "/data/daggett_ca_34.865371_-116.783023_psmv3_60_tmy.csv"
-    plant_config_path = parent_dir + "/data/plant_config.json"
+    plant_design_path = parent_dir + "./../loredash/plant_design.json"
     m = mediator.Mediator(
         params=mediator.mediator_params,
-        plant_config_path = plant_config_path,
-        plant_design=plant_.plant_design,                       # TODO: does this need to be a parameter?
-        weather_file = default_weather_file,
-        update_interval = datetime.timedelta(seconds = 5),
+        plant_design_path=plant_design_path,
+        weather_file=default_weather_file,
+        update_interval=datetime.timedelta(seconds = 5),
     )
     result = m.model_previous_day_and_add_to_db()
     # result = m.RunOnce()          #TODO: reenable and get this working
