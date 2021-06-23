@@ -20,7 +20,6 @@ import pathlib
 import pytz
 
 from mediation import mediator
-from mediation import plant
 
 PARENT_DIR = str(pathlib.Path(__file__).parents[1])
 
@@ -40,10 +39,10 @@ def test_tmy3_to_df():
     return
 
 def test_get_weather_df():
+    plant_design_path = PARENT_DIR + "/../loredash/plant_design.json"
     m = mediator.Mediator(
         params = mediator.mediator_params,
-        plant_config_path = PARENT_DIR + "/data/plant_config.json",
-        plant_design = plant.plant_design,
+        plant_design_path=plant_design_path,
         weather_file = PARENT_DIR + "/data/daggett_ca_34.865371_-116.783023_psmv3_60_tmy.csv",
         update_interval = datetime.timedelta(seconds = 5),
     )

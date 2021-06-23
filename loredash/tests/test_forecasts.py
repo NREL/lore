@@ -23,16 +23,18 @@ from pvlib import location
 import pytz
 
 from mediation import forecasts
-from mediation import plant
+import rapidjson
 
 # Make sure to mark any tests that need database access.
 @pytest.mark.django_db
 def test_forecaster_from_plant():
+    with open("plant_design.json") as f:
+        plant_design = rapidjson.load(f)
     forecaster = forecasts.SolarForecast(
-        plant.plant_design['latitude'],
-        plant.plant_design['longitude'],
-        plant.plant_design['timezone_string'],
-        plant.plant_design['elevation'],
+        plant_design['latitude'],
+        plant_design['longitude'],
+        plant_design['timezone_string'],
+        plant_design['elevation'],
     )
     assert(type(forecaster.plant_location) == location.Location)
     assert(
