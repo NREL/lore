@@ -163,6 +163,7 @@ class Mediator:
 
         # b. Validate these data
             #TODO: Add this
+        dispatch_outputs = data_validator.validate(dispatch_outputs, data_validator.dispatch_outputs_schema)
 
         # c. Store in database and add to current timestep cache
             #TODO: Add this
