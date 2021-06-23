@@ -356,7 +356,7 @@ plant_initial_state = {
     'qdot0':                                0.,                                 # Cycle thermal input (MWt)
 }
 
-with open("./../loredash/tests/inputs/default_design.json") as f:
+with open("./../loredash/plant_design.json") as f:
     plant_design = json.load(f)
 
 # TODO: move this out of plant.py . Maybe to a new financials.py file?
