@@ -17,11 +17,10 @@ from decouple import Config, RepositoryEnv
 
 # SECURITY WARNING: don't run with debug turned on in production!
 # Toggle DEBUG to False to change to production settings
-DEBUG = True
+DEBUG = False
 
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-print("BASE_DIR: {bd}".format(bd=BASE_DIR))
 
 if DEBUG is True:
     DOTENV_FILE = 'dev.env'
@@ -157,7 +156,6 @@ if not DEBUG:
 STATICFILES_DIRS = [
     os.path.join(BASE_DIR, 'static/')
 ]
-print("STATICFILES_DIRS: {sfd}".format(sfd=os.path.join(BASE_DIR, 'static/')))
 
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 MEDIA_URL = '/media/'

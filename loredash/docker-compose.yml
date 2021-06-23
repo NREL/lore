@@ -19,7 +19,8 @@ version: "3"
 services:
     # this is an 'app' from which a container is created. 'plots' and 'dash' are other apps and will be other containers
     nginx:
-        build: ./loredash/nginx
+        build: ./nginx
+        # image: matthewtboyd/lore
         networks:
             app_net:
                 ipv4_address: 10.10.10.12
@@ -35,7 +36,7 @@ services:
         restart: "on-failure"
     dash:
         build: .
-        image: loredash
+        image: matthewtboyd/lore
         networks:
             app_net:
                 ipv4_address: 10.10.10.10
@@ -56,7 +57,7 @@ services:
         # environment:
             # - FILE_UPLOAD_MAX_MEMORY_SIZE=102400        # add this to avoid 'dashboard exited with code 247'. Originally used 102400.
     plots:
-        image: loredash
+        image: matthewtboyd/lore
         networks:
             app_net:
                 ipv4_address: 10.10.10.11
@@ -94,7 +95,7 @@ services:
             - migration
     migration:
         build: .
-        image: loredash
+        image: matthewtboyd/lore
         networks:
             - app_net
         command: python manage.py migrate
