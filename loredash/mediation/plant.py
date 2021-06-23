@@ -333,28 +333,8 @@ class Plant:
 
 # NOTE: These are the values of the corresponding outputs after 5 minutes of operation,
 # starting with the ssc default initialization
-plant_initial_state = {
-    # Field and receiver:
-    'is_field_tracking_init':               0,                                  # Is field tracking?
-    'rec_op_mode_initial':                  0,                                  # Receiver operating mode
-    'rec_startup_time_remain_init':         0.2,                                # Receiver startup time remaining (hr)
-    'rec_startup_energy_remain_init':       167475728,                          # Receiver startup energy remaining (Wh)
-    'disp_rec_persist0':                    1000.,                              # Time (hr) that receiver has been in its current state
-    'disp_rec_off0':                        1000.,                              # Time (hr) that receiver has not been operating (off or startup)
-    # TES:
-    'T_tank_cold_init':                     290.,                               # Cold tank temperature (C)
-    'T_tank_hot_init':                      573.9,                              # Hot tank temperature (C)
-    'csp_pt_tes_init_hot_htf_percent':      25.0,                               # Fraction of available storage in hot tank (%)
-    # Power cycle:
-    'pc_op_mode_initial':                   1,                                  # Initial cycle operating mode (0 = startup, 1 = on, 2 = standby, 3 = off, 4 = startup_controlled)
-    'pc_startup_time_remain_init':          0.,                                 # Cycle startup time remaining (hr)
-    'pc_startup_energy_remain_initial':     0.,                                 # Cycle startup energy remaining (kWh)
-    'disp_pc_persist0':                     1000.,                              # Time (hr) that cycle has been in its current state
-    'disp_pc_off0':                         1000.,                              # Time (hr) that cycle has not been generating electric power (off, startup, or standby)
-    # TODO: these are cycle state variables?:
-    'wdot0':                                0.,                                 # Cycle electricity generation (MWe)
-    'qdot0':                                0.,                                 # Cycle thermal input (MWt)
-}
+with open("./../loredash/tests/inputs/default_initial_state.json") as f:
+    plant_initial_state = json.load(f)
 
 with open("./../loredash/tests/inputs/default_design.json") as f:
     plant_design = json.load(f)

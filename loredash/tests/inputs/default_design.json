@@ -123,6 +123,5 @@
     "beta_b":                       0.1,
     "beta_T":                       -0.2,
     "beta_m":                       -2.0,
-    "beta_mT":                      3.0,
-	"QQ": TREW
+    "beta_mT":                      3.0
 }
