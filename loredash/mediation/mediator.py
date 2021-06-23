@@ -156,6 +156,7 @@ class Mediator:
         # a. Call dispatch model, (which includes the 'f_estimates...' tech_wrap function to get estimates) and update inputs for next call
         dispatch_outputs = self.dispatch_wrap.run(
             datetime_start=datetime_start,
+            ssc_horizon = (datetime_end - datetime_start),
             weather_dataframe=weather_dispatch,
             annual_clearsky_array = clearsky_data_padded,
             f_estimates_for_dispatch_model=self.tech_wrap.estimates_for_dispatch_model,

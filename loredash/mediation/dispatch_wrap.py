@@ -917,10 +917,11 @@ class DispatchWrap:
         return
 
     #--- Run simulation
-    def run(self, datetime_start, weather_dataframe, annual_clearsky_array,
+    def run(self, datetime_start, ssc_horizon, weather_dataframe, annual_clearsky_array,
             f_estimates_for_dispatch_model, update_interval, initial_plant_state):
         '''
-        Assumes that datetime_start and weather_dataframe are not local time, and correspond to a constant offset used in ssc (same as used in tech_wrap.simulate
+        Assumes that datetime_start and weather_dataframe are not local time, and correspond to a constant offset used in ssc (same as used in tech_wrap.simulate)
+        ssc_horizon = time horizon of dispatch targets that will be utilized in ssc (used only to condense dispatch target arrays to the correct length)
         update_interval = frequency (hr) at which dispatch optimization will be re-run
         '''
         # Notes: The ssc simulation time resolution is assumed to be <= the shortest dispatch time step
@@ -1034,7 +1035,7 @@ class DispatchWrap:
                         self.date_for_next_day_schedule = date_today + datetime.timedelta(hours = 24)
 
             #--- Set ssc dispatch targets
-            ssc_dispatch_targets = DispatchTargets(dispatch_soln, self.plant, self.dispatch_params, sscstep, horizon)
+            ssc_dispatch_targets = DispatchTargets(dispatch_soln, self.plant, self.dispatch_params, sscstep, ssc_horizon.total_seconds()/3600.)
 
             #--- Get shut-down state parameters at the point in time in this dispatch solution when the next dispatch call will occur (stand-in for plant state as ssc does not model reciever shutdown)
             # TODO: should eventually remove this is favor of data from plant database (if possible)... shut down state from dispatch model won't match real life unless real plant follows this schedule
