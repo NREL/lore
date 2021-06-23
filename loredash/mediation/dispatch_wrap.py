@@ -780,7 +780,17 @@ class DispatchTargets:
 
         return
 
-    def asdict(self):
+    def asdict(self,use_lists=False):
+        if use_lists:
+            return {
+                'q_pc_target_su_in':    list(self.q_pc_target_su_in),
+                'q_pc_target_on_in':    list(self.q_pc_target_on_in),
+                'q_pc_max_in':          list(self.q_pc_max_in),
+                'is_rec_su_allowed_in': list(self.is_rec_su_allowed_in),
+                'is_rec_sb_allowed_in': list(self.is_rec_sb_allowed_in),
+                'is_pc_su_allowed_in':  list(self.is_pc_su_allowed_in),
+                'is_pc_sb_allowed_in':  list(self.is_pc_sb_allowed_in),
+            }
         return {
             'q_pc_target_su_in':        self.q_pc_target_su_in,
             'q_pc_target_on_in':        self.q_pc_target_on_in,
@@ -848,6 +858,27 @@ class DispatchTargets:
             setattr(self, k, vals)
 
         return
+
+    def update_from_dict(self,target_dict):
+        """
+        updates attributes of the object using a dictionary as input.  called after data validation takes place for
+        the converted object (using asdict).
+
+        parameters
+        ============
+        target_dict : Dict(str, list) | dictionary containing (validated) dispatch targets
+
+        returns
+        ===========
+        None (updates attributes of object
+        """
+        self.q_pc_target_su_in = target_dict['q_pc_target_su_in']
+        self.q_pc_target_on_in = target_dict['q_pc_target_on_in']
+        self.q_pc_max_in = target_dict['q_pc_max_in']
+        self.is_rec_su_allowed_in = target_dict['is_rec_su_allowed_in']
+        self.is_rec_sb_allowed_in = target_dict['is_rec_sb_allowed_in']
+        self.is_pc_su_allowed_in = target_dict['is_pc_su_allowed_in']
+        self.is_pc_sb_allowed_in = target_dict['is_pc_sb_allowed_in']
 
 
 
@@ -1146,9 +1177,9 @@ class DispatchWrap:
             'Rdisp': Rdisp,
             'ursd_last': ursd_last,
             'yrsd_last': yrsd_last,
-            'schedules': self.schedules,
-	        'current_day_schedule': self.current_day_schedule,
-	        'next_day_schedule': self.next_day_schedule
+            'schedules': list(self.schedules),
+	        'current_day_schedule': list(self.current_day_schedule),
+	        'next_day_schedule': list(self.next_day_schedule)
         }
 
         # Read NVE schedules (if not already read during rolling horizon calculations)

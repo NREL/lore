@@ -162,7 +162,10 @@ class Mediator:
         self.dispatch_wrap.update_inputs(dispatch_outputs, self.simulation_timestep)        # TODO: add to end of run()?
 
         # b. Validate these data
-            #TODO: Add this
+        dispatch_outputs = data_validator.validate(dispatch_outputs, data_validator.dispatch_outputs_schema)
+        ssc_dispatch_targets = data_validator.validate(dispatch_outputs['ssc_dispatch_targets'].asdict(use_lists=True),
+                                                       data_validator.ssc_dispatch_targets_schema)
+        dispatch_outputs['ssc_dispatch_targets'].update_from_dict(ssc_dispatch_targets)
 
         # c. Store in database and add to current timestep cache
             #TODO: Add this
