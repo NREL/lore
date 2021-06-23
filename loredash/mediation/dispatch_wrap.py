@@ -1,6 +1,4 @@
 import sys, os
-
-from numpy.lib import twodim_base
 sys.path.insert(1, os.path.join(sys.path[0], '..'))
 
 from math import ceil, pi, log, isnan
@@ -486,11 +484,13 @@ class DispatchParams:
     # Set dispatch inputs from ssc estimates, S = dictionary containing selected ssc data
     def set_estimates_from_ssc_data(self, plant, S, sscstep, require_Qin_nonzero = True):
         n = len(S['Q_thermal'])
+
         Qin = S['Q_thermal']*1000
         if require_Qin_nonzero:
             Qin = np.maximum(0.0, S['Q_thermal']*1000)
         self.Qin = translate_to_variable_timestep(Qin, sscstep, self.Delta)
-        ratio = [0 if S['clearsky'][i] < 0.01 else min(1.0, S['beam'][i]/S['clearsky'][i]) for i in range(n)]   # Ratio of actual to clearsky DNI 
+        clearsky_adjusted = np.maximum(S['beam'], S['clearsky'])  
+        ratio = [0 if clearsky_adjusted[i] < 0.01 else min(1.0, S['beam'][i]/clearsky_adjusted[i]) for i in range(n)]   # Ratio of actual to clearsky DNI 
         self.F = translate_to_variable_timestep(ratio, sscstep, self.Delta)
         self.F = np.minimum(self.F, 1.0)
         self.Q_cls = self.Qin / np.maximum(1.e-6, self.F)
@@ -890,7 +890,7 @@ class DispatchWrap:
         ## SSC OUTPUTS ###################################################################################################################################
         self.results = None                             # Results
 
-        #TODO: Do we need to calculate and return these from within the dispatch model, or are they calculated elsewhere from the ssc solution?
+        #TODO: These aren't currently used.  Do we need to calculate and return these from within the dispatch model?
         '''
         self.revenue = 0.0                              # Revenue over simulated days ($)
         self.startup_ramping_penalty = 0.0              # Startup and ramping penalty over all simulated days ($)
@@ -914,31 +914,23 @@ class DispatchWrap:
         self.total_cycle_net = 0                        # Total net generation by cycle (GWhe)
         '''
 
-        #for key,value in params.items():
-        #    setattr(self, key, value)
-
         return
 
     #--- Run simulation
-    def run(self, datetime_start, weather_dataframe,
+    def run(self, datetime_start, weather_dataframe, annual_clearsky_array,
             f_estimates_for_dispatch_model, update_interval, initial_plant_state):
-        '''update_interval = frequency (hr) at which dispatch optimization will be re-run'''
+        '''
+        Assumes that datetime_start and weather_dataframe are not local time, and correspond to a constant offset used in ssc (same as used in tech_wrap.simulate
+        update_interval = frequency (hr) at which dispatch optimization will be re-run
+        '''
         # Notes: The ssc simulation time resolution is assumed to be <= the shortest dispatch time step
         #         All dispatch time steps and time horizons are assumed to be an integer multiple of the ssc time step
 
-
-
         weather_timestep = (weather_dataframe.index[1]-weather_dataframe.index[0]).total_seconds()    # Time step in weather data frame (s)
        
-        #--- Update weather_dataframe such that first point coincides with datetime_start.  
-        # Assumes that values in weather_dataframe starts at the beginning of the hour containing datetime_start
-        # TODO: Is this consistent with data coming from weather forecasts?
-        weather_dataframe_loc = deepcopy(weather_dataframe)
-        n = int(datetime_start.minute*60 / weather_timestep)   # Point in weather data corresponding to datetime_start
-        weather_dataframe_loc.drop(weather_dataframe_loc.index[[i for i in range(n)]], inplace = True)
-
         #--- Define horizon for this call to the dispatch optimization horizon (use specified 'dispatch_horizon' unless weather data is not available for the full horizon)
-        weather_horizon = (weather_dataframe_loc.index[-1]-weather_dataframe_loc.index[0]).total_seconds() + weather_timestep  # Total duration of weather available for simulation relative to simulation start_date (s)
+        p = int(datetime_start.minute*60 / weather_timestep)   # Point in weather data corresponding to datetime_start.  TODO: Assumes that values in weather_dataframe starts at the beginning of the hour containing datetime_start
+        weather_horizon = (weather_dataframe.index[-1]-weather_dataframe.index[p]).total_seconds() + weather_timestep  # Total duration of weather available for simulation relative to simulation start_date (s)
         horizon = int(min(weather_horizon, self.params['dispatch_horizon']*3600)/3600.)    # hr          
         
         #--- Define time step arrays for dispatch optimization
@@ -963,12 +955,6 @@ class DispatchWrap:
             yrsd0 = self.yrsd0  # Receiver binary shutdown state (taken from last dispatch solution for now)       
                  
         self.plant.state = initial_plant_state
-
-        clearsky_data = np.array(weather_dataframe_loc['Clear Sky DNI'])
-        np.nan_to_num(clearsky_data, copy = False, nan = 0.0)  # TODO: Where are the nan values coming from?
-        clearsky_data_padded = np.pad(clearsky_data, (0, len(self.price_data) - len(clearsky_data)), 'constant', constant_values=(0, 0))
-        self.params['clearsky_data'] = clearsky_data_padded
-
 
         #--- Calculate time-related values
         tod = int(get_time_of_day(datetime_start))        # Current time of day (s)
@@ -1000,9 +986,8 @@ class DispatchWrap:
             plant_state = self.plant.state,
             datetime_start = datetime_start,
             horizon = horizon,     
-            weather_dataframe = weather_dataframe_loc,
+            weather_dataframe = weather_dataframe,
             N_pts_horizon = npts_horizon,    # TODO: These last three inputs shouldn't be needed once clearsky DNI is replaced 
-            clearsky_data = clearsky_data_padded,
             start_pt = startpt
         )
 
@@ -1014,7 +999,7 @@ class DispatchWrap:
             horizon = horizon,      
             dispatch_steplength_array = self.params['dispatch_steplength_array'],
             dispatch_steplength_end_time = dispatch_steplength_end_time,
-            clearsky_data = clearsky_data_padded,
+            clearsky_data = annual_clearsky_array,
             price = self.price_data[startpt:startpt+npts_horizon],          # [$/MWh] Update prices for this horizon
             ursd0 = ursd0,
             yrsd0 = yrsd0
@@ -1053,6 +1038,7 @@ class DispatchWrap:
 
             #--- Get shut-down state parameters at the point in time in this dispatch solution when the next dispatch call will occur (stand-in for plant state as ssc does not model reciever shutdown)
             # TODO: should eventually remove this is favor of data from plant database (if possible)... shut down state from dispatch model won't match real life unless real plant follows this schedule
+            # Note these are only important if shutdown requirements (plant.design['rec_sd_delay'] and plant.design['q_rec_shutdown_fraction']) are nonzero
             self.ursd0 = dispatch_soln.get_value_at_time(self.dispatch_params, update_interval, 'ursd')      # set to False when it doesn't exist 
             self.yrsd0 = dispatch_soln.get_value_at_time(self.dispatch_params, update_interval, 'yrsd')      # set to False when it doesn't exist
 

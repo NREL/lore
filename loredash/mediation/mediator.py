@@ -141,8 +141,10 @@ class Mediator:
                                             #       since getting the forecasts takes significant time?
 
         # Set clearsky data
-        clearsky_data = np.array(weather_dispatch['Clear Sky DNI'])
-        clearsky_data_padded = np.pad(clearsky_data, (0, 365*24*60 - len(clearsky_data)), 'constant', constant_values=(0, 0))   #TODO fix this hack
+        clearsky_data = np.nan_to_num(np.array(weather_dispatch['Clear Sky DNI']), nan = 0.0)  # TODO: Better handling of nan values in clear-sky data
+        clearsky_data_padded = self.tech_wrap.pad_weather_data(list_data = clearsky_data.tolist(), 
+            datetime_start = self._toTMYTime(datetime_start), 
+            timestep = datetime.timedelta(hours=1/self.params['time_steps_per_hour']))
         self.tech_wrap.set({'rec_clearsky_dni': clearsky_data_padded})
 
         # TODO(odow): keep pushing timezones through the code.
@@ -155,6 +157,7 @@ class Mediator:
         dispatch_outputs = self.dispatch_wrap.run(
             datetime_start=datetime_start,
             weather_dataframe=weather_dispatch,
+            annual_clearsky_array = clearsky_data_padded,
             f_estimates_for_dispatch_model=self.tech_wrap.estimates_for_dispatch_model,
             update_interval = 1.0/self.params['time_steps_per_hour'],
             initial_plant_state=plant_state

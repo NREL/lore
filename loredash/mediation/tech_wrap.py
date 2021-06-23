@@ -40,8 +40,10 @@ class TechWrap:
                                                                        timedelta=datetime.timedelta(hours=1))
         datetime_end = datetime_start                                           # run for just first timestep of year
         self.ssc.set({'field_model_type': 2})                                   # generate flux and eta maps but don't optimize field or tower
-        original_values = {k:self.ssc.get(k) for k in ['is_dispatch_targets', 'rec_clearsky_model']}
-        self.ssc.set({'is_dispatch_targets':False, 'rec_clearsky_model': 1})    # set so unneeded dispatch targets and clearsky DNI are not required
+        original_values = {k:self.ssc.get(k) for k in ['is_dispatch_targets', 'rec_clearsky_model', 'time_steps_per_hour', 'sf_adjust:hourly', ]}
+        self.ssc.set({'is_dispatch_targets':False, 'rec_clearsky_model': 1, 'time_steps_per_hour': 1, 'sf_adjust:hourly': [0.0 for j in range(8760)]})    # set so unneeded dispatch targets and clearsky DNI are not required
+        self.ssc.set({'sf_adjust:hourly': [0.0 for j in range(8760)]})
+        
         tech_outputs = self.simulate(datetime_start, datetime_end, None, plant_state=plant_state, solar_resource_data=solar_resource_data)
         self.ssc.set(original_values)                                           # revert back to original specifications
         eta_map = tech_outputs["eta_map_out"]                                   # get maps and set for subsequent runs
@@ -77,7 +79,7 @@ class TechWrap:
 
         self.ssc.set(plant_state)
 
-        #NOTE: this also pads the weather data to 8760 if its length is less than that:
+        #NOTE: this also pads the weather data if its length is less than required:
         self.set_weather_data(weather_dataframe=weather_dataframe, solar_resource_data=solar_resource_data)
 
         # set times:
@@ -93,6 +95,7 @@ class TechWrap:
             self.ssc.set({'time_steps_per_hour': 3600 / timestep.seconds})                      # otherwise its using already set value
 
         # TODO: do this trimming better and properly ##############################################
+        # TODO: array lengths are consistent with ssc requirements, except for sf_adjust:hourly in the flux map call, which is being taken from plant_state
         def resize_list(list_name, total_elements):
             _list = self.ssc.get(list_name)
             if len(_list) < total_elements:
@@ -103,6 +106,7 @@ class TechWrap:
 
         N_weather_data = len(self.ssc.get('solar_resource_data')['year'])
         resize_list('sf_adjust:hourly', N_weather_data)
+        '''
         if self.ssc.get('rec_clearsky_model') == 0:  # Input array for clearsky DNI is only needed if rec_clearsky_model is 0
             resize_list('rec_clearsky_dni', N_weather_data)
 
@@ -119,6 +123,7 @@ class TechWrap:
                 resize_list('is_ignore_elec_heat_dur_off', N_timesteps)    # NOT SET
             except:
                 pass
+        '''
         ###########################################################################################
 
         tech_outputs = self.ssc.execute()
@@ -226,16 +231,42 @@ class TechWrap:
             # weather_schema = data_validator.weather_schema      # validate
             # validated_solar_resource_data = weather_schema(solar_resource_data_input)
 
-            # the number of records must be a integer multiple of 8760
-            # see: sam_dev/ssc/ssc/common.cpp, line 1272
-            # TODO: verify that SSC is reading from the start of the weather data array at non-New Year's start datetimes
-            diff = len(validated_solar_resource_data['dn']) % 8760
-            if diff > 0:
-                padding = [0] * (8760 - diff)
-                for v in validated_solar_resource_data.values():
-                    if isinstance(v, list):
-                        v.extend(padding)
+            # the number of records must be 8760 x ssc 'time_steps_per_hour' input
+            # ssc is reads data from the position in the full annual array that corresponds to time_start
+            validated_solar_resource_data = self.pad_weather_data(validated_solar_resource_data)
             self.ssc.set({'solar_resource_data': validated_solar_resource_data})
+        return 0
+
+    def pad_weather_data(self, solar_resource_data = None, list_data = None, datetime_start = None, timestep = None):
+        """
+        Pads weather data to the appropriate length for input to ssc (8760 * time_steps_per_hour), and places non-zero data at the appropriate position in the array based on the time of the first point in solar_resource_data
+        array_data can be a generic list (e.g. clearsky, solar field adjustment factors, price data) that follows the same conventions in ssc.  Must be supplied with timestep and datetime_start (constant offset correpsonding to TMY time)
+        """
+        if solar_resource_data is not None:
+            n = len(solar_resource_data['dn'])
+            datetime_start = datetime.datetime(solar_resource_data['year'][0], solar_resource_data['month'][0], solar_resource_data['day'][0], solar_resource_data['hour'][0], solar_resource_data['minute'][0])
+            timestep = datetime.datetime(solar_resource_data['year'][1], solar_resource_data['month'][1], solar_resource_data['day'][1], solar_resource_data['hour'][1], solar_resource_data['minute'][1]) - datetime_start
+        elif list_data is not None:  
+            n = len(list_data)
+
+        steps_per_hour = int(3600 / timestep.seconds)
+        i0 = int((datetime_start-datetime.datetime(datetime_start.year,1,1,0,0,0)).total_seconds() / timestep.seconds) 
+        diff = 8760*steps_per_hour - n
+        front_padding = [0]*i0
+        back_padding = [0]*(diff - i0)
+
+        if solar_resource_data is not None:
+            if diff > 0:
+                for k in solar_resource_data:
+                    if isinstance(solar_resource_data[k],list):
+                        solar_resource_data[k] = front_padding + solar_resource_data[k] + back_padding
+            return solar_resource_data
+
+        elif list_data is not None:
+            if diff > 0:
+                padded_data = front_padding + list_data + back_padding
+            return padded_data
+        
         return 0
 
     def get_simulated_plant_state(self, model_outputs, **kwargs):
@@ -287,7 +318,7 @@ class TechWrap:
         return plant_state
 
 
-    def estimates_for_dispatch_model(self, plant_state, datetime_start, horizon, weather_dataframe, N_pts_horizon, clearsky_data, start_pt):
+    def estimates_for_dispatch_model(self, plant_state, datetime_start, horizon, weather_dataframe, N_pts_horizon, start_pt):
 
         # Backup parameters (to revert back after simulation)  ->  can I just copy self.tech_model and not have to backup and revert?
         param_names = ['is_dispatch_targets', 'tshours', 'is_rec_startup_trans', 'rec_su_delay', 'rec_qf_delay']
@@ -311,9 +342,9 @@ class TechWrap:
         self.ssc.set(original_params)
 
         # Filter and adjust results
-        retvars = ['Q_thermal', 'm_dot_rec', 'beam', 'clearsky', 'tdry', 'P_tower_pump', 'pparasi']
+        # TODO: This likely isn't needed. Clearsky is needed in the ssc results, but should be returned in all ssc calls already?
         if 'clearsky' not in results or max(results['clearsky']) < 1.e-3:         # Clear-sky data wasn't passed through ssc (ssc controlled from actual DNI, or user-defined flow inputs)
-            results['clearsky'] = clearsky_data[start_pt : start_pt + N_pts_horizon]
+            results['clearsky'] = [self.ssc.params['rec_clearsky_dni'][i] for i in range(start_pt, start_pt + N_pts_horizon)]
 
         return results
 
