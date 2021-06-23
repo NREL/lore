@@ -288,9 +288,13 @@ class Mediator:
         tmy3_path,
         use_forecast=False,
     ):
-        """Return a dataframe of weather data at `timestep` resolution (of
-        at-most 1 hour) covering the time-span given by datetime_start and
-        datetime_end. Datetimes are in plant-local time.
+        """
+        Return a dataframe of weather data at `timestep` resolution (of
+        at-most 1 hour) covering the time-span given by `datetime_start` and
+        `datetime_end`. That is, the returned dataframe should start _before_
+        `datetime_start` and end _after_ `datetime_end`.
+
+        Datetimes are in plant-local time.
 
         If `use_forecast`, replace the 'DNI', 'DHI', 'GHI', 'Wind Speed' columns
         with the latest NDFD forecast from the forecasts submodule. In addition,

@@ -95,12 +95,16 @@ def test_getForecast():
     # Choose a start time that is not current, but that NDFD will still have
     # data for.
     datetime_start = datetime.datetime.now(pytz.timezone('US/Pacific'))
+    datetime_start = datetime_start - pandas.Timedelta(hours = 24)
+    datetime_end = datetime_start + pandas.Timedelta(hours = 24)
     data = forecaster.getForecast(
-        datetime_start = datetime_start - pandas.Timedelta(hours = 24),
+        datetime_start = datetime_start,
         horizon = pandas.Timedelta(hours = 24),
         resolution = pandas.Timedelta(minutes = 1),
     )
-    assert(len(data) == 24 * 60)
+    assert(len(data) >= 24 * 60)
+    assert(datetime_start >= data.index[0])
+    assert(datetime_end <= data.index[-1])
     assert('dni' in data)
     assert('dhi' in data)
     assert('ghi' in data)

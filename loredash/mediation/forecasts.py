@@ -105,16 +105,23 @@ class SolarForecast:
         return
     
     def _rawData(self, datetime_start, include_columns = ['dni']):
-        # Sufficiently long time window for NDFD.
-        datetime_end = datetime_start + pandas.Timedelta(days = 7)
         data = forecast.NDFD().get_processed_data(
             self.plant_location.latitude,
             self.plant_location.longitude,
-            datetime_start,
-            datetime_end,
+            # Sufficiently long time window for NDFD. We also pick a time window
+            # prior to the actual start time to work-around pvlib forecast
+            # vagaries with how it returns forecasts.
+            datetime_start - pandas.Timedelta(days = 1),
+            datetime_start + pandas.Timedelta(days = 7),
             how = 'clearsky_scaling',
         )[include_columns]
         data.index = pandas.to_datetime(data.index)
+        # Strip out time periods prior to the datetime_start.
+        first_index = 0
+        for i in range(len(data)):
+            if data.index[1] >= datetime_start:
+                first_index = i - 1
+        data = data[first_index:]
         data['clear_sky'] = self.plant_location.get_clearsky(data.index)['dni']
         # Map the values to a normalized dni/clear-sky ratio space to allow us
         # to convert the median estimate from NDFD to a probabilistic estimate.
@@ -175,7 +182,7 @@ class SolarForecast:
         )
         return self.latestForecast(resolution = resolution, horizon = horizon)
 
-    def _correctTime(self, raw_data, resolution, horizon):
+    def _correctTime(self, raw_data, resolution, horizon, datetime_start=None):
         """
         Return a modified version of `raw_data`, imputed as necessary so that it
         has the correct number of rows to match the resolution and horizon, as
@@ -191,8 +198,11 @@ class SolarForecast:
         # For the first and last NaNs, use bfill and ffill:
         data.fillna(method = 'bfill', inplace = True)
         data.fillna(method = 'ffill', inplace = True)
-        datetime_end = data.index[0] + horizon
-        data = data[data.index < datetime_end]
+        if datetime_start is None:
+            datetime_start = data.index[0]
+        datetime_end = datetime_start + horizon
+        data = data[data.index < datetime_end + resolution]
+        data = data[data.index > datetime_start - resolution]
         return data
 
     def _applyForecastUncertainty(self, data):
@@ -239,7 +249,7 @@ class SolarForecast:
             datetime_start,
             include_columns = ['dni', 'ghi', 'dhi', 'temp_air', 'wind_speed'],
         )
-        return self._correctTime(raw_data, resolution, horizon)
+        return self._correctTime(raw_data, resolution, horizon, datetime_start)
 
     def latestForecast(
         self, 
