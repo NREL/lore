@@ -208,11 +208,29 @@ plant_config_schema = Schema( All(
         extra=REMOVE_EXTRA,         # REMOVE_EXTRA = keys in data that are undefined in schema will be removed--no exception will be thrown
         required=True,              # THIS DOESN'T SEEM TO WORK: True = data is required for all defined schema keys unless overriden using
                                     #   Optional(), if not present will throw exception
+)
+
+ssc_dispatch_targets_schema = Schema( All(
+        {
+        Required('q_pc_max_in'): [And(Coerce(float), Range(min=0, max=kBigNumber))],
+        Required('q_pc_target_on_in'): [And(Coerce(float), Range(min=0, max=kBigNumber))],
+        Required('q_pc_target_su_in'): [And(Coerce(float), Range(min=0, max=kBigNumber))],
+        Required('is_rec_su_allowed_in'): [And(Coerce(int), Range(min=0, max=1))],
+        Required('is_rec_sb_allowed_in'): [And(Coerce(int), Range(min=0, max=1))],
+        Required('is_pc_su_allowed_in'): [And(Coerce(int), Range(min=0, max=1))],
+        Required('is_pc_sb_allowed_in'): [And(Coerce(int), Range(min=0, max=1))]
+        },
+        list_lengths_must_match
+    ),
+        extra=REMOVE_EXTRA,         # REMOVE_EXTRA = keys in data that are undefined in schema will be removed--no exception will be thrown
+        required=True,              # THIS DOESN'T SEEM TO WORK: True = data is required for all defined schema keys unless overriden using
+                                    #   Optional(), if not present will throw exception
+)
+
 dispatch_outputs_schema = Schema(
         {
         Required('current_day_schedule'): [And(Coerce(float), Range(min=0, max=kBigNumber))],
         Required('next_day_schedule'): [And(Coerce(float), Range(min=0, max=kBigNumber))],
-        # Required('ssc_dispatch_targets'): ssc_dispatch_targets_schema,
         Required('ursd_last'): And(Coerce(int), Range(min=0, max=kBigNumber)),
         Required('yrsd_last'): And(Coerce(int), Range(min=0, max=1)),
         },
