@@ -39,6 +39,8 @@ os.environ["BOKEH_SECRET_KEY"] = env_config.get('BOKEH_SECRET_KEY')
 os.environ["BOKEH_SIGN_SESSIONS"] = "False"
 os.environ["BOKEH_RESOURCES"] = "cdn"
 
+# Denotes the hostnames that your server will listen to;
+#  not the hostnames of connecting hosts
 ALLOWED_HOSTS = ['localhost', '127.0.0.1', '0.0.0.0']
 
 SITE_ID = 1

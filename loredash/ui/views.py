@@ -177,13 +177,13 @@ def forecast_view(request, *args, **kwargs):
     solar_script = server_session(None, session_id=token.generate_session_id(),
                                     url=solar_url)
 
-    probability_table_url = "http://127.0.0.1:5006/probability_table"
-    probability_table_script = server_session(None, session_id=token.generate_session_id(),
-                                    url=probability_table_url)
+    # probability_table_url = "http://127.0.0.1:5006/probability_table"
+    # probability_table_script = server_session(None, session_id=token.generate_session_id(),
+    #                                 url=probability_table_url)
     
-    estimates_table_url = "http://127.0.0.1:5006/estimates_table"
-    estimates_table_script = server_session(None, session_id=token.generate_session_id(),
-                                    url=estimates_table_url)
+    # estimates_table_url = "http://127.0.0.1:5006/estimates_table"
+    # estimates_table_script = server_session(None, session_id=token.generate_session_id(),
+    #                                 url=estimates_table_url)
     
     context = {**(getLiveStatusData()),
                "mkt_script" : "Market Forecast",
@@ -191,9 +191,8 @@ def forecast_view(request, *args, **kwargs):
                "solar_plot": "Solar Forecast",
                "solar_script": solar_script,
                "live_data": getLiveBarData(),
-               "probability_table_script": probability_table_script,
-               "estimates_table_script": estimates_table_script,
-
+            #    "probability_table_script": probability_table_script,
+            #    "estimates_table_script": estimates_table_script,
               }
 
     return render(request, "ui/forecast.html", context)

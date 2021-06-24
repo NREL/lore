@@ -20,7 +20,6 @@ import pathlib
 import pytz
 
 from mediation import mediator
-from mediation import plant
 
 PARENT_DIR = str(pathlib.Path(__file__).parents[1])
 
@@ -40,10 +39,10 @@ def test_tmy3_to_df():
     return
 
 def test_get_weather_df():
+    plant_design_path = PARENT_DIR + "/../loredash/plant_design.json"
     m = mediator.Mediator(
         params = mediator.mediator_params,
-        plant_config_path = PARENT_DIR + "/data/plant_config.json",
-        plant_design = plant.plant_design,
+        plant_design_path=plant_design_path,
         weather_file = PARENT_DIR + "/data/daggett_ca_34.865371_-116.783023_psmv3_60_tmy.csv",
         update_interval = datetime.timedelta(seconds = 5),
     )
@@ -56,8 +55,7 @@ def test_get_weather_df():
         datetime.timedelta(hours=1),
         m.weather_file,
     )
-    assert(len(weather) == 169 == 7 * 24 + 1)
-    print(sum(weather['DNI'])  == 22216)
+    assert(len(weather) == 7 * 24)
     # Test getting one day of weather. This should fail because it attempts to
     # get latest forecast, but the time is too old for the NDFD server.
     with pytest.raises(Exception) as err:
@@ -83,17 +81,28 @@ def test_get_weather_df():
         m.weather_file,
         use_forecast = True,
     )
+    assert(len(tmy_weather) == 2 * 48)
+    for key in ['DNI', 'DHI', 'GHI', 'Wind Speed']:
+        assert(key in tmy_weather)
+        assert(key in forecast_weather)
+    assert('Ambient Temperature' in forecast_weather)
+    assert('Clear Sky DNI' in forecast_weather)
+    assert(not 'Ambient Temperature' in tmy_weather)
+    assert(not 'Clear Sky DNI' in tmy_weather)
     assert(len(tmy_weather) == len(forecast_weather))
     assert(sum(tmy_weather['DNI']) != sum(forecast_weather['DNI']))
     assert(sum(tmy_weather['DNI']) > 100)
     assert(not tmy_weather['DNI'].isnull().values.any())
     assert(sum(forecast_weather['DNI']) > 100)
     assert(not forecast_weather['DNI'].isnull().values.any())
-    # Check that they are linked up timezone-wise. (If it's not sunny in the TMY
-    # file, it isn't sunny in the forecast.)
+    # Check that they are linked up timezone-wise. (If it's sunny in the 
+    # forecast, it must be sunny in the TMY file too.
+    # It 's a little tricky with some tolerances (what if the forecast is all 
+    # 0 today?), but we use the rule the that the forecast shouldn't exceed the
+    # TMY by too much. The most likely reason is that the forecast high when the 
+    # TMY is off (at night).
     for (tmy, forecast) in zip(tmy_weather['DNI'], forecast_weather['DNI']):
-        if tmy < 100:
-            assert(forecast < 100)
+        assert(forecast - tmy < 400)
     return
 
 def test_normalize_timesteps():

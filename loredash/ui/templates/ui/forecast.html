@@ -17,16 +17,17 @@ Forecast
 
   <!-- Data Cards -->
   <div class='data'>
-    <div class="plots row row-cols-2">
+    <!-- <div class="plots row"> -->
+       <!-- row-cols-2"> -->
 
       <!-- Market Data -->
-      {% include "ui/snippets/card.html" with plot_script=mkt_script %}
+      {% comment %}{% include "ui/snippets/card.html" with plot_script=mkt_script %}{% endcomment %}
 
       <!-- Solar Forecast Data -->
       {% include "ui/snippets/card.html" with plot_script=solar_script %}
 
-    </div>
-    <div class="tables row row-cols-2">
+    <!-- </div> -->
+    {% comment %} <div class="tables row row-cols-2">
 
       <!-- Probability Data Table -->
       {% include "ui/snippets/card.html" with plot_script=probability_table_script %}
@@ -34,7 +35,7 @@ Forecast
       <!-- Estimates Data Table -->
       {% include "ui/snippets/card.html" with plot_script=estimates_table_script %}
 
-    </div>
+    </div> {% endcomment %}
   </div>
 </div>
 {% endblock %}

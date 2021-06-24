@@ -2,31 +2,54 @@
 version: "3"
 
 # Explanation
-# The container can only be accessed via 127.0.0.1
-# Docker maps this host address to the internal container address according to the port
+# The container can only be accessed via 127.0.0.1:1300 (e.g., via web browser)
+# Docker maps this host address to the internal container address according to the port, or to any IP
+#  (whatever is listening) if 0.0.0.0 is used. Therefore what's happening is:
+#   127.0.0.1:1300 -> 10.10.10.12:80    (web browser -> nginx)
+#   10.10.10.12:80 -> 10.10.10.10:8000  (nginx -> gunicorn) [as configured in nginx.conf, for non-static requests]
+#   
 #   127.0.0.1:8000 -> 10.10.10.10:8000  (or whatever target container port the host port is mapped to)
 #   127.0.0.1:5006 -> 10.10.10.11:5006  (for the bokeh server)
-# The --address and --port in the bokeh serve command are where the bokeh server is in the container
-# The IPs and ports in /loredash/ui/views.py are what Django is using to try and reach the bokeh server.
-# Django requests/polling seem to be leaving the container and re-entering. Therefore, the Django
-#  requests/polls appear to be coming from 127.0.0.1:8000 (outside the container) and should thus target
+# For the Bokeh plotting server, the --address and --port in the serve command are where you are running the bokeh
+#  server in the container. The IPs and ports in /loredash/ui/views.py are what Django is using to try and reach
+#  the bokeh server. Django requests/polling seem to be leaving the container and re-entering. Therefore, the Django
+#  requests/polls appear to be coming from 127.0.0.1:1300 (outside the container) and should thus target
 #  the bokeh server at 127.0.0.1:5006 (which gets mapped to 10.10.10.11:5006 once back in the container).
 
 services:
-    # this is an 'app' from which a container is created. 'plots' is another app and will be another container
+    # this is an 'app' from which a container is created. 'plots' and 'dash' are other apps and will be other containers
+    nginx:
+        build: ./nginx
+        # image: matthewtboyd/lore
+        networks:
+            app_net:
+                ipv4_address: 10.10.10.12
+        ports:
+          - 1300:80
+        container_name: reverse_proxy
+        # Defining this volume gives nginx access to the static files in the 'dash' container in order to serve them
+        volumes:
+          - static_volume:/site/static
+        depends_on:
+          - dash
+          - migration
+        restart: "on-failure"
     dash:
+        build: .
         image: matthewtboyd/lore
         networks:
             app_net:
                 ipv4_address: 10.10.10.10
-        command: python manage.py runserver 0.0.0.0:8000
+        command: sh -c "python manage.py collectstatic --noinput &&
+                        gunicorn loredash.wsgi:application --bind 10.10.10.10:8000 --timeout 24000"
         container_name: dashboard
-        # Mapping to a volume may be causing a problematic local dependency on manage.py
-        # volumes:
-        #     - .:/loredash
+        volumes:
+            - static_volume:/site/static
         ports:
             # HOST_PORT:CONTAINER_PORT ('host' is the computer hosting the container)
-            - "8000:8000"
+            - 8000:8000
+        expose:
+            - 8000
         # depends_on makes sure commands are executed in the correct order
         depends_on:
             - migration
@@ -38,7 +61,14 @@ services:
         networks:
             app_net:
                 ipv4_address: 10.10.10.11
-        command: >
+        command:
+            # --allow-websocket-origin: allow connections from <IP>:<port>
+            # --address: host plotting server on <IP>
+            # --port: host plotting server on <port>
+            # --check-unused-sessions: [ms] how often to check the different websocket sessions activity, default=17000
+            # --unused-session-lifetime: [ms] how often that websocket session will stay open before closing, default=15000
+            # --num-procs: cannot be more than 1 on Windows
+            >
             sh -c "python -m bokeh serve
             ./ui/BokehApps/dashboard_plot
             ./ui/BokehApps/historical_dashboard_plot
@@ -49,17 +79,18 @@ services:
             ./ui/BokehApps/probability_table.py
             ./ui/BokehApps/sliders.py
             ./ui/BokehApps/__init__.py
-            --allow-websocket-origin 127.0.0.1:8000 --address 10.10.10.11 --port 5006"
-        #   allow connections from IP:PORT, and host plotting server on IP and PORT
+            --allow-websocket-origin 127.0.0.1:1300
+            --address 10.10.10.11
+            --port 5006
+            --check-unused-sessions 17000
+            --unused-session-lifetime 600000
+            --num-procs 2"
         container_name: plotting_server
-        # Also not mapping to a local volume here as well
-        # volumes:
-        #     - .:/loredash
         ports:
             # Networked service-to-service communication uses the CONTAINER_PORT.
             # When HOST_PORT is defined, the service is accessible outside the swarm as well.
             # see: https://docs.docker.com/compose/networking/
-            - "5006:5006"
+            - 5006:5006
         depends_on:
             - migration
     migration:
@@ -69,18 +100,18 @@ services:
             - app_net
         command: python manage.py migrate
         container_name: migration
-        # Mapping to a volume may be causing a problematic local dependency on manage.py
-        # volumes:
-        #     - .:/loredash
+
+volumes:
+    static_volume:
 
 networks:
     app_net:
         driver: bridge
-        # Removing for greater compatibility across systems
+        # Removing for greater compatibility across systems:
         # enable_ipv6: false
         ipam:
             driver: default
             config:
                 - subnet: 10.10.10.0/24
-        # Removing for greater compatibility across systems
-        #          gateway: 10.10.10.254
+        # Removing for greater compatibility across systems:
+        #         - gateway: 10.10.10.254
