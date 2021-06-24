@@ -46,6 +46,9 @@ ENV PATH="${SITE_DIR}.local/bin:${PATH}"
 #  specifying group and user ownership
 COPY --chown=app:app . ${SITE_DIR}
 
+# Remove the config/ directory that was just copied as this will be bind mounted later
+RUN rm -rf config
+
 # Add all sub-directory group permissions (g+s) the same as base directory so new
 #  files and directory inherit from these sub-directories they're in
 RUN find ${SITE_DIR} -type d -exec chmod g+s {} \;

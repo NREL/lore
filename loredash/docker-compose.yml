@@ -45,6 +45,9 @@ services:
         container_name: dashboard
         volumes:
             - static_volume:/site/static
+            - type: bind
+              source: ./config
+              target: /site/config
         ports:
             # HOST_PORT:CONTAINER_PORT ('host' is the computer hosting the container)
             - 8000:8000
