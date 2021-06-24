@@ -223,7 +223,10 @@ class Mediator:
             with timesteps in database (end of timesteps) being from 17:45 yesterday to 17:40 today
             for 288 total new entries
         """
-        datetime_now = datetime.datetime.now()
+        # Make sure the time is localized to the timezone of the plant!
+        datetime_now = datetime.datetime.now(
+            pytz.timezone(self.plant.design['timezone_string'])
+        )
         datetime_now_rounded_down = round_minutes(datetime_now, 'down', self.simulation_timestep.seconds/60)    # the start of the time interval currently in
         datetime_start_prev_day = datetime_now_rounded_down - datetime.timedelta(days=1)
         datetime_end_current_day = datetime_now_rounded_down                   # end of the last timestep
