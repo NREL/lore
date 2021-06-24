@@ -485,10 +485,14 @@ class DispatchParams:
     def set_estimates_from_ssc_data(self, plant, S, sscstep, require_Qin_nonzero = True):
         n = len(S['Q_thermal'])
 
-        Qin = S['Q_thermal']*1000
+        Qin = np.array([S['Q_thermal'][i]*1000. for i in range(n)])   #kWt
         if require_Qin_nonzero:
-            Qin = np.maximum(0.0, S['Q_thermal']*1000)
+            Qin = np.maximum(0.0, Qin)
         self.Qin = translate_to_variable_timestep(Qin, sscstep, self.Delta)
+
+        field_receiver_parasitic = [(S['P_tower_pump'][i]+S['pparasi'][i])*1000. for i in range(n)]  # kWe
+        self.P_field_rec = translate_to_variable_timestep(field_receiver_parasitic, sscstep, self.Delta)
+
         clearsky_adjusted = np.maximum(S['beam'], S['clearsky'])  
         ratio = [0 if clearsky_adjusted[i] < 0.01 else min(1.0, S['beam'][i]/clearsky_adjusted[i]) for i in range(n)]   # Ratio of actual to clearsky DNI 
         self.F = translate_to_variable_timestep(ratio, sscstep, self.Delta)
@@ -501,9 +505,7 @@ class DispatchParams:
         for t in range(n):
             self.delta_rs[t] = min(1., max(self.Er / max(self.Qin[t]*self.Delta[t], 1.), self.Drsu/self.Delta[t]))
             self.delta_cs[t] = min(1., self.Ec/(self.Qc*self.Delta[t]) )
-        
-        self.P_field_rec = translate_to_variable_timestep((S['P_tower_pump']+S['pparasi'])*1000, sscstep, self.Delta)
-
+    
         # Set time-series power cycle ambient temperature corrections and cycle part-load efficiency
         Tdb = translate_to_variable_timestep(S['tdry'], sscstep, self.Delta)
         self.set_off_design_cycle_inputs(plant, Tdb, S)
