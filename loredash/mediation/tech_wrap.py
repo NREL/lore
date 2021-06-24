@@ -324,7 +324,7 @@ class TechWrap:
         return plant_state
 
 
-    def estimates_for_dispatch_model(self, plant_state, datetime_start, horizon, weather_dataframe, N_pts_horizon, start_pt):
+    def estimates_for_dispatch_model(self, plant_state, datetime_start, horizon, weather_dataframe):
 
         # Backup parameters (to revert back after simulation)  ->  can I just copy self.tech_model and not have to backup and revert?
         param_names = ['is_dispatch_targets', 'tshours', 'is_rec_startup_trans', 'rec_su_delay', 'rec_qf_delay']
@@ -346,11 +346,6 @@ class TechWrap:
         
         # Revert back to original parameters
         self.ssc.set(original_params)
-
-        # Filter and adjust results
-        # TODO: This likely isn't needed. Clearsky is needed in the ssc results, but should be returned in all ssc calls already?
-        if 'clearsky' not in results or max(results['clearsky']) < 1.e-3:         # Clear-sky data wasn't passed through ssc (ssc controlled from actual DNI, or user-defined flow inputs)
-            results['clearsky'] = [self.ssc.params['rec_clearsky_dni'][i] for i in range(start_pt, start_pt + N_pts_horizon)]
 
         return results
 

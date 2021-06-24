@@ -158,7 +158,6 @@ class Mediator:
             datetime_start=datetime_start,
             ssc_horizon = (datetime_end - datetime_start),
             weather_dataframe=weather_dispatch,
-            annual_clearsky_array = clearsky_data_padded,
             f_estimates_for_dispatch_model=self.tech_wrap.estimates_for_dispatch_model,
             update_interval = 1.0/self.params['time_steps_per_hour'],
             initial_plant_state=plant_state

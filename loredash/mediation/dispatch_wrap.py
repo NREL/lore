@@ -917,7 +917,7 @@ class DispatchWrap:
         return
 
     #--- Run simulation
-    def run(self, datetime_start, ssc_horizon, weather_dataframe, annual_clearsky_array,
+    def run(self, datetime_start, ssc_horizon, weather_dataframe, 
             f_estimates_for_dispatch_model, update_interval, initial_plant_state):
         '''
         Assumes that datetime_start and weather_dataframe are not local time, and correspond to a constant offset used in ssc (same as used in tech_wrap.simulate)
@@ -932,7 +932,10 @@ class DispatchWrap:
         #--- Define horizon for this call to the dispatch optimization horizon (use specified 'dispatch_horizon' unless weather data is not available for the full horizon)
         p = int(datetime_start.minute*60 / weather_timestep)   # Point in weather data corresponding to datetime_start.  TODO: Assumes that values in weather_dataframe starts at the beginning of the hour containing datetime_start
         weather_horizon = (weather_dataframe.index[-1]-weather_dataframe.index[p]).total_seconds() + weather_timestep  # Total duration of weather available for simulation relative to simulation start_date (s)
-        horizon = int(min(weather_horizon, self.params['dispatch_horizon']*3600)/3600.)    # hr          
+        horizon = int(min(weather_horizon, self.params['dispatch_horizon']*3600)/3600.)    # hr        
+
+        npts_horizon = int(horizon*self.params['time_steps_per_hour'])
+        clearsky = np.nan_to_num([weather_dataframe['Clear Sky DNI'][p+i] for i in range(npts_horizon)], nan = 0.0)
         
         #--- Define time step arrays for dispatch optimization
         dispatch_steplength_end_time = self.params['dispatch_steplength_end_time']
@@ -988,9 +991,11 @@ class DispatchWrap:
             datetime_start = datetime_start,
             horizon = horizon,     
             weather_dataframe = weather_dataframe,
-            N_pts_horizon = npts_horizon,    # TODO: These last three inputs shouldn't be needed once clearsky DNI is replaced 
-            start_pt = startpt
         )
+
+        if 'clearsky' not in ssc_estimates or max(ssc_estimates['clearsky']) < 1.e-3:   # Clear-sky data wasn't passed through ssc (likely because ssc controlled from actual DNI)
+            ssc_estimates['clearsky'] = clearsky
+
 
         #--- Create dispatch optimization model inputs for this time horizon using ssc estimates
         include_day_ahead_in_dispatch = self.current_day_schedule is not None  # Only use day ahead schedule in dispatch model if one exists
@@ -1000,7 +1005,7 @@ class DispatchWrap:
             horizon = horizon,      
             dispatch_steplength_array = self.params['dispatch_steplength_array'],
             dispatch_steplength_end_time = dispatch_steplength_end_time,
-            clearsky_data = annual_clearsky_array,
+            clearsky_data = clearsky,
             price = self.price_data[startpt:startpt+npts_horizon],          # [$/MWh] Update prices for this horizon
             ursd0 = ursd0,
             yrsd0 = yrsd0
@@ -1013,13 +1018,9 @@ class DispatchWrap:
         dispatch_soln = run_dispatch_model(dispatch_model_inputs, include)
 
         #--- Populate results
-        #retvars += vars(DispatchTargets()).keys()
         if dispatch_soln:    # Dispatch model was successful
             Rdisp_all = dispatch_soln.get_solution_at_ssc_steps(self.dispatch_params, sscstep/3600., horizon)
             Rdisp = {'disp_'+key:value for key,value in Rdisp_all.items() if key in retvars}
-
-            # TODO: make the time triggering more robust; shouldn't be an '==' as the program may be offline at the time or running at intervals
-            #  that won't exactly hit it
 
             # Update calculated schedule for next day (if relevant). Assume schedule must be committed within 1hr of designated time (arbitrary...)
             if self.params['use_day_ahead_schedule'] and self.params['day_ahead_schedule_from'] == 'calculated':
@@ -1058,15 +1059,11 @@ class DispatchWrap:
         return dispatch_outputs
 
 
-    def get_nonlinear_horizon(self, datetime_start, clearsky_data, sscstep):
-        toy = int(get_time_of_year(datetime_start))         # Current time of year (s) 
-        nph = int(self.params['time_steps_per_hour'])       # Number of time steps per hour used in ssc
-        startpt = int(toy/3600)*nph  # First point in annual arrays corresponding to this time
-
+    def get_nonlinear_horizon(self, clearsky_data):
         nonlinear_time = self.params['nonlinear_model_time']   # Nominal time horizon for nonlinear model (hr)
         if self.params['use_linear_dispatch_at_night']:
-            endpt = int((toy + nonlinear_time*3600) / sscstep)  # Last point in annual arrays at ssc time step resolution corresponding to nonlinear portion of dispatch model
-            if clearsky_data[startpt:endpt].max() <= self.params['night_clearsky_cutoff']:
+            endpt = int(nonlinear_time * self.params['time_steps_per_hour'])  # Last point in clear-sky array corresponding to nonlinear portion of dispatch model
+            if clearsky_data[0:endpt].max() <= self.params['night_clearsky_cutoff']:
                 nonlinear_time = 0.0
         return nonlinear_time
 
@@ -1079,7 +1076,7 @@ class DispatchWrap:
         sscstep = 3600/int(self.params['time_steps_per_hour'])         # ssc time step (s)
 
         #--- Set time steps for dispatch model
-        nonlinear_time = self.get_nonlinear_horizon(datetime_start, clearsky_data, sscstep)  # Get time horizon for nonlinear model (this is not used as of 6/2021, only the linear model is currently available)
+        nonlinear_time = self.get_nonlinear_horizon(clearsky_data)  # Get time horizon for nonlinear model (this is not used as of 6/2021, only the linear model is currently available)
         self.dispatch_params.set_dispatch_time_arrays(dispatch_steplength_array, dispatch_steplength_end_time,
             horizon, nonlinear_time, self.params['disp_time_weighting'])    
 
