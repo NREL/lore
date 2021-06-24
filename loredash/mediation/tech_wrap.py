@@ -159,6 +159,8 @@ class TechWrap:
             'gh':       [0.],       # [W/m2]    GHI
             'wspd':     [0.],       # [m/s]     windspeed
             'tdry':     [0.],       # [C]       ambient dry bulb temperature
+            'pres':     [0.],       # [mbar]    ambient pressure
+            'tdew':     [0.],       # [C]       dew point
         }
 
         if plant_location is not None:
@@ -182,6 +184,8 @@ class TechWrap:
             solar_resource_data['gh'] = length * [0.]
             solar_resource_data['wspd'] = length * [0.]
             solar_resource_data['tdry'] = length * [0.]
+            solar_resource_data['pres'] = length * [0.]
+            solar_resource_data['tdew'] = length * [0.]
 
         return solar_resource_data
 
@@ -204,6 +208,8 @@ class TechWrap:
         solar_resource_data['gh'] = list(weather_dataframe['GHI'])
         solar_resource_data['wspd'] = list(weather_dataframe['Wind Speed'])
         solar_resource_data['tdry'] = list(weather_dataframe['Temperature'])
+        solar_resource_data['pres'] = list(weather_dataframe['Pressure'])
+        solar_resource_data['tdew'] = list(weather_dataframe['Dew Point'])
 
         return solar_resource_data
 
