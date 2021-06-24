@@ -128,13 +128,17 @@ class Mediator:
 
         # Step 1, Thread 2:
         # a. Get weather data and forecasts
+        datetime_end_dispatch = datetime_start + \
+            datetime.timedelta(hours=self.dispatch_wrap.dispatch_horizon)
         weather_dispatch = self.get_weather_df(
             datetime_start=datetime_start,
-            datetime_end=datetime_start + datetime.timedelta(hours=self.dispatch_wrap.dispatch_horizon),
+            datetime_end=datetime_end_dispatch,
             timestep=datetime.timedelta(minutes=min(self.dispatch_wrap.dispatch_steplength_array)),
             tmy3_path=self.weather_file,
             use_forecast=True)
-
+        # Sanity check to make sure this is what we expect.
+        assert(weather_dispatch.index[0] == datetime_start)
+        assert(weather_dispatch.index[-1] == datetime_end_dispatch)
         weather_simulate = self.get_weather_df(
             datetime_start=datetime_start,
             datetime_end=datetime_end,
@@ -142,7 +146,9 @@ class Mediator:
             tmy3_path=self.weather_file,
             use_forecast=False)          # TODO: this use_forecast should probably be True too. Can we optimize these two get_weather_df calls
                                             #       since getting the forecasts takes significant time?
-
+        # Sanity check to make sure this is what we expect.
+        assert(weather_simulate.index[0] == datetime_start)
+        assert(weather_simulate.index[-1] == datetime_end)
         # Set clearsky data
         clearsky_data = np.array(weather_dispatch['Clear Sky DNI'])
         clearsky_data_padded = np.pad(clearsky_data, (0, 365*24*60 - len(clearsky_data)), 'constant', constant_values=(0, 0))   #TODO fix this hack
@@ -151,7 +157,6 @@ class Mediator:
         # TODO(odow): keep pushing timezones through the code.
         datetime_start = datetime_start.replace(tzinfo = None)
         datetime_end = datetime_end.replace(tzinfo = None)
-
 
         # Step 2, Thread 1:
         # a. Call dispatch model, (which includes the 'f_estimates...' tech_wrap function to get estimates) and update inputs for next call
@@ -214,6 +219,12 @@ class Mediator:
         looping_call.start(update_interval)
         reactor.run()
 
+    def get_current_plant_time(self):
+        "Return the current time in plant-local time."
+        return datetime.datetime.now(
+            pytz.timezone(self.plant.design['timezone_string']),
+        )
+
     def model_previous_day_and_add_to_db(self):
         """Simulate previous day and add to database
         e.g.:
@@ -224,9 +235,7 @@ class Mediator:
             for 288 total new entries
         """
         # Make sure the time is localized to the timezone of the plant!
-        datetime_now = datetime.datetime.now(
-            pytz.timezone(self.plant.design['timezone_string'])
-        )
+        datetime_now = self.get_current_plant_time()
         datetime_now_rounded_down = round_minutes(datetime_now, 'down', self.simulation_timestep.seconds/60)    # the start of the time interval currently in
         datetime_start_prev_day = datetime_now_rounded_down - datetime.timedelta(days=1)
         datetime_end_current_day = datetime_now_rounded_down                   # end of the last timestep
@@ -291,8 +300,7 @@ class Mediator:
         """
         Return a dataframe of weather data at `timestep` resolution (of
         at-most 1 hour) covering the time-span given by `datetime_start` and
-        `datetime_end`. That is, the returned dataframe should start _before_
-        `datetime_start` and end _after_ `datetime_end`.
+        `datetime_end`.
 
         Datetimes are in plant-local time.
 
@@ -303,12 +311,18 @@ class Mediator:
         self._validate_plant_local_time(datetime_start)
         self._validate_plant_local_time(datetime_end)
         assert(timestep.total_seconds() <= 3600)
-        # Get the TMY data.
+        # The timezone of the TMY file:
+        tmy_tz = pytz.FixedOffset(60 * self.plant.design['timezone'])
+        # Get the TMY data. Make sure to convert the timezones into the TMY
+        # timezone (fixed offset), and then to strip the timezone data!
         data = tmy3_to_df(
             tmy3_path,
-            datetime_start.replace(tzinfo=None),
-            datetime_end.replace(tzinfo=None),
+            datetime_start.astimezone(tmy_tz).replace(tzinfo=None),
+            datetime_end.astimezone(tmy_tz).replace(tzinfo=None),
         )
+        # Re-localize the datetimes again. First add the TMY timezone, and then
+        # convert to plant-local time.
+        data.index = data.index.tz_localize(tmy_tz).tz_convert(datetime_start.tzinfo)
         # Resample data into finer timesteps, filling with previous value.
         data = data.resample(timestep).pad()
         # Extrapolate out last point, filling with last value
@@ -323,11 +337,8 @@ class Mediator:
         )
         data = data.reindex(dates)
         data.fillna(method = 'ffill', inplace = True)
-        # Re-localize the datetimes again.
-        #  - First add the FixedOffset to the index
-        #  - Then convert the FixedOffset back to the plant timezone
-        tz = pytz.FixedOffset(60 * self.plant.design['timezone'])
-        data.index = data.index.tz_localize(tz).tz_convert(datetime_start.tzinfo)
+        # Now strip the data back to what the user asked for:
+        data = data[(data.index >= datetime_start) & (data.index <= datetime_end)]
         if use_forecast:
             tic = time.process_time()
             solar_forecast = self.forecaster.getForecast(

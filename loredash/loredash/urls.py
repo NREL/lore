@@ -40,7 +40,9 @@ def init_and_mediate():
         update_interval=datetime.timedelta(seconds = 5),
     )
     result = m.model_previous_day_and_add_to_db()
-    # result = m.RunOnce()          #TODO: reenable and get this working
+    # datetime_start = m.get_current_plant_time()
+    # datetime_end = datetime_start + datetime.timedelta(hours=48)
+    # result = m.run_once(datetime_start, datetime_end)
     return
 
 if RUN_PROFILER:
