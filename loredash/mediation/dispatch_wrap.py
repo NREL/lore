@@ -915,8 +915,8 @@ class DispatchWrap:
         self.first_run = True                           # Is this the first time run() is called?
         self.ursd0 = 0
         self.yrsd0 = 0
-        self.current_day_schedule = None                # Committed day-ahead generation schedule for current day (MWe)
-        self.next_day_schedule = None                   # Predicted day-ahead generation schedule for next day (MWe)
+        self.current_day_schedule = []                  # Committed day-ahead generation schedule for current day (MWe)
+        self.next_day_schedule = []                     # Predicted day-ahead generation schedule for next day (MWe)
         self.date_for_current_day_schedule = None       # Datetime of first point in schedule stored in self.current_day_schedule
         self.date_for_next_day_schedule = None          # Datetime of first point in schedule stored in self.next_day_schedule
         
@@ -963,12 +963,11 @@ class DispatchWrap:
         weather_timestep = (weather_dataframe.index[1]-weather_dataframe.index[0]).total_seconds()    # Time step in weather data frame (s)
        
         #--- Define horizon for this call to the dispatch optimization horizon (use specified 'dispatch_horizon' unless weather data is not available for the full horizon)
-        p = int(datetime_start.minute*60 / weather_timestep)   # Point in weather data corresponding to datetime_start.  TODO: Assumes that values in weather_dataframe starts at the beginning of the hour containing datetime_start
-        weather_horizon = (weather_dataframe.index[-1]-weather_dataframe.index[p]).total_seconds() + weather_timestep  # Total duration of weather available for simulation relative to simulation start_date (s)
+        weather_horizon = (weather_dataframe.index[-1]-weather_dataframe.index[0]).total_seconds() + weather_timestep  # Total duration of weather available for simulation relative to simulation start_date (s)
         horizon = int(min(weather_horizon, self.params['dispatch_horizon']*3600)/3600.)    # hr        
 
         npts_horizon = int(horizon*self.params['time_steps_per_hour'])
-        clearsky = np.nan_to_num([weather_dataframe['Clear Sky DNI'][p+i] for i in range(npts_horizon)], nan = 0.0)
+        clearsky = np.nan_to_num([weather_dataframe['Clear Sky DNI'][i] for i in range(npts_horizon)], nan = 0.0)
         
         #--- Define time step arrays for dispatch optimization
         dispatch_steplength_end_time = self.params['dispatch_steplength_end_time']
@@ -980,8 +979,8 @@ class DispatchWrap:
         #--- Initialize schedules, plant state, shut-down state parameters, and clear-sky data
         retvars = self.default_disp_stored_vars
         if self.first_run == True:
-            self.current_day_schedule = None
-            self.next_day_schedule = None
+            self.current_day_schedule = []
+            self.next_day_schedule = []
             self.date_for_current_day_schedule = None
             self.date_for_next_day_schedule = None
             ursd0 = None
@@ -1004,17 +1003,17 @@ class DispatchWrap:
         #--- Update stored day-ahead generation schedule for current day (if relevant)
         if self.params['use_day_ahead_schedule']:
 
-            if self.params['day_ahead_schedule_from'] == 'external' and self.current_day_schedule is None:
+            if self.params['day_ahead_schedule_from'] == 'external' and len(self.current_day_schedule)==0:
                 self.current_day_schedule = self.get_external_day_ahead_schedule(datetime_start)   # TODO: Not currently set up.  Do we need to keep this functionality?
 
             elif self.params['day_ahead_schedule_from'] == 'calculated' and self.date_for_current_day_schedule != date_today:   # The schedule stored in current_day_schedule is not for today (or one doesn't exist)
                 if self.date_for_next_day_schedule == date_today:    # Schedule stored in next_day_schedule is for today
                     self.current_day_schedule = deepcopy(self.next_day_schedule)
                     self.date_for_current_day_schedule = self.date_for_next_day_schedule
-                    self.next_day_schedule = None
+                    self.next_day_schedule = []
                     self.date_for_next_day_schedule = None
                 else:
-                    self.current_day_schedule = None
+                    self.current_day_schedule = []
                     self.date_for_current_day_schedule = None
 
         #--- Run ssc for dispatch estimates
@@ -1031,7 +1030,7 @@ class DispatchWrap:
 
 
         #--- Create dispatch optimization model inputs for this time horizon using ssc estimates
-        include_day_ahead_in_dispatch = self.current_day_schedule is not None  # Only use day ahead schedule in dispatch model if one exists
+        include_day_ahead_in_dispatch = len(self.current_day_schedule)>0  # Only use day ahead schedule in dispatch model if one exists
         dispatch_model_inputs = self.setup_dispatch_model(
             datetime_start = datetime_start, 
             ssc_estimates = ssc_estimates,
@@ -1058,7 +1057,7 @@ class DispatchWrap:
             # Update calculated schedule for next day (if relevant). Assume schedule must be committed within 1hr of designated time (arbitrary...)
             if self.params['use_day_ahead_schedule'] and self.params['day_ahead_schedule_from'] == 'calculated':
                 if tod/3600 >= self.params['day_ahead_schedule_time'] and tod/3600 < self.params['day_ahead_schedule_time']+1:            # Within the time window to commit next-day schedule
-                    if self.next_day_schedule is None or self.date_for_next_day_schedule != date_today + datetime.timedelta(hours = 24):  # Next-day schedule doesn't already exist (or one exists, but is left-over from a different day)
+                    if len(self.next_day_schedule)==0 or self.date_for_next_day_schedule != date_today + datetime.timedelta(hours = 24):  # Next-day schedule doesn't already exist (or one exists, but is left-over from a different day)
                         self.next_day_schedule = get_day_ahead_schedule(
                             day_ahead_schedule_steps_per_hour = self.params['day_ahead_schedule_steps_per_hour'],
                             Delta = self.dispatch_params.Delta,
@@ -1066,7 +1065,8 @@ class DispatchWrap:
                             net_electrical_output = dispatch_soln.net_electrical_output,
                             day_ahead_schedule_time = self.params['day_ahead_schedule_time']
                             )
-                        self.date_for_next_day_schedule = date_today + datetime.timedelta(hours = 24)
+                        if len(self.next_day_schedule)>0:
+                            self.date_for_next_day_schedule = date_today + datetime.timedelta(hours = 24)
 
             #--- Set ssc dispatch targets
             ssc_dispatch_targets = DispatchTargets(dispatch_soln, self.plant, self.dispatch_params, sscstep, ssc_horizon.total_seconds()/3600.)
@@ -1135,7 +1135,7 @@ class DispatchWrap:
         self.dispatch_params.set_estimates_from_ssc_data(self.plant, ssc_estimates, sscstep/3600.) 
         
         #--- Set day-ahead schedule in dispatch parameters
-        if self.current_day_schedule is not None:
+        if len(self.current_day_schedule)>0:
             day_ahead_horizon = 24 - int(tod/3600)   # Number of hours of day-ahead schedule to use.  This probably only works in the dispatch model if time horizons are updated at integer multiples of an hour
             use_schedule = [self.current_day_schedule[s]*1000 for s in range(24-day_ahead_horizon, 24)]   # kWhe
             self.dispatch_params.set_day_ahead_schedule(use_schedule, self.params['day_ahead_pen_plus']/1000, self.params['day_ahead_pen_minus']/1000)
@@ -1171,7 +1171,7 @@ def get_day_ahead_schedule(day_ahead_schedule_steps_per_hour, Delta, Delta_e, ne
             next_day_schedule = translate_to_fixed_timestep(wnet[inds], disp_steps[inds], day_ahead_step) 
         return next_day_schedule
     else:
-        return None
+        return []
 
 
 def get_weather_at_day_ahead_schedule(weather_df, npts_horizon):

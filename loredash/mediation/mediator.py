@@ -129,11 +129,11 @@ class Mediator:
         # Step 1, Thread 2:
         # a. Get weather data and forecasts
         datetime_end_dispatch = datetime_start + \
-            datetime.timedelta(hours=self.dispatch_wrap.dispatch_horizon)
+            datetime.timedelta(hours=self.dispatch_wrap.params['dispatch_horizon'])
         weather_dispatch = self.get_weather_df(
             datetime_start=datetime_start,
             datetime_end=datetime_end_dispatch,
-            timestep=datetime.timedelta(minutes=min(self.dispatch_wrap.dispatch_steplength_array)),
+            timestep=datetime.timedelta(minutes=min(self.dispatch_wrap.params['dispatch_steplength_array'])),
             tmy3_path=self.weather_file,
             use_forecast=True)
         # Sanity check to make sure this is what we expect.
@@ -162,6 +162,7 @@ class Mediator:
 
         # Step 2, Thread 1:
         # a. Call dispatch model, (which includes the 'f_estimates...' tech_wrap function to get estimates) and update inputs for next call
+        # TODO: Calls to ssc need to be fixed-offset time, but need to be careful with tech_wrap.set_weather_data()
         dispatch_outputs = self.dispatch_wrap.run(
             datetime_start=datetime_start,
             ssc_horizon = (datetime_end - datetime_start),
