@@ -1,3 +1,6 @@
+import sys, os
+sys.path.insert(1, os.path.join(sys.path[0], '..'))
+
 from bokeh import events as bokeh_events
 from bokeh import io as bokeh_io
 from bokeh import layouts as bokeh_layouts
@@ -30,6 +33,9 @@ def latestData(queue):
         PLANT_DESIGN['elevation'],
     )
     data = forecaster.latestForecast().reset_index()
+    # Strip the timezone info to prevent Bokeh from trying to show it in
+    # computer-local time. The result should be an axis in plant-local time.
+    data['forecast_for'] = data['forecast_for'].dt.tz_localize(None)
     queue.put(data)
     return
 

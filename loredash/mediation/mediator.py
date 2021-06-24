@@ -332,15 +332,10 @@ class Mediator:
             tic = time.process_time()
             solar_forecast = self.forecaster.getForecast(
                 datetime_start=data.index[0],
-                horizon=data.index[-1] - data.index[0] + to_offset(pd.infer_freq(data.index)),
+                horizon=data.index[-1] - data.index[0],
                 resolution=timestep)
             toc = time.process_time()
             print("Generating forecast took {seconds:.2f} seconds".format(seconds=toc-tic))
-            # Annoying issue: if we ask NDFD for a forecast beginning at time T,
-            # it may give us one starting in some period T+N. It's a but
-            # confusing, but we just need to take the first 0:-N elements of
-            # solar_forecast as the N:end elements of `data`.
-            offset = int((solar_forecast.index[0] - data.index[0]) / timestep)
             key_map = {
                 'dni': 'DNI',
                 'dhi': 'DHI',
@@ -353,7 +348,7 @@ class Mediator:
                 'clear_sky': 'Clear Sky DNI',
             }
             for (k, v) in key_map.items():
-                data.loc[data.index[offset:], v] = list(solar_forecast[k])[:-offset]
+                data.loc[:, v] = list(solar_forecast[k])
         return data
 
 def mediate_continuously(update_interval=5):

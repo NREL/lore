@@ -51,7 +51,7 @@ def test_latestForecast():
         100.0,
     )
     data = forecaster.latestForecast()
-    assert(len(data) == 48)
+    assert(len(data) == 50)
     assert('clear_sky' in data.keys())
     assert('0.5' in data.keys())
     # Check clearsky bounds
@@ -69,8 +69,8 @@ def test_latestForecast_resolution():
         'US/Pacific',
         100.0,
     )
-    data = forecaster.latestForecast(resolution = '2h')
-    assert(len(data) == 24)
+    data = forecaster.latestForecast(resolution = pandas.Timedelta(hours = 2))
+    assert(len(data) == 26)
     return
 
 @pytest.mark.django_db
@@ -82,7 +82,7 @@ def test_latestForecast_horizon():
         100.0,
     )
     data = forecaster.latestForecast(horizon = pandas.Timedelta(hours = 24))
-    assert(len(data) == 24)
+    assert(len(data) == 26)
     return
 
 def test_getForecast():

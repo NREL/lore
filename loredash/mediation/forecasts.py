@@ -149,7 +149,7 @@ class SolarForecast:
         return t.tz_localize('UTC').astimezone(self.plant_location.tz)
 
     def _updateDatabase(self, datetime_start):
-        data = self._rawData(datetime_start)
+        data = self._rawData(datetime_start) - pandas.Timedelta(days = 1)
         current_time = self._toUTC(
             pandas.Timestamp(
                 datetime.datetime.now(pytz.timezone(self.plant_location.tz)),
@@ -228,7 +228,7 @@ class SolarForecast:
     def getForecast(
         self,
         datetime_start,
-        resolution = '1h',
+        resolution = pandas.Timedelta(hours = 1),
         horizon = pandas.Timedelta(hours = 48),
     ):
         """
@@ -239,9 +239,9 @@ class SolarForecast:
         ----------
         datetime_start : timezone aware datetime
             Start of the forecast window.
-        resolution : str
+        resolution : pandas.Timedelta
             The resolution passed to `pandas.ressample` for resampling the
-            NDFD forecast into finer resolution. Defaults to `1h`.
+            NDFD forecast into finer resolution. Defaults to `hours = 1`.
         horizon : pandas.Timedelta
             Length of the forecast window.
         """
@@ -253,7 +253,7 @@ class SolarForecast:
 
     def latestForecast(
         self, 
-        resolution = '1h',
+        resolution = pandas.Timedelta(hours = 1),
         update_threshold = 3,
         horizon = pandas.Timedelta(hours = 48),
     ):
@@ -293,5 +293,8 @@ class SolarForecast:
         raw_data['forecast_for'] = \
             raw_data['forecast_for'].map(lambda x: self._toLocal(x))
         raw_data.set_index('forecast_for', inplace=True)
-        data = self._correctTime(raw_data, resolution, horizon)
+        datetime_start = pandas.Timestamp(
+            datetime.datetime.now(pytz.timezone(self.plant_location.tz)),
+        )
+        data = self._correctTime(raw_data, resolution, horizon, datetime_start)
         return self._applyForecastUncertainty(data)
