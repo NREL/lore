@@ -23,16 +23,18 @@ from pvlib import location
 import pytz
 
 from mediation import forecasts
-from mediation import plant
+import rapidjson
 
 # Make sure to mark any tests that need database access.
 @pytest.mark.django_db
 def test_forecaster_from_plant():
+    with open("plant_design.json") as f:
+        plant_design = rapidjson.load(f)
     forecaster = forecasts.SolarForecast(
-        plant.plant_design['latitude'],
-        plant.plant_design['longitude'],
-        plant.plant_design['timezone_string'],
-        plant.plant_design['elevation'],
+        plant_design['latitude'],
+        plant_design['longitude'],
+        plant_design['timezone_string'],
+        plant_design['elevation'],
     )
     assert(type(forecaster.plant_location) == location.Location)
     assert(
@@ -49,7 +51,7 @@ def test_latestForecast():
         100.0,
     )
     data = forecaster.latestForecast()
-    assert(len(data) == 48)
+    assert(len(data) == 50)
     assert('clear_sky' in data.keys())
     assert('0.5' in data.keys())
     # Check clearsky bounds
@@ -67,8 +69,8 @@ def test_latestForecast_resolution():
         'US/Pacific',
         100.0,
     )
-    data = forecaster.latestForecast(resolution = '2h')
-    assert(len(data) == 24)
+    data = forecaster.latestForecast(resolution = pandas.Timedelta(hours = 2))
+    assert(len(data) == 26)
     return
 
 @pytest.mark.django_db
@@ -80,7 +82,7 @@ def test_latestForecast_horizon():
         100.0,
     )
     data = forecaster.latestForecast(horizon = pandas.Timedelta(hours = 24))
-    assert(len(data) == 24)
+    assert(len(data) == 26)
     return
 
 def test_getForecast():
@@ -93,12 +95,16 @@ def test_getForecast():
     # Choose a start time that is not current, but that NDFD will still have
     # data for.
     datetime_start = datetime.datetime.now(pytz.timezone('US/Pacific'))
+    datetime_start = datetime_start - pandas.Timedelta(hours = 24)
+    datetime_end = datetime_start + pandas.Timedelta(hours = 24)
     data = forecaster.getForecast(
-        datetime_start = datetime_start - pandas.Timedelta(hours = 24),
+        datetime_start = datetime_start,
         horizon = pandas.Timedelta(hours = 24),
         resolution = pandas.Timedelta(minutes = 1),
     )
-    assert(len(data) == 24 * 60)
+    assert(len(data) >= 24 * 60)
+    assert(datetime_start >= data.index[0])
+    assert(datetime_end <= data.index[-1])
     assert('dni' in data)
     assert('dhi' in data)
     assert('ghi' in data)

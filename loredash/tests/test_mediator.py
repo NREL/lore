@@ -20,7 +20,6 @@ import pathlib
 import pytz
 
 from mediation import mediator
-from mediation import plant
 
 PARENT_DIR = str(pathlib.Path(__file__).parents[1])
 
@@ -40,10 +39,10 @@ def test_tmy3_to_df():
     return
 
 def test_get_weather_df():
+    plant_design_path = PARENT_DIR + "/../loredash/plant_design.json"
     m = mediator.Mediator(
         params = mediator.mediator_params,
-        plant_config_path = PARENT_DIR + "/data/plant_config.json",
-        plant_design = plant.plant_design,
+        plant_design_path=plant_design_path,
         weather_file = PARENT_DIR + "/data/daggett_ca_34.865371_-116.783023_psmv3_60_tmy.csv",
         update_interval = datetime.timedelta(seconds = 5),
     )
@@ -56,7 +55,7 @@ def test_get_weather_df():
         datetime.timedelta(hours=1),
         m.weather_file,
     )
-    assert(len(weather) == 169 == 7 * 24 + 1)
+    assert(len(weather) == 7 * 24)
     # Test getting one day of weather. This should fail because it attempts to
     # get latest forecast, but the time is too old for the NDFD server.
     with pytest.raises(Exception) as err:
@@ -82,6 +81,7 @@ def test_get_weather_df():
         m.weather_file,
         use_forecast = True,
     )
+    assert(len(tmy_weather) == 2 * 48)
     for key in ['DNI', 'DHI', 'GHI', 'Wind Speed']:
         assert(key in tmy_weather)
         assert(key in forecast_weather)

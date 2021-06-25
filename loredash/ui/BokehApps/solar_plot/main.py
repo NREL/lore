@@ -1,3 +1,6 @@
+import sys, os
+sys.path.insert(1, os.path.join(sys.path[0], '..'))
+
 from bokeh import events as bokeh_events
 from bokeh import io as bokeh_io
 from bokeh import layouts as bokeh_layouts
@@ -8,9 +11,9 @@ from bokeh import themes as bokeh_themes
 import colorcet
 
 from mediation import forecasts
-from mediation import plant
 
 import queue 
+import rapidjson
 import threading
 
 # theme.py is loredash/io/BokehApps/theme/theme.py. It isn't an external
@@ -19,17 +22,20 @@ import threading
 from theme import theme as _loredash_ui_theme
 LOREDASH_UI_THEME = _loredash_ui_theme.json
 
+with open("plant_design.json") as f:
+    PLANT_DESIGN = rapidjson.load(f)
+
 def latestData(queue):
-    # TODO: don't grab plant_design from plant.py as it may be overwritten by
-    # mediator and external config file
-    p = plant.plant_design
     forecaster = forecasts.SolarForecast(
-        p['latitude'],
-        p['longitude'],
-        p['timezone_string'],
-        p['elevation'],
+        PLANT_DESIGN['latitude'],
+        PLANT_DESIGN['longitude'],
+        PLANT_DESIGN['timezone_string'],
+        PLANT_DESIGN['elevation'],
     )
     data = forecaster.latestForecast().reset_index()
+    # Strip the timezone info to prevent Bokeh from trying to show it in
+    # computer-local time. The result should be an axis in plant-local time.
+    data['forecast_for'] = data['forecast_for'].dt.tz_localize(None)
     queue.put(data)
     return
 
