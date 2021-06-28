@@ -227,8 +227,10 @@ class TechWrap:
 
     def pad_weather_data(self, solar_resource_data = None, list_data = None, datetime_start = None, timestep = None):
         """
-        Pads weather data to the appropriate length for input to ssc (8760 * time_steps_per_hour), and places non-zero data at the appropriate position in the array based on the time of the first point in solar_resource_data
-        array_data can be a generic list (e.g. clearsky, solar field adjustment factors, price data) that follows the same conventions in ssc.  Must be supplied with timestep and datetime_start (constant offset correpsonding to TMY time)
+        Pads data to the appropriate length for input to ssc (8760 * time_steps_per_hour), and places non-zero data at the appropriate position in the array 
+        If solar_resource_data is supplied, the position in the annual array is determined from the (month, day, hour, minute) contained within solar_resource_data
+        If list_data is supplied, then the position in the annual array is determined from the supplied datetime_start and timestep (where datetime_start is fixed-offset time, consistent with a TMY file)
+        The list_data input is intended to be used for time-series data not included in the solar_resource_data structure (clearsky DNI, price data, solar field adjustment factors)
         """
         if solar_resource_data is not None:
             n = len(solar_resource_data['dn'])
