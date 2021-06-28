@@ -464,29 +464,6 @@ def get_weatherfile_location(tmy3_path):
         'elevation': float(df_meta['Elevation'][0])
     }
 
-
-#TODO: Remove this function and replace with one in forecasts.py
-def get_clearsky_data(clearsky_file, datetime_start=None, duration=None, timestep=None):
-    """output array must be equal in length to the weather data to satisfy ssc"""
-    if datetime_start is None:
-        datetime_start = datetime.datetime(2018, 1, 1)
-    if duration is None:
-        duration = datetime.timedelta(days=365)
-    if timestep is None:
-        timestep = datetime.timedelta(minutes=1)
-
-    CLEARSKY_DAYS_GENERATED = 365
-    steps_per_hour = 1/(timestep.total_seconds()/3600)
-    clearsky_data = util.get_clearsky_data(clearsky_file, steps_per_hour).tolist()
-    assert(len(clearsky_data) == steps_per_hour * 24 * CLEARSKY_DAYS_GENERATED)
-    df = pd.DataFrame(clearsky_data, columns=['clearsky_data'])
-    df.index = pd.date_range(start=datetime_start,
-                             end=datetime_start + datetime.timedelta(days=CLEARSKY_DAYS_GENERATED) - timestep,
-                             freq=timestep)
-
-    df_out = df[datetime_start:(datetime_start + duration - timestep)]
-    return list(df_out['clearsky_data'])
-
 # This is duplicated in case_study.py
 mediator_params = {
     'start_date_year':                      2018,                   # TODO: Remove the need for this somewhat arbitrary year
