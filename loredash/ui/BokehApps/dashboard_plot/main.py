@@ -21,7 +21,7 @@ import re
 
 # Asyncronous access to Django DB
 from mediation.models import TechData as dd
-from threading import Thread
+import threading
 import queue
 
 TIME_BOXES = {
@@ -55,14 +55,29 @@ label_colors = {col+'_color': cc.glasbey_cool[i] for i,col in enumerate(data_lab
 current_datetime = datetime.datetime.now().replace(second=0, microsecond=0)
 lines = {}
 
-def getDashboardData(_range, _values_list, queue):
-    queryset = dd.objects.filter(timestamp__range=_range).values_list(*_values_list)
-    df = pd.DataFrame.from_records(queryset)
+def getDashboardData(queue, date_range, columns):
+    """
+    Get the dashboard data corresponding `columns` over the `date_range` given
+    as the tuple `(date_start, date_stop)`. Store the result in `queue`.
+    """
+    rows = dd.objects.filter(timestamp__range=date_range).values_list(*columns)
+    df = pd.DataFrame.from_records(rows)
     if not df.empty:
-        df.columns=_values_list
+        df.columns = columns
     else:
-        df = pd.DataFrame(columns=_values_list)
+        df = pd.DataFrame(columns=columns)
     queue.put(df)
+    return
+
+def _getDashboardData(queue, start_date, end_date, columns):
+    "A helper function that wraps the threading calls."
+    thread = threading.Thread(
+        target=getDashboardData,
+        args=(queue, (start_date, end_date), columns),
+    )
+    thread.start()
+    thread.join()
+    return queue.get()
 
 def make_dataset(time_box):
     # Prepare data
@@ -77,25 +92,22 @@ def make_dataset(time_box):
     q = queue.Queue()
 
     # Current Data
-    thread = Thread(target=getDashboardData, 
-        args=((start_date, end_date), 
-            [data_columns[i] for i in CURRENT_DATA_COLS],
-            q))
-    thread.start()
-    thread.join()
-    current_data_df = q.get()
+    current_data_df = _getDashboardData(
+        q,
+        start_date,
+        end_date,
+        [data_columns[i] for i in CURRENT_DATA_COLS],
+    )
     current_cds = ColumnDataSource(current_data_df)
 
     # Future Data
-    thread = Thread(target=getDashboardData, 
-        args=((start_date, pred_end_date), 
+    predictive_data_df = _getDashboardData(
+        q,
+        start_date,
+        pred_end_date,
         [data_columns[i] for i in FUTURE_DATA_COLS],
-        q))
-    thread.start()
-    thread.join()
-    predictive_data_df = q.get()
+    )
     predictive_cds = ColumnDataSource(predictive_data_df)
-
     return predictive_cds, current_cds
 
 def make_plot(pred_src, curr_src): # (Predictive, Current)
@@ -200,40 +212,30 @@ def make_plot(pred_src, curr_src): # (Predictive, Current)
 def _periodic_callback():
     ## Do a live update on the minute
     global current_datetime
-
     new_current_datetime = datetime.datetime.now().replace(second=0, microsecond=0)
-
     q = queue.Queue()
-
     # Update timeline for current time
     getattr(plot, 'center')[2].location = new_current_datetime
-
     # Current Data
-    thread = Thread(target=getDashboardData, 
-        args=((current_datetime, new_current_datetime), 
-            [data_columns[i] for i in CURRENT_DATA_COLS],
-            q))
-    thread.start()
-    thread.join()
-    current_data_df = q.get()
-
+    current_data_df = _getDashboardData(
+        q,
+        current_datetime,
+        new_current_datetime,
+        [data_columns[i] for i in CURRENT_DATA_COLS],
+    )
     curr_src.stream(current_data_df)
     df_temp = curr_src.to_df().drop([0]).drop('index', axis=1)
     curr_src.data.update(ColumnDataSource(df_temp).data)
-
     # Future Data
-    thread = Thread(target=getDashboardData, 
-        args=((current_datetime, new_current_datetime), 
+    predictive_data_df = _getDashboardData(
+        q,
+        current_datetime,
+        new_current_datetime,
         [data_columns[i] for i in FUTURE_DATA_COLS],                    # the last parameter isn't really the 'scheduled'
-        q))
-    thread.start()
-    thread.join()
-    predictive_data_df = q.get()
-    
+    )
     pred_src.stream(predictive_data_df)
     df_temp = pred_src.to_df().drop([0]).drop('index', 1)
     pred_src.data.update(ColumnDataSource(df_temp).data)
-
     current_datetime = new_current_datetime
     return
 
