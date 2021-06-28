@@ -59,7 +59,9 @@ def _strip_unit(label):
     return re.sub(' \[.*\]$', '', label)
 
 current_datetime = datetime.datetime.now().replace(second=0, microsecond=0)
-lines = {}
+
+# A global variable to hold all of the plot lines!
+PLOT_LINES = {}
 
 def getDashboardData(queue, date_range, columns):
     """
@@ -188,7 +190,7 @@ def make_plot(pred_src, curr_src): # (Predictive, Current)
             line_width = 3 if 'Actual' in data_label else 2
         color = cc.glasbey_cool[i]
         active_labels = [plot_select.labels[i] for i in plot_select.active]
-        lines[data_label] = plot.line( 
+        PLOT_LINES[data_label] = plot.line(
             x = PLOT_LABELS_FOR_DATA_COLS['Timestamp'],
             y = data_column,
             line_color = color,
@@ -204,10 +206,10 @@ def make_plot(pred_src, curr_src): # (Predictive, Current)
         )
 
         if 'Field' in data_label:
-            plot.extra_y_ranges['mwt'].renderers.append(lines[data_label])
+            plot.extra_y_ranges['mwt'].renderers.append(PLOT_LINES[data_label])
         else:
-            plot.y_range.renderers.append(lines[data_label])
-        legend_item = LegendItem(label=data_label, renderers=[lines[data_label]])
+            plot.y_range.renderers.append(PLOT_LINES[data_label])
+        legend_item = LegendItem(label=data_label, renderers=[PLOT_LINES[data_label]])
         legend.items.append(legend_item)
     # styling
     plot = butils.style(plot)
@@ -278,8 +280,8 @@ plot_select = CheckboxButtonGroup(
 def _plot_select_callback(attr, _, new_indices):
     assert('active' == attr)
     i = 0
-    for label in lines.keys():
-        lines[label].visible = i in new_indices
+    for label in PLOT_LINES.keys():
+        PLOT_LINES[label].visible = i in new_indices
         i += 1
     return
 
