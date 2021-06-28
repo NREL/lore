@@ -25,11 +25,11 @@ import threading
 import queue
 
 TIME_BOXES = {
-    'TODAY': 1,
-    'LAST_6_HOURS': 6,
-    'LAST_12_HOURS': 12,
-    'LAST_24_HOURS': 24,
-    'LAST_48_HOURS': 48
+    'Today': 1,
+    'Last 6 Hours': 6,
+    'Last 12 Hours': 12,
+    'Last 24 Hours': 24,
+    'Last 48 Hours': 48
 }
 
 # From the TechData model table
@@ -85,7 +85,7 @@ def make_dataset(time_box):
     end_date = current_datetime
     pred_end_date = current_datetime.date() + datetime.timedelta(days=1)
 
-    if time_box != 'TODAY':
+    if time_box != 'Today':
         start_date = current_datetime - datetime.timedelta(hours=TIME_BOXES[time_box])
         pred_end_date = current_datetime
 
@@ -242,7 +242,7 @@ def _periodic_callback():
 ## Create widget layout
 # Create radio button group widget
 time_window = RadioButtonGroup(
-    labels=["Today", "Last 6 Hours", "Last 12 Hours", "Last 24 Hours", "Last 48 Hours"],
+    labels=list(TIME_BOXES.keys()),
     active=0,
     width_policy='min',
     height=31)
@@ -278,7 +278,7 @@ plot_select.on_change('active', _plot_select_callback)
 # Set initial plot information
 initial_plots = [butils.title_to_col(plot_select.labels[i]) for i in plot_select.active]
 
-[pred_src, curr_src] = make_dataset('TODAY')
+[pred_src, curr_src] = make_dataset('Today')
 plot = make_plot(pred_src, curr_src)
 
 widgets = row(
