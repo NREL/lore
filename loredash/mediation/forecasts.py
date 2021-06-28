@@ -149,7 +149,7 @@ class SolarForecast:
         return t.tz_localize('UTC').astimezone(self.plant_location.tz)
 
     def _updateDatabase(self, datetime_start):
-        data = self._rawData(datetime_start) - pandas.Timedelta(days = 1)
+        data = self._rawData(datetime_start)
         current_time = self._toUTC(
             pandas.Timestamp(
                 datetime.datetime.now(pytz.timezone(self.plant_location.tz)),
