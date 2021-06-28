@@ -1,5 +1,3 @@
-import sys, os
-sys.path.insert(1, os.path.join(sys.path[0], '..'))
 # Bokeh
 from bokeh.plotting import figure
 from bokeh.models import Span, ColumnDataSource, LinearAxis, DataRange1d, Legend, LegendItem, PanTool, WheelZoomTool, HoverTool, CustomJS
@@ -8,21 +6,28 @@ from bokeh.layouts import column, row, WidgetBox, Spacer
 from bokeh.themes import Theme
 from bokeh.io import curdoc
 from bokeh.events import DoubleTap
-import bokeh_utils.bokeh_utils as butils
 
-import colorcet as cc
-from tornado import gen
-import theme.theme as theme
-
-# Data manipulation
-import pandas as pd
+import colorcet
 import datetime
-import re
-
-# Asyncronous access to Django DB
-from mediation.models import TechData as dd
-import threading
+import pandas
 import queue
+import re
+import threading
+from tornado import gen
+
+from mediation.models import TechData
+
+# theme.py is loredash/io/BokehApps/theme/theme.py. It isn't an external
+# package. It's also different from `bokeh.themes`. There is only one constant
+# in it.
+# bokeh_utils.py is loredash/io/BokehApps/bokeh_utils/bokeh_utils.py.
+# These both need the local path.
+import sys, os
+sys.path.insert(1, os.path.join(sys.path[0], '..'))
+
+import bokeh_utils.bokeh_utils as butils
+from theme import theme as _loredash_ui_theme
+LOREDASH_UI_THEME = _loredash_ui_theme.json
 
 TIME_BOXES = {
     'Today': 1,
@@ -68,12 +73,12 @@ def getDashboardData(queue, date_range, columns):
     Get the dashboard data corresponding `columns` over the `date_range` given
     as the tuple `(date_start, date_stop)`. Store the result in `queue`.
     """
-    rows = dd.objects.filter(timestamp__range=date_range).values_list(*columns)
-    df = pd.DataFrame.from_records(rows)
+    rows = TechData.objects.filter(timestamp__range=date_range).values_list(*columns)
+    df = pandas.DataFrame.from_records(rows)
     if not df.empty:
         df.columns = columns
     else:
-        df = pd.DataFrame(columns=columns)
+        df = pandas.DataFrame(columns=columns)
     queue.put(df)
     return
 
@@ -188,7 +193,7 @@ def make_plot(pred_src, curr_src): # (Predictive, Current)
             y_range_name = 'default'
             level = 'glyph' if 'Actual' in data_label else 'underlay'
             line_width = 3 if 'Actual' in data_label else 2
-        color = cc.glasbey_cool[i]
+        color = colorcet.glasbey_cool[i]
         active_labels = [plot_select.labels[i] for i in plot_select.active]
         PLOT_LINES[data_label] = plot.line(
             x = PLOT_LABELS_FOR_DATA_COLS['Timestamp'],
@@ -305,4 +310,4 @@ layout = column(
 curdoc().add_root(layout)
 curdoc().add_periodic_callback(_periodic_callback, 60000)
 curdoc().title = "Dashboard"
-curdoc().theme = Theme(json=theme.json)
+curdoc().theme = Theme(json=LOREDASH_UI_THEME)
