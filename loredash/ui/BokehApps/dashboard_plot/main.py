@@ -196,26 +196,8 @@ def make_plot(pred_src, curr_src): # (Predictive, Current)
 
     return plot
 
-def update_lines(attr, old, new):
-    # Update visible lines
-    selected_labels = [plot_select.labels[i] for i in plot_select.active]
-
-    for label in lines.keys():
-        label_name_no_units = re.sub(' \[.*\]$', '', butils.col_to_title(label))
-        lines[label].visible = label_name_no_units in selected_labels
-
-
-def update_points(attr, old, new):
-    # Get updated time block information
-    time_box = list(TIME_BOXES.keys())[time_window.active]
-
-    # Update data
-    [new_pred_src, new_curr_src] = make_dataset(time_box)
-    pred_src.data.update(new_pred_src.data)
-    curr_src.data.update(new_curr_src.data)
-
 @gen.coroutine
-def live_update():
+def _periodic_callback():
     ## Do a live update on the minute
     global current_datetime
 
@@ -253,16 +235,25 @@ def live_update():
     pred_src.data.update(ColumnDataSource(df_temp).data)
 
     current_datetime = new_current_datetime
-
+    return
 
 ## Create widget layout
 # Create radio button group widget
 time_window = RadioButtonGroup(
-    labels=["Today", "Last 6 Hours", "Last 12 Hours", "Last 24 Hours", "Last 48 Hours"], 
+    labels=["Today", "Last 6 Hours", "Last 12 Hours", "Last 24 Hours", "Last 48 Hours"],
     active=0,
     width_policy='min',
     height=31)
-time_window.on_change('active', update_points)
+
+def _time_window_callback(attr, _, new_index):
+    assert('active' == attr)
+    time_box = list(TIME_BOXES.keys())[new_index]
+    [new_pred_src, new_curr_src] = make_dataset(time_box)
+    pred_src.data.update(new_pred_src.data)
+    curr_src.data.update(new_curr_src.data)
+    return
+
+time_window.on_change('active', _time_window_callback)
 
 # Create Checkbox Select Group Widget
 plot_select = CheckboxButtonGroup(
@@ -272,7 +263,15 @@ plot_select = CheckboxButtonGroup(
     height=31
 )
 
-plot_select.on_change('active', update_lines)
+def _plot_select_callback(attr, _, new_indices):
+    assert('active' == attr)
+    i = 0
+    for label in lines.keys():
+        lines[label].visible = i in new_indices
+        i += 1
+    return
+
+plot_select.on_change('active', _plot_select_callback)
 
 # Set initial plot information
 initial_plots = [butils.title_to_col(plot_select.labels[i]) for i in plot_select.active]
@@ -293,6 +292,6 @@ layout = column(
     width_policy='max')
 
 curdoc().add_root(layout)
-curdoc().add_periodic_callback(live_update, 60000)
+curdoc().add_periodic_callback(_periodic_callback, 60000)
 curdoc().title = "Dashboard"
 curdoc().theme = Theme(json=theme.json)
