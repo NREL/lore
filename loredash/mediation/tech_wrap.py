@@ -106,24 +106,6 @@ class TechWrap:
 
         N_weather_data = len(self.ssc.get('solar_resource_data')['year'])
         resize_list('sf_adjust:hourly', N_weather_data)
-        '''
-        if self.ssc.get('rec_clearsky_model') == 0:  # Input array for clearsky DNI is only needed if rec_clearsky_model is 0
-            resize_list('rec_clearsky_dni', N_weather_data)
-
-        if self.ssc.get('is_dispatch_targets'):  # Input arrays for dispatch targets 
-            N_timesteps = ceil((self.ssc.get('time_stop') - self.ssc.get('time_start')) / 3600. * self.ssc.get('time_steps_per_hour'))
-            resize_list('q_pc_target_su_in', N_timesteps)
-            resize_list('q_pc_target_on_in', N_timesteps)
-            resize_list('q_pc_max_in', N_timesteps)
-            resize_list('is_rec_su_allowed_in', N_timesteps)
-            resize_list('is_rec_sb_allowed_in', N_timesteps)
-            resize_list('is_pc_su_allowed_in', N_timesteps)
-            resize_list('is_pc_sb_allowed_in', N_timesteps)
-            try:
-                resize_list('is_ignore_elec_heat_dur_off', N_timesteps)    # NOT SET
-            except:
-                pass
-        '''
         ###########################################################################################
 
         tech_outputs = self.ssc.execute()
