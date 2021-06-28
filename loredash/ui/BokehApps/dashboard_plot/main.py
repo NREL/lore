@@ -42,15 +42,21 @@ PLOT_LABELS_FOR_DATA_COLS = {
     'Field Op. Available [MWt]': 'Q_field_incident'
 }
 
-# Corresponds to PLOT_LABELS_FOR_DATA_COLS
-CURRENT_DATA_COLS = [0, 1, 4, 5]
-FUTURE_DATA_COLS = [0, 2, 3]
+CURRENT_DATA_COLS = [
+    'timestamp',
+    'W_grid_no_derate',
+    'Q_tower_incident',
+    'Q_field_incident',
+]
 
+FUTURE_DATA_COLS = [
+    'timestamp',
+    'W_grid_with_derate',
+    'W_grid_with_derate',
+]
 
-data_labels = list(PLOT_LABELS_FOR_DATA_COLS.keys())
-data_labels_no_units = [re.sub(' \[.*\]$', '', label) for label in data_labels]
-data_columns = list(PLOT_LABELS_FOR_DATA_COLS.values())
-label_colors = {col+'_color': cc.glasbey_cool[i] for i,col in enumerate(data_labels[1:])}
+def _strip_unit(label):
+    return re.sub(' \[.*\]$', '', label)
 
 current_datetime = datetime.datetime.now().replace(second=0, microsecond=0)
 lines = {}
@@ -96,7 +102,7 @@ def make_dataset(time_box):
         q,
         start_date,
         end_date,
-        [data_columns[i] for i in CURRENT_DATA_COLS],
+        CURRENT_DATA_COLS,
     )
     current_cds = ColumnDataSource(current_data_df)
 
@@ -105,7 +111,7 @@ def make_dataset(time_box):
         q,
         start_date,
         pred_end_date,
-        [data_columns[i] for i in FUTURE_DATA_COLS],
+        FUTURE_DATA_COLS,
     )
     predictive_cds = ColumnDataSource(predictive_data_df)
     return predictive_cds, current_cds
@@ -167,10 +173,11 @@ def make_plot(pred_src, curr_src): # (Predictive, Current)
         line_width=2
     )
     plot.add_layout(current_time_line)
-
+    i = -1
     for data_label, data_column in PLOT_LABELS_FOR_DATA_COLS.items():
-        if 'Timestamp' in data_label: continue
-        data_label_no_unit = re.sub(' \[.*\]$', '', data_label)
+        if 'Timestamp' in data_label:
+            continue
+        i += 1
         if 'Field' in data_label:
             y_range_name = 'mwt'
             level = 'underlay'
@@ -179,17 +186,18 @@ def make_plot(pred_src, curr_src): # (Predictive, Current)
             y_range_name = 'default'
             level = 'glyph' if 'Actual' in data_label else 'underlay'
             line_width = 3 if 'Actual' in data_label else 2
-
+        color = cc.glasbey_cool[i]
+        active_labels = [plot_select.labels[i] for i in plot_select.active]
         lines[data_label] = plot.line( 
             x = PLOT_LABELS_FOR_DATA_COLS['Timestamp'],
             y = data_column,
-            line_color = label_colors[data_label + '_color'],
+            line_color = color,
             line_alpha = 0.7,
-            hover_line_color = label_colors[data_label + '_color'],
+            hover_line_color = color,
             hover_alpha = 1.0,
             source = curr_src if PLOT_LABELS_FOR_DATA_COLS[data_label] in curr_src.column_names else pred_src,
             name = data_label,
-            visible = data_label_no_unit in [plot_select.labels[i] for i in plot_select.active],
+            visible = _strip_unit(data_label) in active_labels,
             y_range_name = y_range_name,
             level = level,
             line_width = line_width,
@@ -201,7 +209,6 @@ def make_plot(pred_src, curr_src): # (Predictive, Current)
             plot.y_range.renderers.append(lines[data_label])
         legend_item = LegendItem(label=data_label, renderers=[lines[data_label]])
         legend.items.append(legend_item)
-
     # styling
     plot = butils.style(plot)
     plot.add_layout(legend, 'below')
@@ -221,7 +228,7 @@ def _periodic_callback():
         q,
         current_datetime,
         new_current_datetime,
-        [data_columns[i] for i in CURRENT_DATA_COLS],
+        CURRENT_DATA_COLS,
     )
     curr_src.stream(current_data_df)
     df_temp = curr_src.to_df().drop([0]).drop('index', axis=1)
@@ -231,7 +238,7 @@ def _periodic_callback():
         q,
         current_datetime,
         new_current_datetime,
-        [data_columns[i] for i in FUTURE_DATA_COLS],                    # the last parameter isn't really the 'scheduled'
+        FUTURE_DATA_COLS,  # the last parameter isn't really the 'scheduled'
     )
     pred_src.stream(predictive_data_df)
     df_temp = pred_src.to_df().drop([0]).drop('index', 1)
@@ -259,7 +266,10 @@ time_window.on_change('active', _time_window_callback)
 
 # Create Checkbox Select Group Widget
 plot_select = CheckboxButtonGroup(
-    labels = [label for label in data_labels_no_units if label != 'Timestamp'],
+    labels = [
+        _strip_unit(label)
+        for label in PLOT_LABELS_FOR_DATA_COLS.keys() if label != 'Timestamp'
+    ],
     active = [0],
     width_policy='min',
     height=31
@@ -274,9 +284,6 @@ def _plot_select_callback(attr, _, new_indices):
     return
 
 plot_select.on_change('active', _plot_select_callback)
-
-# Set initial plot information
-initial_plots = [butils.title_to_col(plot_select.labels[i]) for i in plot_select.active]
 
 [pred_src, curr_src] = make_dataset('Today')
 plot = make_plot(pred_src, curr_src)
