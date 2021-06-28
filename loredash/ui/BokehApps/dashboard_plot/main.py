@@ -1,8 +1,8 @@
 # Bokeh
 from bokeh.plotting import figure
 from bokeh.models import Span, ColumnDataSource, LinearAxis, DataRange1d, Legend, LegendItem, PanTool, WheelZoomTool, HoverTool, CustomJS
-from bokeh.models.widgets import Button, CheckboxButtonGroup, RadioButtonGroup
-from bokeh.layouts import column, row, WidgetBox, Spacer
+from bokeh.models.widgets import CheckboxButtonGroup, RadioButtonGroup
+from bokeh.layouts import column, row, Spacer
 from bokeh.themes import Theme
 from bokeh.io import curdoc
 from bokeh.events import DoubleTap
@@ -30,11 +30,11 @@ from theme import theme as _loredash_ui_theme
 LOREDASH_UI_THEME = _loredash_ui_theme.json
 
 TIME_BOXES = {
-    'Today': 1,
-    'Last 6 Hours': 6,
-    'Last 12 Hours': 12,
-    'Last 24 Hours': 24,
-    'Last 48 Hours': 48
+    'Today': datetime.timedelta(hours=1),
+    'Last 6 Hours': datetime.timedelta(hours=6),
+    'Last 12 Hours': datetime.timedelta(hours=12),
+    'Last 24 Hours': datetime.timedelta(hours=24),
+    'Last 48 Hours': datetime.timedelta(hours=48),
 }
 
 # From the TechData model table
@@ -63,6 +63,7 @@ FUTURE_DATA_COLS = [
 def _strip_unit(label):
     return re.sub(' \[.*\]$', '', label)
 
+# This is a global variable that will be updated by the live callback.
 current_datetime = datetime.datetime.now().replace(second=0, microsecond=0)
 
 # A global variable to hold all of the plot lines!
@@ -97,13 +98,10 @@ def make_dataset(time_box):
     start_date = current_datetime.date()
     end_date = current_datetime
     pred_end_date = current_datetime.date() + datetime.timedelta(days=1)
-
     if time_box != 'Today':
-        start_date = current_datetime - datetime.timedelta(hours=TIME_BOXES[time_box])
+        start_date = current_datetime - TIME_BOXES[time_box]
         pred_end_date = current_datetime
-
     q = queue.Queue()
-
     # Current Data
     current_data_df = _getDashboardData(
         q,
@@ -112,7 +110,6 @@ def make_dataset(time_box):
         CURRENT_DATA_COLS,
     )
     current_cds = ColumnDataSource(current_data_df)
-
     # Future Data
     predictive_data_df = _getDashboardData(
         q,
@@ -155,10 +152,10 @@ def make_plot(pred_src, curr_src): # (Predictive, Current)
         )
 
     # Set action to reset plot
-    plot.js_on_event(DoubleTap, CustomJS(args=dict(p=plot), 
-    code="""
-        p.reset.emit()
-    """))
+    plot.js_on_event(
+        DoubleTap,
+        CustomJS(args=dict(p=plot), code="p.reset.emit()"),
+    )
 
     plot.toolbar.active_drag = pan_tool
     plot.toolbar.active_scroll = wheel_zoom_tool   
@@ -172,54 +169,50 @@ def make_plot(pred_src, curr_src): # (Predictive, Current)
     legend = Legend(orientation='horizontal', location='top_center', spacing=10)
     
     # Add current time vertical line
-    current_time_line = Span(
-        location=current_datetime,
-        dimension='height',
-        line_color='white',
-        line_dash='dashed',
-        line_width=2
+    plot.add_layout(
+        Span(
+            location=current_datetime,
+            dimension='height',
+            line_color='white',
+            line_dash='dashed',
+            line_width=2
+        )
     )
-    plot.add_layout(current_time_line)
     i = -1
-    for data_label, data_column in PLOT_LABELS_FOR_DATA_COLS.items():
-        if 'Timestamp' in data_label:
+    for label, data in PLOT_LABELS_FOR_DATA_COLS.items():
+        if 'Timestamp' in label:
             continue
         i += 1
-        if 'Field' in data_label:
-            y_range_name = 'mwt'
-            level = 'underlay'
-            line_width = 2
-        else:
-            y_range_name = 'default'
-            level = 'glyph' if 'Actual' in data_label else 'underlay'
-            line_width = 3 if 'Actual' in data_label else 2
         color = colorcet.glasbey_cool[i]
         active_labels = [plot_select.labels[i] for i in plot_select.active]
-        PLOT_LINES[data_label] = plot.line(
+        if PLOT_LABELS_FOR_DATA_COLS[label] in curr_src.column_names:
+            source = curr_src
+        else:
+            source = pred_src
+        PLOT_LINES[label] = plot.line(
             x = PLOT_LABELS_FOR_DATA_COLS['Timestamp'],
-            y = data_column,
+            y = data,
             line_color = color,
             line_alpha = 0.7,
             hover_line_color = color,
             hover_alpha = 1.0,
-            source = curr_src if PLOT_LABELS_FOR_DATA_COLS[data_label] in curr_src.column_names else pred_src,
-            name = data_label,
-            visible = _strip_unit(data_label) in active_labels,
-            y_range_name = y_range_name,
-            level = level,
-            line_width = line_width,
+            source = source,
+            name = label,
+            visible = _strip_unit(label) in active_labels,
+            y_range_name = 'mwt' if 'Field' in label else 'default',
+            level = 'glyph' if 'Actual' in label else 'underlay',
+            line_width = 3 if 'Actual' in label else 2,
         )
-
-        if 'Field' in data_label:
-            plot.extra_y_ranges['mwt'].renderers.append(PLOT_LINES[data_label])
+        if 'Field' in label:
+            plot.extra_y_ranges['mwt'].renderers.append(PLOT_LINES[label])
         else:
-            plot.y_range.renderers.append(PLOT_LINES[data_label])
-        legend_item = LegendItem(label=data_label, renderers=[PLOT_LINES[data_label]])
-        legend.items.append(legend_item)
+            plot.y_range.renderers.append(PLOT_LINES[label])
+        legend.items.append(
+            LegendItem(label=label, renderers=[PLOT_LINES[label]])
+        )
     # styling
     plot = butils.style(plot)
     plot.add_layout(legend, 'below')
-
     return plot
 
 @gen.coroutine
@@ -253,8 +246,10 @@ def _periodic_callback():
     current_datetime = new_current_datetime
     return
 
-## Create widget layout
-# Create radio button group widget
+###
+### Make the widget to control the time windows.
+###
+
 time_window = RadioButtonGroup(
     labels=list(TIME_BOXES.keys()),
     active=0,
@@ -271,7 +266,10 @@ def _time_window_callback(attr, _, new_index):
 
 time_window.on_change('active', _time_window_callback)
 
-# Create Checkbox Select Group Widget
+###
+### Make the widget to control which lines are shown.
+###
+
 plot_select = CheckboxButtonGroup(
     labels = [
         _strip_unit(label)
@@ -292,22 +290,27 @@ def _plot_select_callback(attr, _, new_indices):
 
 plot_select.on_change('active', _plot_select_callback)
 
+###
+### Make the actual plot.
+###
+
 [pred_src, curr_src] = make_dataset('Today')
 plot = make_plot(pred_src, curr_src)
 
-widgets = row(
-    time_window,
-    Spacer(width_policy='max'),
-    plot_select)
-
-layout = column(
-    widgets,
-    Spacer(height=20),
-    plot,
-    sizing_mode='stretch_width',
-    width_policy='max')
-
-curdoc().add_root(layout)
-curdoc().add_periodic_callback(_periodic_callback, 60000)
-curdoc().title = "Dashboard"
-curdoc().theme = Theme(json=LOREDASH_UI_THEME)
+doc = curdoc()
+doc.add_root(
+    column(
+        row(
+            time_window,
+            Spacer(width_policy='max'),
+            plot_select,
+        ),
+        Spacer(height=20),
+        plot,
+        sizing_mode='stretch_width',
+        width_policy='max',
+    )
+)
+doc.add_periodic_callback(_periodic_callback, 60000)
+doc.title = "Dashboard"
+doc.theme = Theme(json=LOREDASH_UI_THEME)
