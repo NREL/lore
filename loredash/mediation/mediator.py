@@ -121,7 +121,7 @@ class Mediator:
         plant_state = self.plant.get_state()
 
         # b. Validate these data
-            #TODO: Add this
+        plant_state = data_validator.validate(plant_state, data_validator.plant_state_schema)
 
         # c. Store in database and add to current timestep cache
             #TODO: Add this

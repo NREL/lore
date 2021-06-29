@@ -236,3 +236,22 @@ dispatch_outputs_schema = Schema(
         required=True,              # THIS DOESN'T SEEM TO WORK: True = data is required for all defined schema keys unless overriden using
                                     #   Optional(), if not present will throw exception
 )
+
+plant_state_schema = Schema( All(
+    {
+        Required('rec_startup_time_remain_init'): And(Coerce(float), Range(min=0, max=24)),
+        Required('rec_startup_energy_remain_init'): And(Coerce(float), Range(min=0, max=kBigNumber)),
+        Required('T_tank_cold_init'): And(Coerce(float), Range(min=0, max=kBigNumber)),
+        Required('T_tank_hot_init'): And(Coerce(float), Range(min=0, max=kBigNumber)),
+        Required('pc_startup_time_remain_init'): And(Coerce(float), Range(min=0, max=24)),
+        Required('pc_startup_energy_remain_initial'): And(Coerce(float), Range(min=0, max=kBigNumber)),
+        Required('sf_adjust:hourly'): [And(Coerce(float), Range(min=0, max=1))]
+    },
+    list_lengths_must_match
+),
+    extra=REMOVE_EXTRA,
+    # REMOVE_EXTRA = keys in data that are undefined in schema will be removed--no exception will be thrown
+    required=True,
+    # THIS DOESN'T SEEM TO WORK: True = data is required for all defined schema keys unless overriden using
+    #   Optional(), if not present will throw exception
+)
