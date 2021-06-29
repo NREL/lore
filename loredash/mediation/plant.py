@@ -123,8 +123,8 @@ class Plant:
         FIELD_AVAIL_DAYS_GENERATED = 365
         steps_per_hour = int(1/(timestep.total_seconds()/3600))
 
-        fixed_soiling_loss = 0.02   # TODO: move this constant to the plant config file
-        field_availability = ((1 - fixed_soiling_loss) * np.ones(steps_per_hour*24*365)).tolist()
+        fixed_soiling_loss=0.02
+        field_availability = (fixed_soiling_loss * 100 * np.ones(steps_per_hour*24*365)).tolist()  
 
         assert(len(field_availability) == steps_per_hour * 24 * FIELD_AVAIL_DAYS_GENERATED)
         df = pd.DataFrame(field_availability, columns=['field_availability'])
