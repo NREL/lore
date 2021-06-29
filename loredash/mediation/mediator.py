@@ -11,7 +11,7 @@ import numpy as np
 import rapidjson
 
 from data.mspt_2020_defaults import default_ssc_params
-from mediation import tech_wrap, data_validator, dispatch_wrap, models, forecasts, util
+from mediation import tech_wrap, data_validator, dispatch_wrap, models, forecasts
 import mediation.plant as plant_
 from mediation.plant import Revenue
 
@@ -129,11 +129,11 @@ class Mediator:
         # Step 1, Thread 2:
         # a. Get weather data and forecasts
         datetime_end_dispatch = datetime_start + \
-            datetime.timedelta(hours=self.dispatch_wrap.dispatch_horizon)
+            datetime.timedelta(hours=self.dispatch_wrap.params['dispatch_horizon'])
         weather_dispatch = self.get_weather_df(
             datetime_start=datetime_start,
             datetime_end=datetime_end_dispatch,
-            timestep=datetime.timedelta(minutes=min(self.dispatch_wrap.dispatch_steplength_array)),
+            timestep=datetime.timedelta(minutes=min(self.dispatch_wrap.params['dispatch_steplength_array'])),
             tmy3_path=self.weather_file,
             use_forecast=True)
         # Sanity check to make sure this is what we expect.
@@ -150,8 +150,10 @@ class Mediator:
         assert(weather_simulate.index[0] == datetime_start)
         assert(weather_simulate.index[-1] == datetime_end)
         # Set clearsky data
-        clearsky_data = np.array(weather_dispatch['Clear Sky DNI'])
-        clearsky_data_padded = np.pad(clearsky_data, (0, 365*24*60 - len(clearsky_data)), 'constant', constant_values=(0, 0))   #TODO fix this hack
+        clearsky_data = np.nan_to_num(np.array(weather_dispatch['Clear Sky DNI']), nan = 0.0)  # TODO: Better handling of nan values in clear-sky data
+        clearsky_data_padded = self.tech_wrap.pad_weather_data(list_data = clearsky_data.tolist(), 
+            datetime_start = self._toTMYTime(datetime_start), 
+            timestep = datetime.timedelta(hours=1/self.params['time_steps_per_hour']))
         self.tech_wrap.set({'rec_clearsky_dni': clearsky_data_padded})
 
         # TODO(odow): keep pushing timezones through the code.
@@ -160,14 +162,15 @@ class Mediator:
 
         # Step 2, Thread 1:
         # a. Call dispatch model, (which includes the 'f_estimates...' tech_wrap function to get estimates) and update inputs for next call
+        # TODO: Calls to ssc need to be fixed-offset time, but need to be careful with tech_wrap.set_weather_data()
         dispatch_outputs = self.dispatch_wrap.run(
-            start_date=datetime_start,
-            timestep_days=(datetime_end - datetime_start).days,                             # not timestep but actually duration in days
+            datetime_start=datetime_start,
+            ssc_horizon = (datetime_end - datetime_start),
             weather_dataframe=weather_dispatch,
             f_estimates_for_dispatch_model=self.tech_wrap.estimates_for_dispatch_model,
+            update_interval = 1.0/self.params['time_steps_per_hour'],
             initial_plant_state=plant_state
         )
-        self.dispatch_wrap.update_inputs(dispatch_outputs, self.simulation_timestep)        # TODO: add to end of run()?
 
         # b. Validate these data
         dispatch_outputs = data_validator.validate(dispatch_outputs, data_validator.dispatch_outputs_schema)
