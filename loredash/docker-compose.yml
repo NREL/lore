@@ -29,7 +29,7 @@ services:
         container_name: reverse_proxy
         # Defining this volume gives nginx access to the static files in the 'dash' container in order to serve them
         volumes:
-          - static_volume:/site/static
+          - static_volume:/loredash/static
         depends_on:
           - dash
           - migration
@@ -44,10 +44,10 @@ services:
                         gunicorn loredash.wsgi:application --bind 10.10.10.10:8000 --timeout 24000"
         container_name: dashboard
         volumes:
-            - static_volume:/site/static
+            - static_volume:/loredash/static
             - type: bind
               source: ./config
-              target: /site/config
+              target: /loredash/config
         ports:
             # HOST_PORT:CONTAINER_PORT ('host' is the computer hosting the container)
             - 8000:8000
@@ -101,6 +101,10 @@ services:
         image: matthewtboyd/lore
         networks:
             - app_net
+        volumes:
+            - type: bind
+              source: ./config
+              target: /loredash/config
         command: python manage.py migrate
         container_name: migration
 

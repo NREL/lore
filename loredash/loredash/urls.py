@@ -32,7 +32,7 @@ RUN_PROFILER = False
 def init_and_mediate():
     parent_dir = str(Path(__file__).parents[1])
     default_weather_file = parent_dir + "/data/daggett_ca_34.865371_-116.783023_psmv3_60_tmy.csv"
-    plant_design_path = parent_dir + "/../loredash/plant_design.json"
+    plant_design_path = parent_dir + "/config/plant_design.json"
     m = mediator.Mediator(
         params=mediator.mediator_params,
         plant_design_path=plant_design_path,

@@ -313,10 +313,11 @@ class Plant:
 
     def get_location(self):
         location = {
-            'latitude':     self.design['latitude'],
-            'longitude':    self.design['longitude'],
-            'elevation':    self.design['elevation'],
-            'timezone':     self.design['timezone'],
+            'latitude':         self.design['latitude'],
+            'longitude':        self.design['longitude'],
+            'elevation':        self.design['elevation'],
+            'timezone':         self.design['timezone'],
+            'timezone_string':  self.design['timezone_string'],
         }
         return location
 

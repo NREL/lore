@@ -23,19 +23,19 @@ RUN apt-get -qq install -y coinor-cbc
 # Create a group and user, both named 'app', that this app will run as
 # '-r' means create a system account
 # '-g app' means add to group 'app'
-# '-d /site' means /site is the user's login directory
+# '-d /loredash' means /loredash is the user's login directory
 # '-s /sbin/nologin' means /sbin/nologin is the user's login shell
 # '-c "Docker image user"' is just a comment, usually a description of the login
 # 'app' is the name of the user
 RUN groupadd -r app && \
-    useradd -r -g app -d /site -s /sbin/nologin -c "Docker image user" app
+    useradd -r -g app -d /loredash -s /sbin/nologin -c "Docker image user" app
 
 # Give user 'app' root privileges (leave commented, just for testing)
 # RUN usermod -aG sudo app
 
 # Create a base directory, specify ownership by 'app' user and 'app' group, and
 #  set this directory as WORKDIR
-ENV SITE_DIR=/site/
+ENV SITE_DIR=/loredash/
 RUN install -g app -o app -d ${SITE_DIR}
 WORKDIR $SITE_DIR
 

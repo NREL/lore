@@ -28,7 +28,7 @@ import rapidjson
 # Make sure to mark any tests that need database access.
 @pytest.mark.django_db
 def test_forecaster_from_plant():
-    with open("plant_design.json") as f:
+    with open("./config/plant_design.json") as f:
         plant_design = rapidjson.load(f)
     forecaster = forecasts.SolarForecast(
         plant_design['latitude'],

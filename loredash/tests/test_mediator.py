@@ -39,7 +39,7 @@ def test_tmy3_to_df():
     return
 
 def test_get_weather_df():
-    plant_design_path = PARENT_DIR + "/../loredash/plant_design.json"
+    plant_design_path = PARENT_DIR + "/../loredash/config/plant_design.json"
     m = mediator.Mediator(
         params = mediator.mediator_params,
         plant_design_path=plant_design_path,

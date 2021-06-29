@@ -1,6 +1,10 @@
 import sys, os
 sys.path.insert(1, os.path.join(sys.path[0], '..'))
-
+import colorcet
+from pathlib import Path
+import queue 
+import rapidjson
+import threading
 from bokeh import events as bokeh_events
 from bokeh import io as bokeh_io
 from bokeh import layouts as bokeh_layouts
@@ -8,13 +12,8 @@ from bokeh import models as bokeh_models
 from bokeh import plotting as bokeh_plotting
 from bokeh import themes as bokeh_themes
 
-import colorcet
-
 from mediation import forecasts
 
-import queue 
-import rapidjson
-import threading
 
 # theme.py is loredash/io/BokehApps/theme/theme.py. It isn't an external
 # package. It's also different from `bokeh.themes`. There is only one constant
@@ -22,15 +21,17 @@ import threading
 from theme import theme as _loredash_ui_theme
 LOREDASH_UI_THEME = _loredash_ui_theme.json
 
-with open("plant_design.json") as f:
-    PLANT_DESIGN = rapidjson.load(f)
-
+# TODO: Pull the forecasts from a database table--don't call forecasts methods
+#       in the plotting server. Also, config files should only be read once, during
+#       mediator initialization.
+# with open("plant_design.json") as f:
+#     PLANT_DESIGN = rapidjson.load(f)
 def latestData(queue):
     forecaster = forecasts.SolarForecast(
-        PLANT_DESIGN['latitude'],
-        PLANT_DESIGN['longitude'],
-        PLANT_DESIGN['timezone_string'],
-        PLANT_DESIGN['elevation'],
+        38.23895540732931,
+        -117.36368180656123,
+        "US/Pacific",
+        1524,
     )
     data = forecaster.latestForecast().reset_index()
     # Strip the timezone info to prevent Bokeh from trying to show it in
