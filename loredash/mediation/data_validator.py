@@ -231,8 +231,6 @@ dispatch_outputs_schema = Schema(
         {
         Required('current_day_schedule'): [And(Coerce(float), Range(min=0, max=kBigNumber))],
         Required('next_day_schedule'): [And(Coerce(float), Range(min=0, max=kBigNumber))],
-        Required('ursd_last'): And(Coerce(int), Range(min=0, max=kBigNumber)),
-        Required('yrsd_last'): And(Coerce(int), Range(min=0, max=1)),
         },
         extra=ALLOW_EXTRA,         # REMOVE_EXTRA = keys in data that are undefined in schema will be removed--no exception will be thrown
         required=True,              # THIS DOESN'T SEEM TO WORK: True = data is required for all defined schema keys unless overriden using

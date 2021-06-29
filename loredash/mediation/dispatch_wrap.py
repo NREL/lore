@@ -8,15 +8,12 @@ import pyomo.environ as pe
 from pyomo.opt import TerminationCondition
 import datetime
 
-from mediation import util, dispatch_model
+from mediation import dispatch_model
 
 
 dispatch_wrap_params = {
     # Dispatch optimization
-	'dispatch_frequency':			        1,                      # Frequency of dispatch re-optimization (hr)
-	'dispatch_weather_horizon':		        2,                      # Time point in hours (relative to start of optimization horizon) defining the transition from actual weather to forecasted weather used in the dispatch model. Set to 0 to use forecasts for the full horizon, set to -1 to use actual weather for the full horizon, or any value > 0 to combine actual/forecasted weather
     'dispatch_horizon':                     48.,                    # Time into future from start of current timestep that dispatch model is modeling (hr)
-    'dispatch_horizon_update':              24.,                    # Frequency of dispatch time horizon update (hr) -> set to the same value as dispatch_frequency for a fixed-length horizon 
     'dispatch_steplength_array':            [5, 15, 60],            # Dispatch time step sizes used in the variable timestep operations (min)
     'dispatch_steplength_end_time':         [1, 4, 48],             # End time for dispatch step lengths (hr)
     'nonlinear_model_time':                 4.0,                    # Amount of time to apply nonlinear dispatch model (hr) (not currently used)
@@ -217,6 +214,7 @@ class DispatchParams:
         self.avg_purchase_price = 0   # Average electricity purchase price ($/kWh) 
         self.day_ahead_tol_plus = 0   # Tolerance for over-production relative to day-ahead schedule before incurring penalty (kWhe)
         self.day_ahead_tol_minus= 0   # Tolerance for under-production relative to day-ahead schedule before incurring penalty (kWhe)
+        self.avg_price_disp_storage_incentive = 0  #  Average electricity price ($/kWh) used in dispatch model storage inventory incentive ($/kWh).  Note, high values cause the solutions to max out storage rather than generate electricity
 
         return
 
@@ -319,13 +317,10 @@ class DispatchParams:
         self.delta_T_design = plant.design['T_htf_hot_des'] - plant.design['T_htf_cold_des']
         self.delta_T_max = max(abs(plant.design['alpha_b'] * self.delta_T_design), plant.design['T_hs_max'] - plant.design['T_cs_min'])
 
-        if plant.design['pc_config'] == 1: # User-defined cycle
-            self.set_linearized_params_from_udpc_inputs(plant)
-        else:
-            print ('WARNING: Dispatch optimization parameters are currently only set up for user-defined power cycle. Defaulting to constant efficiency vs load')
-            self.etap = self.eta_des  
-            self.Wdotl = self.Ql*self.eta_des  
-            self.Wdotu = self.Qu*self.eta_des
+        # Initial setup for part-load cycle efficiency (this will be over-written using power cycle off-design output tables from ssc)
+        self.etap = self.eta_des   
+        self.Wdotl = self.Ql*self.eta_des   
+        self.Wdotu = self.Qu*self.eta_des   
     
         self.W_delta_plus = (plant.design['pc_rampup']) * self.Wdotu 
         self.W_delta_minus = (plant.design['pc_rampdown']) * self.Wdotu 
@@ -487,14 +482,20 @@ class DispatchParams:
         return
 
     # Set dispatch inputs from ssc estimates, S = dictionary containing selected ssc data
-    def set_estimates_from_ssc_data(self, design, S, sscstep, require_Qin_nonzero = True):
+    def set_estimates_from_ssc_data(self, plant, S, sscstep, require_Qin_nonzero = True):
         n = len(S['Q_thermal'])
-        Qin = S['Q_thermal']*1000
+
+        Qin = np.array([S['Q_thermal'][i]*1000. for i in range(n)])   #kWt
         if require_Qin_nonzero:
-            Qin = np.maximum(0.0, S['Q_thermal']*1000)
-        self.Qin = util.translate_to_variable_timestep(Qin, sscstep, self.Delta)
-        ratio = [0 if S['clearsky'][i] < 0.01 else min(1.0, S['beam'][i]/S['clearsky'][i]) for i in range(n)]   # Ratio of actual to clearsky DNI 
-        self.F = util.translate_to_variable_timestep(ratio, sscstep, self.Delta)
+            Qin = np.maximum(0.0, Qin)
+        self.Qin = translate_to_variable_timestep(Qin, sscstep, self.Delta)
+
+        field_receiver_parasitic = [(S['P_tower_pump'][i]+S['pparasi'][i])*1000. for i in range(n)]  # kWe
+        self.P_field_rec = translate_to_variable_timestep(field_receiver_parasitic, sscstep, self.Delta)
+
+        clearsky_adjusted = np.maximum(S['beam'], S['clearsky'])  
+        ratio = [0 if clearsky_adjusted[i] < 0.01 else min(1.0, S['beam'][i]/clearsky_adjusted[i]) for i in range(n)]   # Ratio of actual to clearsky DNI 
+        self.F = translate_to_variable_timestep(ratio, sscstep, self.Delta)
         self.F = np.minimum(self.F, 1.0)
         self.Q_cls = self.Qin / np.maximum(1.e-6, self.F)
 
@@ -504,25 +505,10 @@ class DispatchParams:
         for t in range(n):
             self.delta_rs[t] = min(1., max(self.Er / max(self.Qin[t]*self.Delta[t], 1.), self.Drsu/self.Delta[t]))
             self.delta_cs[t] = min(1., self.Ec/(self.Qc*self.Delta[t]) )
-        
-        self.P_field_rec = util.translate_to_variable_timestep((S['P_tower_pump']+S['pparasi'])*1000, sscstep, self.Delta)
-
-        # Set time-series ambient temperature corrections
-        if design['pc_config'] == 1: # User-defined cycle
-            # TODO: Note that current user-defined cycle neglects ambient T effects
-            Tdry = util.translate_to_variable_timestep(S['tdry'], sscstep, self.Delta)
-            etamult, wmult = self.get_ambient_T_corrections_from_udpc_inputs(design, Tdry)
-     
-            #TODO: Make sure these should be efficiency values and not mulipliers
-            self.etaamb  = etamult * design['design_eff']
-            self.etac = wmult * design['ud_f_W_dot_cool_des']/100.
-
-            
-        else:
-            # TODO: Need actual ambient temperature correction for cycle efficiency (ssc dispatch model interpolates from a table of points calculated at off-design ambient T, full load, design HTF T)
-            self.etaamb = np.ones(n)  
-            self.etac = np.ones(n)     
-            print ('WARNING: Dispatch cycle ambient T corrections are currently only set up for a user-defined cycle. Using default values (1.0) at all time points')
+    
+        # Set time-series power cycle ambient temperature corrections and cycle part-load efficiency
+        Tdb = translate_to_variable_timestep(S['tdry'], sscstep, self.Delta)
+        self.set_off_design_cycle_inputs(plant, Tdb, S)
 
         return
     
@@ -534,53 +520,80 @@ class DispatchParams:
         self.Cg_minus = [penalty_minus for j in range(n)]
         return 
     
+    # Set parameters in dispatch model for off-design cycle performance
+    def set_off_design_cycle_inputs(self, plant, Tdb, ssc_outputs):
+        is_ssc_tables = 'cycle_eff_load_table' in ssc_outputs and 'cycle_eff_Tdb_table' in ssc_outputs and 'cycle_wcond_Tdb_table' in ssc_outputs
+    
+        #--- Cycle part-load efficiency (not a function of time, but setting here to use outputs from ssc estimates)
+        if is_ssc_tables:
+            q_pb_design = plant.get_cycle_thermal_rating()
+            nload = len(ssc_outputs['cycle_eff_load_table'])
+            xpts = [ssc_outputs['cycle_eff_load_table'][i][0]/q_pb_design for i in range(nload)]    # Load fraction
+            etapts = [ssc_outputs['cycle_eff_load_table'][i][1] for i in range(nload)]              # Efficiency 
+            self.set_linearized_cycle_part_load_params(plant, xpts, etapts)
+        elif plant.design['pc_config'] == 1:    # Tables not returned from ssc, but can be taken from user-defined cycle inputs
+            D = interpret_user_defined_cycle_data(plant.design['ud_ind_od'])
+            k = 3*D['nT'] + D['nm']
+            xpts = D['mpts']   # Load fraction
+            etapts = [plant.design['design_eff'] * (plant.design['ud_ind_od'][k+p][3]/plant.design['ud_ind_od'][k+p][4]) for p in range(len(xpts))]  # Efficiency
+            self.set_linearized_cycle_part_load_params(plant, xpts, etapts)
+        else:
+            print ('WARNING: Dispatch optimization cycle part-load efficiency is not set up. Defaulting to constant efficiency vs load')
+            self.etap = self.eta_des                         
+            self.Wdotl = self.Ql*self.eta_des  
+            self.Wdotu = self.Qu*self.eta_des
 
-    def set_linearized_params_from_udpc_inputs(self, plant):
-        q_pb_design = plant.get_cycle_thermal_rating()  #MWt
-        D = util.interpret_user_defined_cycle_data(plant.design['ud_ind_od'])
-        eta_adj_pts = [plant.design['ud_ind_od'][p][3]/plant.design['ud_ind_od'][p][4] for p in range(len(plant.design['ud_ind_od'])) ]
-        xpts = D['mpts']
-        step = xpts[1] - xpts[0]
+        #--- Cycle ambient-temperature efficiency corrections
+        if is_ssc_tables:
+            nT = len(ssc_outputs['cycle_eff_Tdb_table'])
+            Tpts = [ssc_outputs['cycle_eff_Tdb_table'][i][0] for i in range(nT)]                                
+            etapts = [ssc_outputs['cycle_eff_Tdb_table'][i][1]* plant.design['design_eff'] for i in range(nT)]  # Efficiency
+            wcondfpts = [ssc_outputs['cycle_wcond_Tdb_table'][i][1] for i in range(nT)]                         # Fraction of cycle design gross output consumed by cooling
+            self.set_cycle_ambient_corrections(Tdb, Tpts, etapts, wcondfpts)
+        elif plant.design['pc_config'] == 1:          # Tables not returned from ssc, but can be taken from user-defined cycle inputs
+            D = interpret_user_defined_cycle_data(plant.design['ud_ind_od'])
+            k = 3*D['nT']+3*D['nm']+D['nTamb']  # first index in udpc data corresponding to performance at design point HTF T, and design point mass flow
+            npts = D['nTamb']
+            etapts = [ plant.design['design_eff'] * (plant.design['ud_ind_od'][j][3]/plant.design['ud_ind_od'][j][4]) for j in range(k, k+npts)]  # Efficiency
+            wcondfpts = [(plant.design['ud_f_W_dot_cool_des']/100.)*plant.design['ud_ind_od'][j][5] for j in range(k, k+npts)]                    # Fraction of cycle design gross output consumed by cooling
+            self.set_cycle_ambient_corrections(Tdb, D['Tambpts'], etapts, wcondfpts)
+        else:
+            print ('WARNING: Dispatch optimization cycle ambient T corrections are not set up. Using default values (1.0) at all time points')
+            n = len(Tdb)
+            self.etaamb = np.ones(n) * plant.design['design_eff']  # Design point efficiency at all ambient T
+            self.etac = np.zeros(n)                                # No condenser parasitic requirement
+        return
         
-        # Interpolate for cycle performance at specified min/max load points
+
+    def set_linearized_cycle_part_load_params(self, plant, xfpts, etapts):
+        q_pb_design = plant.get_cycle_thermal_rating()
         fpts = [plant.design['cycle_cutoff_frac'], plant.design['cycle_max_frac']]
+        step = xfpts[1] - xfpts[0]
         q, eta = [ [] for v in range(2)]
         for j in range(2):
-            p = max(0, min(int((fpts[j] - xpts[0]) / step), len(xpts)-2) )  # Find first point in user-defined array of load fractions for interpolation
-            i = 3*D['nT'] + D['nm'] + p    # Index of point in full list of udpc points (at design point ambient T)
-            eta_adj = eta_adj_pts[i] + (eta_adj_pts[i+1] - eta_adj_pts[i])/step * (fpts[j] - xpts[p])
-            eta.append(eta_adj * plant.design['design_eff'])
-            q.append(fpts[j]*q_pb_design * 1000.)
-
+            p = max(0, min(int((fpts[j] - xfpts[0]) / step), len(xfpts)-2) )               # Find first point in user-defined array of load fractions
+            eta.append(etapts[p] + (etapts[p+1] - etapts[p])/step * (fpts[j] - xfpts[p]))  
+            q.append(fpts[j]*q_pb_design * 1000.)  # kW
         etap = (q[1]*eta[1]-q[0]*eta[0])/(q[1]-q[0])
         b = q[1]*(eta[1] - etap)
         self.etap = etap
         self.Wdotl = b + self.Ql*self.etap
         self.Wdotu = b + self.Qu*self.etap
         return
-    
-    # Use off-design ambient T performance in user-defined cycle data to interpolate of ambient temperature corrections. Assumes off-design tempertures are specified at a constant interval
-    def get_ambient_T_corrections_from_udpc_inputs(self, design, Tamb):
-        n = len(Tamb)  # Tamb = set of ambient temperature points for each dispatch time step
-        D = util.interpret_user_defined_cycle_data(design['ud_ind_od'])
-        
-        Tambpts = np.array(D['Tambpts'])
-        i0 = 3*D['nT']+3*D['nm']+D['nTamb']  # first index in udpc data corresponding to performance at design point HTF T, and design point mass flow
-        npts = D['nTamb']
-        etapts = [ design['ud_ind_od'][j][3]/design['ud_ind_od'][j][4] for j in range(i0, i0+npts)]
-        wpts = [ design['ud_ind_od'][j][5] for j in range(i0, i0+npts)]
-        
-        etamult  = np.ones(n)
-        wmult = np.ones(n) 
-        Tstep = Tambpts[1] - Tambpts[0]
-        for j in range(n):
-            i = max(0, min( int((Tamb[j] - Tambpts[0]) / Tstep), npts-2) )
-            r = (Tamb[j] - Tambpts[i]) / Tstep
-            etamult[j] = etapts[i] + (etapts[i+1] - etapts[i])*r
-            wmult[j] = wpts[i] + (wpts[i+1] - wpts[i])*r
 
-        return etamult, wmult
-    
+    def set_cycle_ambient_corrections(self, Tdb, Tpts, etapts, wcondfpts):
+        n = len(Tdb)            # Tdb = set of ambient temperature points for each dispatch time step
+        npts = len(Tpts)        # Tpts = ambient temperature points with tabulated values
+        self.etaamb = np.ones(n)
+        self.etac = np.zeros(n) 
+        Tstep = Tpts[1] - Tpts[0]
+        for j in range(n):
+            i = max(0, min( int((Tdb[j] - Tpts[0]) / Tstep), npts-2) )
+            r = (Tdb[j] - Tpts[i]) / Tstep
+            self.etaamb[j] = etapts[i] + (etapts[i+1] - etapts[i])*r
+            self.etac[j] = wcondfpts[i] + (wcondfpts[i+1] - wcondfpts[i])*r
+        return
+
     def copy_and_format_indexed_inputs(self):
         """
         Return a copy of the dispatch params, first converting all lists and numpy arrays
@@ -752,7 +765,7 @@ class DispatchSoln:
             vals = getattr(self, k)
             if (type(vals) == type([]) or type(vals) == type(np.array(1))) and len(vals) >= len(inds):
                 vals = [vals[i] for i in inds]
-                R[k] = util.translate_to_fixed_timestep(vals, dt, sscstep)  
+                R[k] = translate_to_fixed_timestep(vals, dt, sscstep)  
         return R 
     
     def get_value_at_time(self, disp_params, time, name):
@@ -851,7 +864,7 @@ class DispatchTargets:
         # Translate to fixed ssc timestep and limit arrays to the desired time horizon (length of dispatch target input arrays in ssc needs to match the designated simulation time))
         npts = int(horizon / sscstep)
         for k in D.keys():
-            vals = util.translate_to_fixed_timestep(D[k], dt, sscstep)  # Translate from variable dispatch timestep to fixed ssc time step
+            vals = translate_to_fixed_timestep(D[k], dt, sscstep)  # Translate from variable dispatch timestep to fixed ssc time step
             vals = [vals[j] for j in range(npts)]                     # Truncate to only the points needed for the ssc solution
             if k in ['is_rec_su_allowed_in', 'is_rec_sb_allowed_in', 'is_pc_su_allowed_in', 'is_pc_sb_allowed_in']:  # Set binary inputs
                 vals = [1 if v > 0.001 else 0 for v in vals]
@@ -885,56 +898,33 @@ class DispatchTargets:
 class DispatchWrap:
     def __init__(self, plant, params):
 
-        self.dispatch_inputs = {
-            'ursd_last':                        None,
-            'yrsd_last':                        None,
-            'current_day_schedule':             None,
-            'next_day_schedule':                None,
-            'schedules':                        None,
-            'horizon':                          3600,          # [s]   TODO: what should this really be?
-        }
+        self.plant = plant             # Plant design and operating properties
+        self.params = params           # Parameters, needs to include everything in dispatch_wrap_params and mediator_params
 
         self.default_disp_stored_vars = [
             'cycle_on', 'cycle_standby', 'cycle_startup', 'receiver_on', 'receiver_startup', 'receiver_standby', 
             'receiver_power', 'thermal_input_to_cycle', 'electrical_output_from_cycle', 'net_electrical_output',
             'tes_soc', 'yrsd', 'ursd']
 
-        ## DISPATCH INPUTS ###############################################################################################################################
-        # Input data files: weather, masslow, clearsky DNI must have length of full annual array based on ssc time step size
-        #--- Simulation start point and duration
-        self.start_date = None
-        self.sim_days = None
-        # self.plant = None                             # Plant design and operating properties
-        
         self.user_defined_cycle_input_file = '../../librtdispatch/udpc_noTamb_dependency.csv'  # Only required if cycle_type is user_defined
 
+        self.price_data = params['dispatch_factors_ts']   # Electricity prices ($/MWh) at ssc time resolution
 
         ## DISPATCH PERSISTING INTERMEDIARIES ############################################################################################################
-        self.first_run = True                           # Is this the first time run() is called?
-        self.ursd_last = 0
-        self.yrsd_last = 0
         self.dispatch_params = DispatchParams()         # Structure to contain all inputs for dispatch model 
-        self.current_time = 0                           # Current time (tracked in standard time, not local time)
-        self.is_initialized = False                     # Has solution already been initalized?        
-        self.CD_data_for_plotting = {}                  # Only used if control_cycle = 'CD_data' 
-
-
-        ## DISPATCH OUTPUTS FOR INPUT INTO SSC ###########################################################################################################
-        # see: ssc_dispatch_targets, which is a dispatch.DispatchTargets object
-
-
+        self.first_run = True                           # Is this the first time run() is called?
+        self.ursd0 = 0
+        self.yrsd0 = 0
+        self.current_day_schedule = []                  # Committed day-ahead generation schedule for current day (MWe)
+        self.next_day_schedule = []                     # Predicted day-ahead generation schedule for next day (MWe)
+        self.date_for_current_day_schedule = None       # Datetime of first point in schedule stored in self.current_day_schedule
+        self.date_for_next_day_schedule = None          # Datetime of first point in schedule stored in self.next_day_schedule
+        
         ## SSC OUTPUTS ###################################################################################################################################
         self.results = None                             # Results
 
-        self.current_day_schedule = []                  # Committed day-ahead generation schedule for current day (MWe)
-        self.next_day_schedule = []                     # Predicted day-ahead generation schedule for next day (MWe)
-        self.schedules = []                             # List to store all day-ahead generation schedules (MWe)
-        self.weather_at_schedule = []                   # List to store weather data at the point in time the day-ahead schedule was generated
-        self.disp_params_tracking = []                  # List to store dispatch parameters for each call to dispatch model
-        self.disp_soln_tracking = []                    # List to store dispatch solutions for each call to dispatch model (directly from dispatch model, no translation to ssc time steps)
-        self.plant_state_tracking = []                  # List to store plant state at the start of each call to the dispatch model
-        self.infeasible_count = 0
-        
+        #TODO: These aren't currently used.  Do we need to calculate and return these from within the dispatch model?
+        '''
         self.revenue = 0.0                              # Revenue over simulated days ($)
         self.startup_ramping_penalty = 0.0              # Startup and ramping penalty over all simulated days ($)
         self.day_ahead_penalty_tot = {}                 # Penalty for missing schedule over all simulated days ($)
@@ -955,336 +945,211 @@ class DispatchWrap:
         self.total_receiver_thermal = 0                 # Total thermal energy from receiver (GWht)
         self.total_cycle_gross = 0                      # Total gross generation by cycle (GWhe)
         self.total_cycle_net = 0                        # Total net generation by cycle (GWhe)
-
-        self.plant = plant                              # Plant design and operating properties
-        self.params = params
-
-        for key,value in params.items():
-            setattr(self, key, value)
-
-        # Aliases (that could be combined and removed)
-        self.start_date = datetime.datetime(self.start_date_year, 1, 1, 8, 0, 0)      # needed for schedules TODO: fix spanning years (note the 8)
-        self.ssc_time_steps_per_hour = params['time_steps_per_hour']
-        self.use_transient_model = params['is_rec_model_trans']
-        self.use_transient_startup = params['is_rec_startup_trans']
-        self.price_data = params['dispatch_factors_ts']
-
-        # Initialize and adjust above parameters
-        self.initialize()
+        '''
 
         return
-
-
-    def initialize(self):
-        
-        # Check combinations of control conditions
-        if self.is_optimize and (self.control_field == 'CD_data' or self.control_receiver == 'CD_data'):
-            print ('Warning: Dispatch optimization is being used with field or receiver operation derived from CD data. Receiver can only operate when original CD receiver was operating')
-        if self.control_receiver == 'CD_data' and self.control_field != 'CD_data':
-            print ('Warning: Receiver flow is controlled from CD data, but field tracking fraction is controlled by ssc. Temperatures will likely be unrealistically high')
-
-
-        self.current_day_schedule = np.zeros(24*self.day_ahead_schedule_steps_per_hour)
-        self.next_day_schedule = np.zeros(24*self.day_ahead_schedule_steps_per_hour)
-        if int(util.get_time_of_day(self.start_date)) == 0 and self.use_day_ahead_schedule and self.day_ahead_schedule_from == 'calculated':
-            self.schedules.append(None)
-
-
-        self.is_initialized = True
-        return
-
-    def update_inputs(self, outputs, timestep):
-        self.dispatch_inputs.update((k, outputs[k]) for k in outputs.keys() & self.dispatch_inputs.keys())     # update inputs but don't add any new keys
-        self.dispatch_inputs['horizon'] -= int(timestep.seconds)
 
     #--- Run simulation
-    def run(self, start_date, timestep_days, weather_dataframe,
-            f_estimates_for_dispatch_model, initial_plant_state=None):
+    def run(self, datetime_start, ssc_horizon, weather_dataframe, 
+            f_estimates_for_dispatch_model, update_interval, initial_plant_state):
+        '''
+        Assumes that datetime_start and weather_dataframe are not local time, and correspond to a constant offset used in ssc (same as used in tech_wrap.simulate)
+        ssc_horizon = time horizon of dispatch targets that will be utilized in ssc (used only to condense dispatch target arrays to the correct length)
+        update_interval = frequency (hr) at which dispatch optimization will be re-run
+        '''
+        # Notes: The ssc simulation time resolution is assumed to be <= the shortest dispatch time step
+        #         All dispatch time steps and time horizons are assumed to be an integer multiple of the ssc time step
 
-        # Define horizon for this call to the dispatch optimization horizon (use specified 'dispatch_horizon' unless weather data is not available for the full horizon)
-        weather_timestep = (weather_dataframe.index[1]-weather_dataframe.index[0]).total_seconds()                     # Time step in weather data frame (s)
+        weather_timestep = (weather_dataframe.index[1]-weather_dataframe.index[0]).total_seconds()    # Time step in weather data frame (s)
+       
+        #--- Define horizon for this call to the dispatch optimization horizon (use specified 'dispatch_horizon' unless weather data is not available for the full horizon)
         weather_horizon = (weather_dataframe.index[-1]-weather_dataframe.index[0]).total_seconds() + weather_timestep  # Total duration of weather available for simulation relative to simulation start_date (s)
-        horizon = int(min(weather_horizon, self.params['dispatch_horizon']*3600)/3600.)              
+        horizon = int(min(weather_horizon, self.params['dispatch_horizon']*3600)/3600.)    # hr        
+
+        npts_horizon = int(horizon*self.params['time_steps_per_hour'])
+        clearsky = np.nan_to_num([weather_dataframe['Clear Sky DNI'][i] for i in range(npts_horizon)], nan = 0.0)
         
+        #--- Define time step arrays for dispatch optimization
+        dispatch_steplength_end_time = self.params['dispatch_steplength_end_time']
+        if horizon != self.params['dispatch_horizon']:
+            horizon_minutes = int(horizon*60 / self.params['dispatch_steplength_array'][0]) * self.params['dispatch_steplength_array'][0]  # Horizon rounded to nearest integer multiple of shortest dispatch time step
+            end_time_minutes = calculate_time_steps(horizon_minutes, self.params['dispatch_steplength_array'], [t*60 for t in self.params['dispatch_steplength_end_time']])
+            dispatch_steplength_end_time  = [t/60 for t in end_time_minutes]
 
+        #--- Initialize schedules, plant state, shut-down state parameters, and clear-sky data
         retvars = self.default_disp_stored_vars
-        ursd_last=self.dispatch_inputs['ursd_last']
-        yrsd_last=self.dispatch_inputs['yrsd_last']
-        schedules=self.dispatch_inputs['schedules']
-        current_day_schedule=self.dispatch_inputs['current_day_schedule']
-        next_day_schedule=self.dispatch_inputs['next_day_schedule']
-
         if self.first_run == True:
-            if ursd_last is None: ursd_last = self.ursd_last
-            if yrsd_last is None: yrsd_last = self.yrsd_last
-            if current_day_schedule is None: current_day_schedule = self.current_day_schedule
-            if next_day_schedule is None: next_day_schedule = self.next_day_schedule
-            if schedules is None: schedules = self.schedules
-
+            self.current_day_schedule = []
+            self.next_day_schedule = []
+            self.date_for_current_day_schedule = None
+            self.date_for_next_day_schedule = None
+            ursd0 = None
+            yrsd0 = None
             self.first_run == False
-
-        time = self.current_time = self.start_date = start_date
-        self.sim_days = timestep_days
-        self.schedules = schedules
-        self.current_day_schedule = current_day_schedule
-        self.next_day_schedule = next_day_schedule
-        if initial_plant_state is not None:
-            self.plant.state = initial_plant_state
-
-        # Start compiling ssc input dict (D)
-        #TODO: don't pass full copy of plant object to dispatch_wrap, just it's state, etc.
-        D = self.plant.design.copy()
-        D.update(self.plant.get_state())
-        D.update(self.plant.flux_maps)
-        D['time_start'] = int(util.get_time_of_year(self.start_date))
-        D['time_stop'] = int(util.get_time_of_year(self.start_date) + self.sim_days*24*3600)
-        clearsky_data = np.array(weather_dataframe['Clear Sky DNI'])
-        clearsky_data_padded = np.pad(clearsky_data, (0, len(self.dispatch_factors_ts) - len(clearsky_data)), 'constant', constant_values=(0, 0))
-        self.params['clearsky_data'] = clearsky_data_padded
-        reupdate_ssc_constants(D, self.params)
-
-        #-------------------------------------------------------------------------
-        # Run simulation in a rolling horizon   
-        #      The ssc simulation time resolution is assumed to be <= the shortest dispatch time step
-        #      All dispatch time steps and time horizons are assumed to be an integer multiple of the ssc time step
-        #      Time at which the weather forecast is updated coincides with the start of an optimization interval
-        #      Time at which the day-ahead generation schedule is due coincides with the start of an optimization interval
+        else:
+            ursd0 = self.ursd0  # Receiver accumulated energy for shutdown (taken from last dispatch solution for now)
+            yrsd0 = self.yrsd0  # Receiver binary shutdown state (taken from last dispatch solution for now)       
+                 
+        self.plant.state = initial_plant_state
 
         #--- Calculate time-related values
-        tod = int(util.get_time_of_day(time))                       # Current time of day (s)
-        toy = int(util.get_time_of_year(time))                      # Current time of year (s)    
-        start_time = util.get_time_of_year(time)                    # Time (sec) elapsed since beginning of year
-        start_hour = int(start_time / 3600)                         # Time (hours) elapsed since beginning of year
-        end_hour = start_hour + self.sim_days*24
-        nph = int(self.ssc_time_steps_per_hour)                     # Number of time steps per hour
-        total_horizon = self.sim_days*24
-        ntot = int(nph*total_horizon)                               # Total number of time points in full horizon
-        napply = int(nph*self.dispatch_frequency)                   # Number of ssc time points accepted after each solution 
-        nupdate = int(total_horizon / self.dispatch_frequency)      # Number of update intervals
-        startpt = int(start_hour*nph)                               # Start point in annual arrays
-        sscstep = 3600/nph                                          # ssc time step (s)
-        nominal_horizon = int(self.dispatch_horizon*3600)  
-        horizon_update = int(self.dispatch_horizon_update*3600)
-        freq = int(self.dispatch_frequency*3600)                    # Frequency of rolling horizon update (s)
+        tod = int(get_time_of_day(datetime_start))        # Current time of day (s)
+        toy = int(get_time_of_year(datetime_start))       # Current time of year (s)    
+        nph = int(self.params['time_steps_per_hour'])     # Number of time steps per hour
+        startpt = int(toy/3600)*nph                       # Start point in annual arrays
+        sscstep = 3600/nph                                # ssc time step (s)
+        date_today = datetime.datetime(datetime_start.year, datetime_start.month, datetime_start.day)
 
         #--- Update stored day-ahead generation schedule for current day (if relevant)
-        if tod == 0 and self.use_day_ahead_schedule:
-            self.next_day_schedule = [0 for s in self.next_day_schedule]
+        if self.params['use_day_ahead_schedule']:
 
-            if self.day_ahead_schedule_from == 'NVE':
-                self.current_day_schedule = self.get_CD_NVE_day_ahead_schedule(time)
-                self.schedules.append(self.current_day_schedule)
+            if self.params['day_ahead_schedule_from'] == 'external' and len(self.current_day_schedule)==0:
+                self.current_day_schedule = self.get_external_day_ahead_schedule(datetime_start)   # TODO: Not currently set up.  Do we need to keep this functionality?
+
+            elif self.params['day_ahead_schedule_from'] == 'calculated' and self.date_for_current_day_schedule != date_today:   # The schedule stored in current_day_schedule is not for today (or one doesn't exist)
+                if self.date_for_next_day_schedule == date_today:    # Schedule stored in next_day_schedule is for today
+                    self.current_day_schedule = deepcopy(self.next_day_schedule)
+                    self.date_for_current_day_schedule = self.date_for_next_day_schedule
+                    self.next_day_schedule = []
+                    self.date_for_next_day_schedule = None
+                else:
+                    self.current_day_schedule = []
+                    self.date_for_current_day_schedule = None
+
+        #--- Run ssc for dispatch estimates
+        npts_horizon = int(horizon* nph)
+        ssc_estimates = f_estimates_for_dispatch_model(
+            plant_state = self.plant.state,
+            datetime_start = datetime_start,
+            horizon = horizon,     
+            weather_dataframe = weather_dataframe,
+        )
+
+        if 'clearsky' not in ssc_estimates or max(ssc_estimates['clearsky']) < 1.e-3:   # Clear-sky data wasn't passed through ssc (likely because ssc controlled from actual DNI)
+            ssc_estimates['clearsky'] = clearsky
+
+
+        #--- Create dispatch optimization model inputs for this time horizon using ssc estimates
+        include_day_ahead_in_dispatch = len(self.current_day_schedule)>0  # Only use day ahead schedule in dispatch model if one exists
+        dispatch_model_inputs = self.setup_dispatch_model(
+            datetime_start = datetime_start, 
+            ssc_estimates = ssc_estimates,
+            horizon = horizon,      
+            dispatch_steplength_array = self.params['dispatch_steplength_array'],
+            dispatch_steplength_end_time = dispatch_steplength_end_time,
+            clearsky_data = clearsky,
+            price = self.price_data[startpt:startpt+npts_horizon],          # [$/MWh] Update prices for this horizon
+            ursd0 = ursd0,
+            yrsd0 = yrsd0
+        )
+
+        #--- Run dispatch optimization 
+        include = {"pv": False, "battery": False, "persistence": False, "force_cycle": False, "op_assumptions": False,
+                    "signal":include_day_ahead_in_dispatch, "simple_receiver": False}
             
-        # Don't include day-ahead schedule if one hasn't been calculated yet, or if there is no NVE schedule available on this day
-        if ((toy - start_time)/3600 < 24 and self.day_ahead_schedule_from == 'calculated') or (self.day_ahead_schedule_from == 'NVE' and self.current_day_schedule == None):  
-            include_day_ahead_in_dispatch = False
-        else:
-            include_day_ahead_in_dispatch = self.use_day_ahead_schedule
+        dispatch_soln = run_dispatch_model(dispatch_model_inputs, include)
 
-        #--- Run dispatch optimization (if relevant)
-        if self.is_optimize:
+        #--- Populate results
+        if dispatch_soln:    # Dispatch model was successful
+            Rdisp_all = dispatch_soln.get_solution_at_ssc_steps(self.dispatch_params, sscstep/3600., horizon)
+            Rdisp = {'disp_'+key:value for key,value in Rdisp_all.items() if key in retvars}
 
-            #--- Run ssc for dispatch estimates: (using weather forecast time resolution for weather data and specified ssc time step)
-            npts_horizon = int(horizon* nph)
-            R_est = f_estimates_for_dispatch_model(
-                plant_state = self.plant.state,
-                datetime_start = start_date,
-                horizon = horizon,     
-                weather_dataframe = weather_dataframe,
-                N_pts_horizon = npts_horizon,
-                clearsky_data = clearsky_data_padded,
-                start_pt = startpt
-            )
+            # Update calculated schedule for next day (if relevant). Assume schedule must be committed within 1hr of designated time (arbitrary...)
+            if self.params['use_day_ahead_schedule'] and self.params['day_ahead_schedule_from'] == 'calculated':
+                if tod/3600 >= self.params['day_ahead_schedule_time'] and tod/3600 < self.params['day_ahead_schedule_time']+1:            # Within the time window to commit next-day schedule
+                    if len(self.next_day_schedule)==0 or self.date_for_next_day_schedule != date_today + datetime.timedelta(hours = 24):  # Next-day schedule doesn't already exist (or one exists, but is left-over from a different day)
+                        self.next_day_schedule = get_day_ahead_schedule(
+                            day_ahead_schedule_steps_per_hour = self.params['day_ahead_schedule_steps_per_hour'],
+                            Delta = self.dispatch_params.Delta,
+                            Delta_e = self.dispatch_params.Delta_e,
+                            net_electrical_output = dispatch_soln.net_electrical_output,
+                            day_ahead_schedule_time = self.params['day_ahead_schedule_time']
+                            )
+                        if len(self.next_day_schedule)>0:
+                            self.date_for_next_day_schedule = date_today + datetime.timedelta(hours = 24)
 
-            #--- Set dispatch optimization properties for this time horizon using ssc estimates
-            disp_in = setup_dispatch_model(
-                R_est = R_est,
-                freq = freq,
-                horizon = horizon,      
-                include_day_ahead_in_dispatch = include_day_ahead_in_dispatch,
-                dispatch_params = self.dispatch_params,
-                dispatch_steplength_array = self.dispatch_steplength_array,
-                dispatch_steplength_end_time = self.dispatch_steplength_end_time,
-                dispatch_horizon = self.dispatch_horizon,
-                plant = self.plant,
-                nonlinear_model_time = self.nonlinear_model_time,
-                use_linear_dispatch_at_night = self.use_linear_dispatch_at_night,
-                clearsky_data = clearsky_data_padded,
-                night_clearky_cutoff = self.night_clearsky_cutoff,
-                disp_time_weighting = self.disp_time_weighting,
-                price = self.price_data[startpt:startpt+npts_horizon],          # [$/MWh] Update prices for this horizon
-                sscstep = sscstep,
-                avg_price = self.avg_price,
-                avg_price_disp_storage_incentive = self.avg_price_disp_storage_incentive,
-                avg_purchase_price = self.avg_purchase_price,
-                day_ahead_tol_plus = self.day_ahead_tol_plus,
-                day_ahead_tol_minus = self.day_ahead_tol_minus,
-                startpt = startpt,
-                toy = toy,
-                tod = tod,
-                current_day_schedule = self.current_day_schedule,
-                day_ahead_pen_plus = self.day_ahead_pen_plus,
-                day_ahead_pen_minus = self.day_ahead_pen_minus,
-                night_clearsky_cutoff = self.night_clearsky_cutoff,
-                ursd_last = ursd_last,
-                yrsd_last = yrsd_last
-            )
+            #--- Set ssc dispatch targets
+            ssc_dispatch_targets = DispatchTargets(dispatch_soln, self.plant, self.dispatch_params, sscstep, ssc_horizon.total_seconds()/3600.)
 
-            include = {"pv": False, "battery": False, "persistence": False, "force_cycle": False, "op_assumptions": False,
-                        "signal":include_day_ahead_in_dispatch, "simple_receiver": False}
-                
-            dispatch_soln = run_dispatch_model(disp_in, include)
+            #--- Get shut-down state parameters at the point in time in this dispatch solution when the next dispatch call will occur (stand-in for plant state as ssc does not model reciever shutdown)
+            # TODO: should eventually remove this is favor of data from plant database (if possible)... shut down state from dispatch model won't match real life unless real plant follows this schedule
+            # Note these are only important if shutdown requirements (plant.design['rec_sd_delay'] and plant.design['q_rec_shutdown_fraction']) are nonzero
+            self.ursd0 = dispatch_soln.get_value_at_time(self.dispatch_params, update_interval, 'ursd')      # set to False when it doesn't exist 
+            self.yrsd0 = dispatch_soln.get_value_at_time(self.dispatch_params, update_interval, 'yrsd')      # set to False when it doesn't exist
 
-            # Populate results
-            if self.is_optimize:
-                retvars += vars(DispatchTargets()).keys()
-            if dispatch_soln is not None:
-                Rdisp_all = dispatch_soln.get_solution_at_ssc_steps(self.dispatch_params, sscstep/3600., freq/3600.)
-                Rdisp = {'disp_'+key:value for key,value in Rdisp_all.items() if key in retvars}
 
-                # TODO: make the time triggering more robust; shouldn't be an '==' as the program may be offline at the time or running at intervals
-                #  that won't exactly hit it
-                if self.use_day_ahead_schedule and self.day_ahead_schedule_from == 'calculated' and tod/3600 == self.day_ahead_schedule_time:
-                    self.next_day_schedule = get_day_ahead_schedule(
-                        day_ahead_schedule_steps_per_hour = self.day_ahead_schedule_steps_per_hour,
-                        Delta = self.dispatch_params.Delta,
-                        Delta_e = self.dispatch_params.Delta_e,
-                        net_electrical_output = dispatch_soln.net_electrical_output,
-                        day_ahead_schedule_time = self.day_ahead_schedule_time
-                        )
-
-                    weather_at_day_ahead_schedule = get_weather_at_day_ahead_schedule(weather_dataframe, startpt, npts_horizon)
-                    self.weather_at_schedule.append(weather_at_day_ahead_schedule)  # Store weather used at the point in time the day ahead schedule was generated
-
-                #--- Set ssc dispatch targets
-                ssc_dispatch_targets = DispatchTargets(dispatch_soln, self.plant, self.dispatch_params, sscstep, freq/3600.)
-
-                #--- Save these values for next estimates
-                ursd_last = dispatch_soln.get_value_at_time(self.dispatch_params, freq/3600, 'ursd')      # set to False when it doesn't exists 
-                yrsd_last = dispatch_soln.get_value_at_time(self.dispatch_params, freq/3600, 'yrsd')      # set to False when it doesn't exists
-
-            else:  # Infeasible solution was returned, revert back to running ssc without dispatch targets
-                Rdisp = None
-                ssc_dispatch_targets = None
-
-        tod = int(util.get_time_of_day(self.start_date))
-        if tod == 0 and self.use_day_ahead_schedule and self.day_ahead_schedule_from == 'calculated':
-            self.current_day_schedule = [s for s in self.next_day_schedule]
-            self.schedules.append(self.current_day_schedule)
+        else:  # Infeasible solution was returned, revert back to running ssc without dispatch targets
+            Rdisp = None
+            ssc_dispatch_targets = None
 
         dispatch_outputs = {
             'ssc_dispatch_targets': ssc_dispatch_targets,
             'Rdisp': Rdisp,
-            'ursd_last': ursd_last,
-            'yrsd_last': yrsd_last,
-            'schedules': list(self.schedules),
 	        'current_day_schedule': list(self.current_day_schedule),
 	        'next_day_schedule': list(self.next_day_schedule)
         }
 
-        # Read NVE schedules (if not already read during rolling horizon calculations)
-        if self.is_optimize == False and self.use_day_ahead_schedule and self.day_ahead_schedule_from == 'NVE':
-            for j in range(self.sim_days):
-                date = datetime.datetime(self.start_date.year, self.start_date.month, self.start_date.day + j)
-                dispatch_outputs['schedules'].append(self.get_CD_NVE_day_ahead_schedule(date))
+        self.results = dispatch_outputs
 
         return dispatch_outputs
 
 
+    def get_nonlinear_horizon(self, clearsky_data):
+        nonlinear_time = self.params['nonlinear_model_time']   # Nominal time horizon for nonlinear model (hr)
+        if self.params['use_linear_dispatch_at_night']:
+            endpt = int(nonlinear_time * self.params['time_steps_per_hour'])  # Last point in clear-sky array corresponding to nonlinear portion of dispatch model
+            if clearsky_data[0:endpt].max() <= self.params['night_clearsky_cutoff']:
+                nonlinear_time = 0.0
+        return nonlinear_time
 
-def reupdate_ssc_constants(D, params):
-    #D['solar_resource_data'] = params['solar_resource_data']
-    D['dispatch_factors_ts'] = params['dispatch_factors_ts']
+    def setup_dispatch_model(self, datetime_start, ssc_estimates, horizon, dispatch_steplength_array, dispatch_steplength_end_time,
+        clearsky_data, price, ursd0, yrsd0):
+        '''horizon in [hr]'''
+        #--- Set dispatch optimization properties for this time horizon using ssc estimates
 
-    D['ppa_multiplier_model'] = params['ppa_multiplier_model']
-    D['time_steps_per_hour'] = params['time_steps_per_hour']
-    D['is_rec_model_trans'] = params['is_rec_model_trans']
-    D['is_rec_startup_trans'] = params['is_rec_startup_trans']
-    D['rec_control_per_path'] = params['rec_control_per_path']
-    D['field_model_type'] = params['field_model_type']
-    D['eta_map_aod_format'] = params['eta_map_aod_format']
-    D['is_rec_to_coldtank_allowed'] = params['is_rec_to_coldtank_allowed']
-    D['is_dispatch'] = params['is_dispatch']
-    D['is_dispatch_targets'] = params['is_dispatch_targets']
+        tod = int(get_time_of_day(datetime_start))                     # Current time of day (s) 
+        sscstep = 3600/int(self.params['time_steps_per_hour'])         # ssc time step (s)
 
-    #--- Set field control parameters
-    if params['control_field'] == 'CD_data':
-        D['rec_su_delay'] = params['rec_su_delay']
-        D['rec_qf_delay'] = params['rec_qf_delay']
+        #--- Set time steps for dispatch model
+        nonlinear_time = self.get_nonlinear_horizon(clearsky_data)  # Get time horizon for nonlinear model (this is not used as of 6/2021, only the linear model is currently available)
+        self.dispatch_params.set_dispatch_time_arrays(dispatch_steplength_array, dispatch_steplength_end_time,
+            horizon, nonlinear_time, self.params['disp_time_weighting'])    
 
-    #--- Set receiver control parameters
-    if params['control_receiver'] == 'CD_data':
-        D['is_rec_user_mflow'] = params['is_rec_user_mflow']
-        D['rec_su_delay'] = params['rec_su_delay']
-        D['rec_qf_delay'] = params['rec_qf_delay']
-    elif params['control_receiver'] == 'ssc_clearsky':
-        D['rec_clearsky_fraction'] = params['rec_clearsky_fraction']
-        D['rec_clearsky_model'] = params['rec_clearsky_model']
-        D['rec_clearsky_dni'] = params['clearsky_data'].tolist()
-    elif params['control_receiver'] == 'ssc_actual_dni':
-        D['rec_clearsky_fraction'] = params['rec_clearsky_fraction']
-
-    return
-
-
-
-def setup_dispatch_model(R_est, freq, horizon, include_day_ahead_in_dispatch,
-    dispatch_params, plant, nonlinear_model_time, use_linear_dispatch_at_night,
-    clearsky_data, night_clearky_cutoff, dispatch_steplength_array, dispatch_steplength_end_time,
-    disp_time_weighting, price, sscstep, avg_price, avg_price_disp_storage_incentive,
-    avg_purchase_price, day_ahead_tol_plus, day_ahead_tol_minus, startpt, toy,
-    tod, current_day_schedule, day_ahead_pen_plus, day_ahead_pen_minus,
-    dispatch_horizon, night_clearsky_cutoff, ursd_last, yrsd_last):
-
-    #--- Set dispatch optimization properties for this time horizon using ssc estimates
-    ##########
-    ##  There's already a lot of the dispatch_params member variables set here, which set_initial_state draws from
-    ##########
-    # Initialize dispatch model inputs
-    dispatch_params.set_dispatch_time_arrays(dispatch_steplength_array, dispatch_steplength_end_time,
-        dispatch_horizon, nonlinear_model_time, disp_time_weighting)
-    dispatch_params.set_fixed_parameters_from_plant_design(plant)
-    dispatch_params.set_default_grid_limits()
-    dispatch_params.disp_time_weighting = disp_time_weighting
-    dispatch_params.set_initial_state(plant)  # Set initial plant state for dispatch model
-    
-    # Update approximate receiver shutdown state from previous dispatch solution (not returned from ssc)
-    dispatch_params.set_approximate_shutdown_state_parameters(plant.state, ursd = ursd_last, yrsd = yrsd_last)  # Set initial state parameters related to shutdown from dispatch model (because this cannot be derived from ssc)
-
-    nonlinear_time = nonlinear_model_time # Time horizon for nonlinear model (hr)
-    if use_linear_dispatch_at_night:
-        endpt = int((toy + nonlinear_time*3600) / sscstep)  # Last point in annual arrays at ssc time step resolution corresponding to nonlinear portion of dispatch model
-        if clearsky_data[startpt:endpt].max() <= night_clearsky_cutoff:
-            nonlinear_time = 0.0
-
-    dispatch_params.set_dispatch_time_arrays(dispatch_steplength_array, dispatch_steplength_end_time, horizon, nonlinear_time, disp_time_weighting)
-    dispatch_params.set_default_grid_limits()
-    dispatch_params.P = util.translate_to_variable_timestep([p/1000. for p in price], sscstep/3600., dispatch_params.Delta)  # $/kWh
-    dispatch_params.avg_price = avg_price/1000.
-    dispatch_params.avg_price_disp_storage_incentive = avg_price_disp_storage_incentive / 1000.  # $/kWh  # Only used in storage inventory incentive -> high values cause the solutions to max out storage rather than generate electricity
-    dispatch_params.avg_purchase_price = avg_purchase_price/1000    # $/kWh 
-    dispatch_params.day_ahead_tol_plus = day_ahead_tol_plus*1000    # kWhe
-    dispatch_params.day_ahead_tol_minus = day_ahead_tol_minus*1000  # kWhe
-
-    dispatch_params.set_estimates_from_ssc_data(plant.design, R_est, sscstep/3600.) 
-    
-    
-    #--- Set day-ahead schedule in dispatch parameters
-    if include_day_ahead_in_dispatch:  
-        day_ahead_horizon = 24 - int(tod/3600)   # Number of hours of day-ahead schedule to use.  This probably only works in the dispatch model if time horizons are updated at integer multiples of an hour
-        use_schedule = [current_day_schedule[s]*1000 for s in range(24-day_ahead_horizon, 24)]   # kWhe
-        dispatch_params.set_day_ahead_schedule(use_schedule, day_ahead_pen_plus/1000, day_ahead_pen_minus/1000)
+        #--- Set plant design and plant state in dispatch parameters
+        self.dispatch_params.set_fixed_parameters_from_plant_design(self.plant)  # Only uses fixed plant design parameters and not plant state parameters, could be moved
+        self.dispatch_params.set_initial_state(self.plant)                       # TODO: Make sure plant includes plant_state at this point  plant or plant.state?
+        self.dispatch_params.disp_time_weighting = self.params['disp_time_weighting']
         
+        #--- Update approximate receiver shutdown state from previous dispatch solution (not returned from ssc)
+        self.dispatch_params.set_approximate_shutdown_state_parameters(self.plant.state, ursd = ursd0, yrsd = yrsd0)  # Set initial state parameters related to shutdown from dispatch model (because this cannot be derived from ssc)
+    
+        #--- Set time-indexed parameters in dispatch inputs
+        self.dispatch_params.set_default_grid_limits()
+        self.dispatch_params.P = translate_to_variable_timestep([p/1000. for p in price], sscstep/3600., self.dispatch_params.Delta)  # $/kWh
+        self.dispatch_params.avg_price = self.params['avg_price']/1000.
+        self.dispatch_params.avg_price_disp_storage_incentive = self.params['avg_price_disp_storage_incentive'] / 1000.  # $/kWh  # Only used in storage inventory incentive -> high values cause the solutions to max out storage rather than generate electricity
+        self.dispatch_params.avg_purchase_price = self.params['avg_purchase_price']/1000    # $/kWh 
+        self.dispatch_params.day_ahead_tol_plus = self.params['day_ahead_tol_plus']*1000    # kWhe
+        self.dispatch_params.day_ahead_tol_minus = self.params['day_ahead_tol_minus']*1000  # kWhe
 
-    #--- Create copy of params, and convert all lists and numpy arrays into dicts, where each value has a key equal to the index + 1
-    disp_in = dispatch_params.copy_and_format_indexed_inputs()     # dispatch.DispatchParams object
+        self.dispatch_params.set_estimates_from_ssc_data(self.plant, ssc_estimates, sscstep/3600.) 
+        
+        #--- Set day-ahead schedule in dispatch parameters
+        if len(self.current_day_schedule)>0:
+            day_ahead_horizon = 24 - int(tod/3600)   # Number of hours of day-ahead schedule to use.  This probably only works in the dispatch model if time horizons are updated at integer multiples of an hour
+            use_schedule = [self.current_day_schedule[s]*1000 for s in range(24-day_ahead_horizon, 24)]   # kWhe
+            self.dispatch_params.set_day_ahead_schedule(use_schedule, self.params['day_ahead_pen_plus']/1000, self.params['day_ahead_pen_minus']/1000)
+            
+        #--- Create copy of params, and convert all lists and numpy arrays into dicts, where each value has a key equal to the index + 1 (required format for pyomo dispatch model)
+        dispatch_model_inputs = self.dispatch_params.copy_and_format_indexed_inputs()     
+        dispatch_model_inputs.transition = 0   #Transition index between nonlinear/linear models. TODO: Once nonlinear model is available, need to update this to correspond to nonlinear_time 
 
-    return disp_in
+        return dispatch_model_inputs
 
 
-def run_dispatch_model(disp_in, include, transition=0):
-    disp_in.transition = transition
-    rt = dispatch_model.RealTimeDispatchModel(disp_in, include)
+
+def run_dispatch_model(dispatch_model_inputs, include):
+    rt = dispatch_model.RealTimeDispatchModel(dispatch_model_inputs, include)
     rt_results = rt.solveModel()
     
     if rt_results.solver.termination_condition == TerminationCondition.infeasible:
@@ -1303,12 +1168,135 @@ def get_day_ahead_schedule(day_ahead_schedule_steps_per_hour, Delta, Delta_e, ne
         diff = np.abs(disp_steps[inds] - day_ahead_step)
         next_day_schedule = wnet[inds]
         if diff.max() > 1.e-3:
-            next_day_schedule = util.translate_to_fixed_timestep(wnet[inds], disp_steps[inds], day_ahead_step) 
+            next_day_schedule = translate_to_fixed_timestep(wnet[inds], disp_steps[inds], day_ahead_step) 
         return next_day_schedule
     else:
-        return None
+        return []
 
 
 def get_weather_at_day_ahead_schedule(weather_df, npts_horizon):
     return {k: list(weather_df[k][0:npts_horizon])  for k in ['DNI', 'Temperature', 'Wind Speed']}
+
+
+def calculate_time_steps(horizon, step_size, target_step_end_time):
+    # Set number of each dispatch time step to maintain the largest number of each step (within the target number of steps), subject to integer requirements on the number of steps of each duration
+    # Assumes: (1) All time step lengths are an integer multiple of the shortest time step
+    #          (2) horizon is an integer multiple of the smallest time step size
+    #          (2) Step sizes increase monotonically
+    
+    target_steps, steps, end_time = [np.zeros_like(step_size) for j in range(3)]
+    for j in range(len(step_size)):
+        start = 0 if j == 0 else target_step_end_time[j-1]
+        target_steps[j] = int((target_step_end_time[j] - start) / step_size[j])   # Target number of steps of each length
+        
+    remaining_horizon = horizon
+    for j in range(len(step_size)-1):
+        n2 = (remaining_horizon - step_size[j]*target_steps[j]) / step_size[j+1]  # Number of steps (s+1) within remaining horizon after target number of steps (s)
+        n = int((remaining_horizon - ceil(n2)*step_size[j+1]) / step_size[j])     # Number of steps (s) that are possible to maintain integer number of remaining steps
+        steps[j] = n
+        start = 0 if j == 0 else end_time[j-1]
+        end_time[j] = start + n*step_size[j]
+        remaining_horizon -= n * step_size[j]     
+    steps[-1] = int(remaining_horizon / step_size[-1])
+    end_time[-1] = end_time[-2] + steps[-1]* step_size[-1]
+    if horizon != end_time[-1]:
+        print ('WARNING: Dispatch model time step arrays do not match required horizon')
+    return end_time.tolist()
+
+
+
+
+def get_time_of_day(date):
+    return (date- datetime.datetime(date.year,date.month,date.day,0,0,0)).total_seconds()
+        
+def get_time_of_year(date):
+    return (date - datetime.datetime(date.year,1,1,0,0,0)).total_seconds()
+
+# Update annual array to a new timestep (assuming integer multiple of new timesteps in old timestep or vice versa)
+def translate_to_new_timestep(data, old_timestep, new_timestep):
+    n = len(data)
+    if new_timestep > old_timestep:  # Average over consecutive timesteps
+        nperavg = int(new_timestep / old_timestep)
+        nnew = int(n/nperavg)
+        newdata = np.reshape(np.array(data), (nnew, nperavg)).mean(1)
+    else:  # Repeat consecutive timesteps
+        nrepeat = int(old_timestep / new_timestep)
+        newdata = np.repeat(data, nrepeat)
+    return newdata.tolist()
+
+# Translate arrays from a fixed timestep (dt_fixed) to variable timestep (dt_var)
+# Assumes that all variable timesteps are an integer multiple of the fixed timstep, or vice versa, and that end points of fixed and variable timesteps coincide
+def translate_to_variable_timestep(data, dt_fixed, dt_var):
+    n = len(dt_var)  
+    dt_fixed_sec = int(ceil(dt_fixed*3600 - 0.0001))
+    data_var = np.zeros(n)
+    s = 0
+    j = 0
+    while j<n:
+        dt_sec = int(ceil(dt_var[j]*3600 - 0.0001))
+        if dt_sec > dt_fixed_sec:  # Variable timestep is larger than fixed timestep, apply average of all fixed timesteps contained within the variable timestep
+            n_fixed_per_var = int(dt_sec / dt_fixed_sec)
+            for i in range(n_fixed_per_var):
+                data_var[j] += data[s+i]/n_fixed_per_var 
+            j +=1
+            s += n_fixed_per_var
+        else:  # Variable timestep is shorter than fixed timestep, repeat fixed timestep value for all variable timesteps within the interval
+            t = 0
+            while t < dt_fixed_sec - 0.0001:
+                data_var[j] = data[s]
+                t += dt_var[j]*3600
+                j+=1
+            s+=1
+    return data_var
+
+
+# Translate arrays from a variable timestep (dt_var) to a fixed timestep (dt_fixed)
+# Assumes that all variable timesteps are an integer multiple of the fixed timstep, or vice versa, and that end points of fixed and variable timesteps coincide
+def translate_to_fixed_timestep(data, dt_var, dt_fixed):
+    n = len(dt_var)
+    dte = np.cumsum(dt_var)  
+    dt_fixed_sec = int(ceil(dt_fixed*3600 - 0.0001))
+    horizon = int(ceil(dte[-1]* 3600 - 0.0001))  # Full dispatch time horizon (s)
+    n_fixed = int(horizon / dt_fixed_sec)  # Number of fixed time steps in horizon
+    data_fixed = np.zeros(n_fixed)
+    s = 0
+    j = 0
+    while j<n:
+        dt_sec = int(ceil(dt_var[j]*3600 - 0.0001))
+        if dt_sec >= dt_fixed_sec:  # Variable timestep is larger than fixed timestep, repeat value at variable timestep for each fixed timestep in the interval
+            n_per_var = int(dt_sec / dt_fixed_sec)  
+            for i in range(n_per_var):
+                data_fixed[s+i] = data[j]
+            s += n_per_var 
+            j+=1
+
+        else:  # Fixed timestep is larger than variable timestep, apply average of all variable timesteps contained within fixed timestep
+            t = 0
+            while t < dt_fixed_sec - 0.0001:
+                data_fixed[s] += data[j] * (dt_var[j] / dt_fixed)
+                t += dt_var[j]*3600
+                j+=1
+            s+=1
+    return data_fixed
+
+def interpret_user_defined_cycle_data(ud_ind_od):
+    data = np.array(ud_ind_od)
+        
+    i0 = 0
+    nT = np.where(np.diff(data[i0::,0])<0)[0][0] + 1 
+    Tpts = data[i0:i0+nT,0]
+    mlevels = [data[j,1] for j in [i0,i0+nT,i0+2*nT]]
+    
+    i0 = 3*nT
+    nm = np.where(np.diff(data[i0::,1])<0)[0][0] + 1 
+    mpts = data[i0:i0+nm,1]
+    Tamblevels = [data[j,2] for j in [i0,i0+nm,i0+2*nm]]
+    
+    i0 = 3*nT + 3*nm
+    nTamb = np.where(np.diff(data[i0::,2])<0)[0][0] + 1 
+    Tambpts = data[i0:i0+nTamb,2]
+    Tlevels = [data[j,0] for j in [i0,i0+nm,i0+2*nm]]
+    
+    return {'nT':nT, 'Tpts':Tpts, 'Tlevels':Tlevels, 'nm':nm, 'mpts':mpts, 'mlevels':mlevels, 'nTamb':nTamb, 'Tambpts':Tambpts, 'Tamblevels':Tamblevels}
+
 

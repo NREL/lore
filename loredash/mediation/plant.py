@@ -13,7 +13,7 @@ import numpy as np
 import pandas as pd
 import datetime, rapidjson
 
-from mediation import data_validator, util
+from mediation import data_validator
 
 class Plant:
     """Represents a real plant. Includes attributes that characterize the plant or
@@ -122,13 +122,10 @@ class Plant:
 
         FIELD_AVAIL_DAYS_GENERATED = 365
         steps_per_hour = int(1/(timestep.total_seconds()/3600))
-        field_availability = util.get_field_availability_adjustment(
-            steps_per_hour=steps_per_hour,
-            year=2018,
-            control_field='ssc',
-            use_CD_measured_reflectivity=False,
-            plant_design=self.design.copy(),
-            fixed_soiling_loss=0.02)
+
+        fixed_soiling_loss=0.02
+        field_availability = (fixed_soiling_loss * 100 * np.ones(steps_per_hour*24*365)).tolist()  
+
         assert(len(field_availability) == steps_per_hour * 24 * FIELD_AVAIL_DAYS_GENERATED)
         df = pd.DataFrame(field_availability, columns=['field_availability'])
         df.index = pd.date_range(start=datetime_start,
