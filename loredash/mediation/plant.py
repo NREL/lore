@@ -123,7 +123,7 @@ class Plant:
         FIELD_AVAIL_DAYS_GENERATED = 365
         steps_per_hour = int(1/(timestep.total_seconds()/3600))
 
-        fixed_soiling_loss=0.02
+        fixed_soiling_loss = 0.02       # TODO: move this constant to the plant config file
         field_availability = (fixed_soiling_loss * 100 * np.ones(steps_per_hour*24*365)).tolist()  
 
         assert(len(field_availability) == steps_per_hour * 24 * FIELD_AVAIL_DAYS_GENERATED)

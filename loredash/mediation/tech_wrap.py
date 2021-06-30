@@ -28,8 +28,8 @@ class TechWrap:
         self.ssc.set(plant.design)      # Updating from plant.design last to overwrite any plant design defaults in params
         self.set_weather_data(tmy_file_path=weather_file)
 
-        if (__name__ == "__main__" or settings.DEBUG) == True:
-            self._set_design_from_file(self.design_path)            # only used for debugging to avoid recalculating flux maps
+        # if (__name__ == "__main__" or settings.DEBUG) == True:
+        #     self._set_design_from_file(self.design_path)            # only used for debugging to avoid recalculating flux maps
 
     def calc_flux_eta_maps(self, plant_design, plant_state):
         """Compute the flux and eta maps and assign them to the ssc model parameters, first getting the needed solar resource data"""
@@ -52,8 +52,8 @@ class TechWrap:
         flux_eta_maps = {'eta_map': eta_map, 'flux_maps': flux_maps, 'A_sf_in': A_sf_in}
         self.ssc.set(flux_eta_maps)
         
-        if __name__ == "__main__" or settings.DEBUG is True:
-            self._save_design_to_file()
+        # if __name__ == "__main__" or settings.DEBUG is True:
+        #     self._save_design_to_file()
 
         return flux_eta_maps
 

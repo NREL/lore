@@ -45,7 +45,8 @@ def validate(values, schema, **kwargs):
     """
 
     try:
-        update = settings.DEBUG    # don't let missing required variables cause a failure while debugging
+        # update = settings.DEBUG    # don't let missing required variables cause a failure while debugging
+        update = False
     except:
         update = True       # set to true if not calling from Django framework
 
