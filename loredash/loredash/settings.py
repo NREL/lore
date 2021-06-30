@@ -23,9 +23,9 @@ DEBUG = True
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 if DEBUG is True:
-    DOTENV_FILE = 'dev.env'
+    DOTENV_FILE = 'config/dev.env'
 else:
-    DOTENV_FILE = 'prod.env'
+    DOTENV_FILE = 'config/prod.env'
 env_config = Config(RepositoryEnv(os.path.join(BASE_DIR, DOTENV_FILE)))
 
 

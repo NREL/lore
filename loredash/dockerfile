@@ -47,6 +47,7 @@ ENV PATH="${SITE_DIR}.local/bin:${PATH}"
 COPY --chown=app:app . ${SITE_DIR}
 
 # Remove the config/ directory that was just copied as this will be bind mounted later
+# TODO: add this to a .dockerignore file instead
 RUN rm -rf config
 
 # Add all sub-directory group permissions (g+s) the same as base directory so new
