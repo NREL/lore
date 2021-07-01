@@ -12,12 +12,17 @@ For suitable production settings
 https://docs.djangoproject.com/en/2.2/howto/deployment/checklist/
 """
 
-import os
+import os, sys
 from decouple import Config, RepositoryEnv
 
 # SECURITY WARNING: don't run with debug turned on in production!
 # Toggle DEBUG to False to change to production settings
 DEBUG = True
+
+RUNNING_DEVSERVER = (len(sys.argv) > 1 and sys.argv[1] == 'runserver')
+
+if RUNNING_DEVSERVER == False:
+    DEBUG = False
 
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

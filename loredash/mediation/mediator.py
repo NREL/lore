@@ -9,12 +9,28 @@ import pandas as pd
 from pandas.tseries.frequencies import to_offset
 import numpy as np
 import rapidjson
+from pathlib import Path
 
 from data.mspt_2020_defaults import default_ssc_params
 from mediation import tech_wrap, data_validator, dispatch_wrap, models, forecasts
 import mediation.plant as plant_
 from mediation.plant import Revenue
 
+def init_and_mediate():
+    parent_dir = str(Path(__file__).parents[1])
+    default_weather_file = parent_dir + "/data/daggett_ca_34.865371_-116.783023_psmv3_60_tmy.csv"
+    plant_design_path = parent_dir + "/config/plant_design.json"
+    m = Mediator(
+        params=mediator_params,
+        plant_design_path=plant_design_path,
+        weather_file=default_weather_file,
+        update_interval=datetime.timedelta(seconds = 5),
+    )
+    result = m.model_previous_day_and_add_to_db()
+    # datetime_start = m.get_current_plant_time()
+    # datetime_end = datetime_start + datetime.timedelta(hours=48)
+    # result = m.run_once(datetime_start, datetime_end)
+    return
 class Mediator:
     tech_wrap = None
 

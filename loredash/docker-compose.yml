@@ -41,6 +41,7 @@ services:
             app_net:
                 ipv4_address: 10.10.10.10
         command: sh -c "python manage.py collectstatic --noinput &&
+                        python manage.py run_lore &&
                         gunicorn loredash.wsgi:application --bind 10.10.10.10:8000 --timeout 24000"
         container_name: dashboard
         volumes:

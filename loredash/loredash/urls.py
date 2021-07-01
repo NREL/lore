@@ -17,58 +17,10 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
-from pathlib import Path
-import datetime
-import multiprocessing
 from pyinstrument import Profiler       # can also profile Django, see: https://github.com/joerick/pyinstrument
+import multiprocessing
 
 from mediation import mediator
-import mediation.plant as plant_
-
-RUN_PROFILER = False
-
-# TODO: Ensure database migration happens before this code is run. It is currently
-# run on a 'migrate', which initially fails because no database has yet been created.
-def init_and_mediate():
-    parent_dir = str(Path(__file__).parents[1])
-    default_weather_file = parent_dir + "/data/daggett_ca_34.865371_-116.783023_psmv3_60_tmy.csv"
-    plant_design_path = parent_dir + "/config/plant_design.json"
-    m = mediator.Mediator(
-        params=mediator.mediator_params,
-        plant_design_path=plant_design_path,
-        weather_file=default_weather_file,
-        update_interval=datetime.timedelta(seconds = 5),
-    )
-    result = m.model_previous_day_and_add_to_db()
-    # datetime_start = m.get_current_plant_time()
-    # datetime_end = datetime_start + datetime.timedelta(hours=48)
-    # result = m.run_once(datetime_start, datetime_end)
-    return
-
-if RUN_PROFILER:
-    profiler = Profiler()
-    profiler.start()
-
-try:
-    init_and_mediate()
-except OSError as err:
-    print("ERROR: OS error: {0}".format(err))
-except Exception as err:
-    print("ERROR: {0}".format(err))
-
-if RUN_PROFILER:
-    profiler.stop()
-    profiler.open_in_browser()
-
-# This is the main production code where the mediator runs continuously
-# update_interval = 10     # seconds
-# p = multiprocessing.Process(target=mediator.MediateContinuously, args=(update_interval,))
-# p.start()
-
-# This code adds another simultaneous mediate process (although likely not needed):
-# p = multiprocessing.Process(target=mediator.MediateContinuously, args=(1,))
-# p.start()
-# ===/initialization=========================================================================
 
 urlpatterns = [
     path('', include('ui.urls')),
@@ -77,3 +29,32 @@ urlpatterns = [
 
 if settings.DEBUG is True:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+
+
+# -- Initialization code, needed here in urls.py or it will be run twice, one of which by the bokeh server--
+RUN_PROFILER = False
+
+if settings.RUNNING_DEVSERVER == True:
+    if RUN_PROFILER:
+        profiler = Profiler()
+        profiler.start()
+
+    try:
+        mediator.init_and_mediate()
+    except OSError as err:
+        print("ERROR: OS error: {0}".format(err))
+    except Exception as err:
+        print("ERROR: {0}".format(err))
+
+    if RUN_PROFILER:
+        profiler.stop()
+        profiler.open_in_browser()
+
+    # This is the main production code where the mediator runs continuously
+    # update_interval = 10     # seconds
+    # p = multiprocessing.Process(target=mediator.MediateContinuously, args=(update_interval,))
+    # p.start()
+
+    # This code adds another simultaneous mediate process (although likely not needed):
+    # p = multiprocessing.Process(target=mediator.MediateContinuously, args=(1,))
+    # p.start()
