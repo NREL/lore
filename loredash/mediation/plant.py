@@ -20,6 +20,8 @@ class Plant:
     those used in preprocessing for calculating them. Also includes methods to determine
     the real plant state.
     """
+
+    # TODO: do these have everything needed from ssc?
     def __init__(self, design, initial_state):
         self.design = {}
         self.flux_maps = {
@@ -28,6 +30,9 @@ class Plant:
             'flux_maps':                            [],                                 # flux maps
         }
         self.state = {
+            """This is the current plant state, but it's usually only updated at the beginning
+            and end of a timestep. The names correspond to SSC inputs (hence the 'init's and 0's).
+            """
             # Field and receiver:
             'is_field_tracking_init':               False,                              # Is field tracking?
             'rec_op_mode_initial':                  0,                                  # Receiver operating mode
@@ -35,6 +40,7 @@ class Plant:
             'rec_startup_energy_remain_init':       0.,                                 # Receiver startup energy remaining (Wh)
             'disp_rec_persist0':                    0.,                                 # Time (hr) that receiver has been in its current state
             'disp_rec_off0':                        0.,                                 # Time (hr) that receiver has not been operating (off or startup)
+            # 'sf_adjust:hourly':                     [0],                                # Solar field adjustment factors  [not a state variable?]
             # TES:
             'T_tank_cold_init':                     0.,                                 # Cold tank temperature (C)
             'T_tank_hot_init':                      0.,                                 # Hot tank temperature (C)
@@ -45,10 +51,8 @@ class Plant:
             'pc_startup_energy_remain_initial':     0.,                                 # Cycle startup energy remaining (kWh)
             'disp_pc_persist0':                     0.,                                 # Time (hr) that cycle has been in its current state
             'disp_pc_off0':                         0.,                                 # Time (hr) that cycle has not been generating electric power (off, startup, or standby)
-            # TODO: these are cycle state variables?:
             'wdot0':                                0.,                                 # Cycle electricity generation (MWe)
             'qdot0':                                0.,                                 # Cycle thermal input (MWt)
-            'sf_adjust:hourly':                     [0],
         }
 
         self.set_design(design)
@@ -203,8 +207,8 @@ class Plant:
     def update_flux_maps(self, flux_eta_maps):
         self.flux_maps.update(flux_eta_maps)
 
-    #TODO: Are set_initial_state(), set_state() and update_state() all needed?
-    def update_state(self, cycle_results, new_plant_state_vars, ssc_time_step):
+    #TODO: Are set_initial_state() and set_state() both needed?
+    def calc_persistance_vars(self, cycle_results, ssc_time_step):
         """
         Inputs:
             self.state                          previous plant state
@@ -220,9 +224,6 @@ class Plant:
                 -P_cycle
                 -q_pb
                 -q_dot_pc_startup
-            new_plant_state_vars                gotten directly from the sim results
-                -rec_op_mode_initial
-                -pc_op_mode_initial
             ssc_time_step
 
         Outputs:
@@ -234,7 +235,7 @@ class Plant:
             # Receiver state persistence disp_rec_persist0
             #  set the respective is_rec_current array values true if their state is the same as the final/current state
             previous_rec_state = self.state['rec_op_mode_initial']  # Receiver state before start of most recent set of simulation calls
-            current_rec_state = new_plant_state_vars['rec_op_mode_initial']    # Receiver state at the end of the the most recent simulation call
+            current_rec_state = cycle_results['rec_op_mode_final'][-1]    # Receiver state at the end of the the most recent simulation call
             if current_rec_state== 2:     # On
                 is_rec_current = np.array(cycle_results['Q_thermal']) > 1.e-3
             elif current_rec_state == 1:  # Startup
@@ -252,7 +253,7 @@ class Plant:
         
         def disp_rec_off0():
             # Receiver state persistence disp_rec_off0
-            current_rec_state = new_plant_state_vars['rec_op_mode_initial']    # Receiver state at the end of the the most recent simulation call
+            current_rec_state = cycle_results['rec_op_mode_final'][-1]    # Receiver state at the end of the the most recent simulation call
             is_rec_not_on = np.array(cycle_results['Q_thermal']) <= 1.e-3  # Array of time points receiver is not generating thermal power
             n = len(cycle_results['Q_thermal'])
             if current_rec_state == 2:  # Receiver is on
@@ -267,12 +268,12 @@ class Plant:
         def disp_pc_persist0():
             # Cycle state persistence disp_pc_persist0
             previous_cycle_state = self.state['pc_op_mode_initial']   # Cycle state before start of most recent set of simulation calls
-            current_cycle_state = new_plant_state_vars['pc_op_mode_initial']  # Cycle state at the end of the the most recent simulation call
+            current_cycle_state = cycle_results['pc_op_mode_final'][-1]  # Cycle state at the end of the the most recent simulation call
             if current_cycle_state == 1: # On
                 is_pc_current = np.array(cycle_results['P_cycle']) > 1.e-3 
             elif current_cycle_state == 2: # Standby
                 is_pc_current = np.logical_and(np.logical_and(np.array(cycle_results['P_cycle'])<=1.e-3, np.array(cycle_results['q_pb'])>= 1.e-3), np.array(cycle_results['q_dot_pc_startup'])<=1.e-3)
-            elif current_cycle_state == 0 or new_plant_state_vars['pc_op_mode_initial'] == 4: # Startup
+            elif current_cycle_state == 0 or cycle_results['pc_op_mode_final'][-1] == 4: # Startup
                 is_pc_current = np.array(cycle_results['q_dot_pc_startup']) > 1.e-3
             elif current_cycle_state == 3:  # Off
                 is_pc_current = (np.array(cycle_results['q_dot_pc_startup']) + np.array(cycle_results['q_pb'])) <= 1.e-3
@@ -287,7 +288,7 @@ class Plant:
 
         def disp_pc_off0():
             # Cycle state persistence disp_pc_off0
-            current_cycle_state = new_plant_state_vars['pc_op_mode_initial']  # Cycle state at the end of the the most recent simulation call
+            current_cycle_state = cycle_results['pc_op_mode_final'][-1]  # Cycle state at the end of the the most recent simulation call
             is_pc_not_on = np.array(cycle_results['P_cycle']) <=1.e-3
             n = len(cycle_results['P_cycle'])
             if current_cycle_state == 1:  # Cycle is on
@@ -306,10 +307,7 @@ class Plant:
             'disp_pc_off0': disp_pc_off0()
             }
 
-        self.state.update(new_persistance_vars)
-        self.state.update(new_plant_state_vars)
-
-        return
+        return new_persistance_vars
 
     def get_location(self):
         location = {

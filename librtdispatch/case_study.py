@@ -274,7 +274,7 @@ if __name__ == '__main__':
             npts = napply)
         
         # Update saved plant state, post model run
-        plant.update_state(results, new_plant_state_vars, 1./ssc_time_steps_per_hour)
+        plant.calc_persistance_vars(results, new_plant_state_vars, 1./ssc_time_steps_per_hour)
 
         if start_date == datetime.datetime(2018, 10, 14, 0, 0):
             assert math.isclose(plant.state['pc_startup_energy_remain_initial'], 29339.9, rel_tol=1e-4)

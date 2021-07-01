@@ -17,7 +17,6 @@ from mediation.plant import Revenue
 
 class Mediator:
     tech_wrap = None
-    validated_outputs_prev = None
 
     def __init__(self, params, plant_design_path, weather_file=None,
                  update_interval=datetime.timedelta(seconds=5)):
@@ -203,11 +202,13 @@ class Mediator:
         print("Validation took {seconds:0.2f} seconds".format(seconds=toc-tic))
         validated_outputs['year_start'] = datetime_start.year                                           # add this so date can be determined from time_hr
 
-        # d. Add simulated plant state and other data to cache and store in database
-        self.validated_outputs_prev = copy.deepcopy(validated_outputs)
-        new_plant_state_vars = self.tech_wrap.get_simulated_plant_state(validated_outputs)             # for initializing next simulation from a prior one
-        self.plant.update_state(validated_outputs, new_plant_state_vars, self.simulation_timestep.seconds/3600)
-        self.bulk_add_to_db_table(validated_outputs)                                                 # add to database
+        # d. Add simulated plant state and other data to cache and database, and update plant state
+        new_plant_state = self.tech_wrap.get_simulated_plant_state(validated_outputs)             # for initializing next simulation from a prior one
+        new_plant_state_persistance = self.plant.calc_persistance_vars(validated_outputs, self.simulation_timestep.seconds/3600)
+        self.plant.set_state(new_plant_state)
+        self.plant.set_state(new_plant_state_persistance)
+        # TODO: add all variables in self.plant.state to its own db table
+        self.bulk_add_to_db_table(validated_outputs)    # TODO: rename as techmodeldata or something
 
         return 0
 
