@@ -277,16 +277,19 @@ class Mediator:
         instances = [
             models.TechData(
                 timestamp =             round_time(newyears + datetime.timedelta(hours=records['time_hr'][i]), 1),       # round to nearest second
-                E_tes_charged =         records['e_ch_tes'][i],
+                E_tes_charged =         records['e_ch_tes'][i] * 1.e3,
                 eta_tower_thermal =     records['eta_therm'][i],
                 eta_field_optical =     records['eta_field'][i],
-                W_grid_no_derate =      records['P_out_net'][i],
+                W_grid_no_derate =      records['P_out_net'][i] * 1.e3,
                 tou =                   records['tou_value'][i],
                 W_grid_with_derate =    records['gen'][i],
-                Q_tower_incident =      records['q_dot_rec_inc'][i],
-                Q_field_incident =      records['q_sf_inc'][i],
+                Q_tower_incident =      records['q_dot_rec_inc'][i] * 1.e3,
+                Q_field_incident =      records['q_sf_inc'][i] * 1.e3,
                 pricing_multiple =      records['pricing_mult'][i],
                 dni =                   records['beam'][i],
+                Q_tower_absorbed =      records['Q_thermal'][i] * 1.e3,
+                mdot_tower =            records['m_dot_rec'][i],
+                mdot_cycle =            records['m_dot_pc'][i],
             )
             for i in range(n_records)
         ]

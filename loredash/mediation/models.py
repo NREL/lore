@@ -13,6 +13,9 @@ class TechData(models.Model):                                                   
     Q_field_incident = models.FloatField(verbose_name="Field incident thermal power [kWt]", default=None)   #   q_sf_inc [MWt]
     pricing_multiple = models.FloatField(verbose_name="Pricing multiple [-]", default=None)                 #   pricing_mult [-]
     dni = models.FloatField(verbose_name="DNI [W/m2]", default=None)                                        #   beam [W/m2]
+    Q_tower_absorbed = models.FloatField(verbose_name="Tower HTF heat rate [kWt]", default=None)            #   Q_thermal [MWt]
+    mdot_tower = models.FloatField(verbose_name="Tower HTF mass flow rate [kg/s]", default=None)            #   m_dot_rec [kg/s]
+    mdot_cycle = models.FloatField(verbose_name="Cycle HTF mass flow rate [kg/s]", default=None)            #   m_dot_pc [kg/s]
 
     def __str__(self):
         """shown when entry is generically queried"""
