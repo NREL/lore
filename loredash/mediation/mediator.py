@@ -211,20 +211,24 @@ class Mediator:
         print("Generated Energy [kWh]= ", tech_outputs["annual_energy"])
 
         # c. Validate output data
+        # TODO: fix timezones in these db tables
         tech_outputs = {k:(list(v) if isinstance(v, tuple) else v) for (k,v) in tech_outputs.items()}   # converts tuples to lists so they can be edited
         tic = time.process_time()
         validated_outputs = data_validator.validate(tech_outputs, data_validator.ssc_schema)
         toc = time.process_time()
         print("Validation took {seconds:0.2f} seconds".format(seconds=toc-tic))
         validated_outputs['year_start'] = datetime_start.year                                           # add this so date can be determined from time_hr
+        self.bulk_add_to_db_table(validated_outputs)    # TODO: rename as techmodeldata or something
 
         # d. Add simulated plant state and other data to cache and database, and update plant state
-        new_plant_state = self.tech_wrap.get_simulated_plant_state(validated_outputs)             # for initializing next simulation from a prior one
+        new_plant_state = self.tech_wrap.get_simulated_plant_state(validated_outputs)                   # for initializing next simulation from a prior one
         new_plant_state_persistance = self.plant.calc_persistance_vars(validated_outputs, self.simulation_timestep.seconds/3600)
+        new_plant_state.update(new_plant_state_persistance)
+        new_plant_state['sf_adjust:hourly'] = self.plant.get_field_availability()[-1]
         self.plant.set_state(new_plant_state)
-        self.plant.set_state(new_plant_state_persistance)
-        # TODO: add all variables in self.plant.state to its own db table
-        self.bulk_add_to_db_table(validated_outputs)    # TODO: rename as techmodeldata or something
+        new_plant_state['year_start'] = datetime_start.year
+        new_plant_state['time_hr'] = validated_outputs['time_hr'][-1]
+        self.add_to_db_table(new_plant_state)
 
         return 0
 
@@ -269,6 +273,39 @@ class Mediator:
         """
         assert(time.tzinfo.zone == self.plant.design['timezone_string'])
         return
+
+    def add_to_db_table(self, records):
+        newyears = datetime.datetime(records['year_start'], 1, 1, 0, 0, 0)
+
+        instance = {
+            'timestamp':                 round_time(newyears + datetime.timedelta(hours=records['time_hr']), 1),       # round to nearest second
+            'is_field_tracking':         records['is_field_tracking_init'],
+            'receiver_mode':             records['rec_op_mode_initial'],
+            'dt_rec_startup_remain':     records['rec_startup_time_remain_init'],
+            'dE_rec_startup_remain':     records['rec_startup_energy_remain_init'] * 1.e-3,
+            'dt_rec_current_mode':       records['disp_rec_persist0'],
+            'dt_rec_not_on':             records['disp_rec_off0'],
+            'sf_adjust':                 records['sf_adjust:hourly'],
+            'T_cold_tank':               records['T_tank_cold_init'],
+            'T_hot_tank':                records['T_tank_hot_init'],
+            'Frac_avail_hot_tank':       records['csp_pt_tes_init_hot_htf_percent'],
+            'cycle_mode':                records['pc_op_mode_initial'],
+            'dt_cycle_startup_remain':   records['pc_startup_time_remain_init'],
+            'dE_cycle_startup_remain':   records['pc_startup_energy_remain_initial'],
+            'dt_cycle_current_mode':     records['disp_pc_persist0'],
+            'dt_cycle_not_on':           records['disp_pc_off0'],
+            'W_cycle':                   records['wdot0'] * 1.e3,
+            'Q_cycle':                   records['qdot0'] * 1.e3,
+        }
+
+        try:
+            models.PlantStateData.objects.update_or_create(instance)
+        except IntegrityError as err:
+            error_string = format(err)
+            if error_string == "UNIQUE constraint failed: mediation_plantstatedata.timestamp":
+                raise IntegrityError(error_string)      # just re-raise the exception for now
+        except Exception as err:
+            raise(err)
 
     def bulk_add_to_db_table(self, records):
         n_records = len(records['time_hr'])

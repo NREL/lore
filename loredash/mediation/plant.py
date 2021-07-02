@@ -40,7 +40,7 @@ class Plant:
             'rec_startup_energy_remain_init':       0.,                                 # Receiver startup energy remaining (Wh)
             'disp_rec_persist0':                    0.,                                 # Time (hr) that receiver has been in its current state
             'disp_rec_off0':                        0.,                                 # Time (hr) that receiver has not been operating (off or startup)
-            # 'sf_adjust:hourly':                     [0],                                # Solar field adjustment factors  [not a state variable?]
+            'sf_adjust:hourly':                     0.,                                 # Solar field adjustment factor (latest)
             # TES:
             'T_tank_cold_init':                     0.,                                 # Cold tank temperature (C)
             'T_tank_hot_init':                      0.,                                 # Hot tank temperature (C)
@@ -91,7 +91,7 @@ class Plant:
         self.state['T_tank_hot_init'] = self.design['T_htf_hot_des']
         self.state['pc_startup_time_remain_init'] = self.design['startup_time']
         self.state['pc_startup_energy_remain_initial'] = self.design['startup_frac'] * self.get_cycle_thermal_rating() * 1000.
-        self.state['sf_adjust:hourly'] = self.get_field_availability()
+        self.state['sf_adjust:hourly'] = self.get_field_availability()[-1]
 
     def set_state(self, state):
         self.state.update((k, state[k]) for k in state.keys() & self.state.keys())     # update state but don't add any new keys
@@ -108,7 +108,7 @@ class Plant:
 
     def get_state(self):
         result = self.state.copy()              # copy to disallow edits
-        result['sf_adjust:hourly'] = self.get_field_availability()
+        result['sf_adjust:hourly'] = self.get_field_availability()[-1]
         return result
 
     def get_design(self):

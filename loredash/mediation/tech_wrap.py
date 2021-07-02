@@ -98,7 +98,9 @@ class TechWrap:
         # TODO: array lengths are consistent with ssc requirements, except for sf_adjust:hourly in the flux map call, which is being taken from plant_state
         def resize_list(list_name, total_elements):
             _list = self.ssc.get(list_name)
-            if len(_list) < total_elements:
+            if isinstance(_list, int) or isinstance(_list, float):
+                _list = total_elements * [_list]
+            elif len(_list) < total_elements:
                 _list.extend((total_elements - len(_list))*[_list[-1]])
             else:
                 _list = _list[0:total_elements]
