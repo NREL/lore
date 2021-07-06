@@ -33,7 +33,7 @@ def test_forecaster_from_plant():
     forecaster = forecasts.SolarForecast(
         plant_design['latitude'],
         plant_design['longitude'],
-        plant_design['timezone_string'],
+        plant_design['timezone'],
         plant_design['elevation'],
     )
     assert(type(forecaster.plant_location) == location.Location)
@@ -47,7 +47,7 @@ def test_latestForecast():
     forecaster = forecasts.SolarForecast(
         38.2,
         -117.4,
-        'US/Pacific',
+        -8,
         100.0,
     )
     data = forecaster.latestForecast()
@@ -66,7 +66,7 @@ def test_latestForecast_resolution():
     forecaster = forecasts.SolarForecast(
         38.2,
         -117.4,
-        'US/Pacific',
+        -8,
         100.0,
     )
     data = forecaster.latestForecast(resolution = pandas.Timedelta(hours = 2))
@@ -78,7 +78,7 @@ def test_latestForecast_horizon():
     forecaster = forecasts.SolarForecast(
         38.2,
         -117.4,
-        'US/Pacific',
+        -8,
         100.0,
     )
     data = forecaster.latestForecast(horizon = pandas.Timedelta(hours = 24))
@@ -89,12 +89,12 @@ def test_getForecast():
     forecaster = forecasts.SolarForecast(
         38.2,
         -117.4,
-        'US/Pacific',
+        -8,
         100.0,
     )
     # Choose a start time that is not current, but that NDFD will still have
     # data for.
-    datetime_start = datetime.datetime.now(pytz.timezone('US/Pacific'))
+    datetime_start = datetime.datetime.now(pytz.FixedOffset(-480))
     datetime_start = datetime_start - pandas.Timedelta(hours = 24)
     datetime_end = datetime_start + pandas.Timedelta(hours = 24)
     data = forecaster.getForecast(

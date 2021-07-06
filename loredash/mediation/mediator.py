@@ -97,7 +97,7 @@ class Mediator:
         self.forecaster = forecasts.SolarForecast(
             self.plant.design['latitude'],
             self.plant.design['longitude'],
-            self.plant.design['timezone_string'],
+            self.plant.design['timezone'],  # Fixed offset!
             self.plant.design['elevation'])
 
         self.plant.update_flux_maps(self.tech_wrap.calc_flux_eta_maps(self.plant.get_design(), self.plant.get_state()))
@@ -162,7 +162,7 @@ class Mediator:
         if datetime_start.tzinfo is None or datetime_end.tzinfo is None or \
             datetime_start.tzinfo != datetime_end.tzinfo:
             print("WARNING: Timesteps in run_once were not properly localized.")
-            _tz = pytz.timezone(self.plant.design['timezone_string'])
+            _tz = pytz.FixedOffset(60 * self.plant.design['timezone'])
             datetime_start = _tz.localize(datetime_start)
             datetime_end = _tz.localize(datetime_end)
         self._validate_plant_local_time(datetime_start)
@@ -296,9 +296,9 @@ class Mediator:
         reactor.run()
 
     def get_current_plant_time(self):
-        "Return the current time in plant-local time."
+        "Return the current time in plant-local (fixed-offset) time."
         return datetime.datetime.now(
-            pytz.timezone(self.plant.design['timezone_string']),
+            pytz.FixedOffset(60 * self.plant.design['timezone']),
         )
 
     def model_previous_day_and_add_to_db(self):
@@ -323,7 +323,7 @@ class Mediator:
         """A helper function that validates the given `time` is localized to the
         timezone of the plant.
         """
-        assert(time.tzinfo.zone == self.plant.design['timezone_string'])
+        assert(time.tzinfo == pytz.FixedOffset(60 * self.plant.design['timezone']))
         return
 
     def add_weather_to_db(self, df_records):

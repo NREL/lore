@@ -46,7 +46,7 @@ def test_get_weather_df():
         weather_file = PARENT_DIR + "/data/daggett_ca_34.865371_-116.783023_psmv3_60_tmy.csv",
         update_interval = datetime.timedelta(seconds = 5),
     )
-    tzinfo = pytz.timezone(m.plant.design['timezone_string'])
+    tzinfo = pytz.FixedOffset(60 * m.plant.design['timezone'])
     datetime_start = datetime.datetime(2021, 1, 1, 0, 0, 0, tzinfo = tzinfo)
     # Test getting one week of weather. Should be pure TMY data.
     weather = m.get_weather_df(
@@ -55,7 +55,7 @@ def test_get_weather_df():
         datetime.timedelta(hours=1),
         m.weather_file,
     )
-    assert(len(weather) == 7 * 24)
+    assert(len(weather) == 7 * 24 + 1)
     # Test getting one day of weather. This should fail because it attempts to
     # get latest forecast, but the time is too old for the NDFD server.
     with pytest.raises(Exception) as err:
@@ -93,18 +93,15 @@ def test_get_weather_df():
     assert(not tmy_weather['DNI'].isnull().values.any())
     assert(sum(forecast_weather['DNI']) > 100)
     assert(not forecast_weather['DNI'].isnull().values.any())
-    # Check that they are linked up timezone-wise. (If it's sunny in the 
-    # forecast, it must be sunny in the TMY file too.
-    # It 's a little tricky with some tolerances (what if the forecast is all 
-    # 0 today?), but we use the rule the that the forecast shouldn't exceed the
-    # TMY by too much. The most likely reason is that the forecast high when the 
-    # TMY is off (at night).
-    for (tmy, forecast) in zip(tmy_weather['DNI'], forecast_weather['DNI']):
-        assert(forecast - tmy < 400)
+    # Check that they are linked up timezone-wise. If the clear-sky is low, the
+    # TMY must be too.
+    for (tmy, forecast) in zip(tmy_weather['DNI'], forecast_weather['Clear Sky DNI']):
+        if forecast < 100:
+            assert(tmy <= 200)
     return
 
 def test_normalize_timesteps():
-    tzinfo = pytz.timezone('US/Pacific')
+    tzinfo = pytz.FixedOffset(-480)
     datetime_start = datetime.datetime(2021, 1, 1, 1, 32, 0, tzinfo = tzinfo)
     datetime_end = datetime_start + datetime.timedelta(days = 2)
     start, end = mediator.normalize_timesteps(

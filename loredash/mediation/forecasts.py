@@ -84,17 +84,19 @@ class SolarForecast:
             The latitude of the plant.
         longitude : float
             The longitude of the plant.
-        timezone : float
-            The timezone of the plant.
+        timezone : int
+            The timezone of the plant in fixed-offset.
         altitude : float
             The altitude of the plant. Used to compute clear-sky DNI.
         uncertainty_bands : str
             The filename of a CSV file containing the uncertainty matrices.
         """
+        if not isinstance(timezone, int):
+            raise TypeError("Expected the timezone to be an integer representing the FixedOffset time.")
         self.plant_location = location.Location(
             latitude,
             longitude,
-            timezone,
+            pytz.FixedOffset(60 * timezone),
             altitude,
         )
         if uncertainty_bands == "":
@@ -105,16 +107,23 @@ class SolarForecast:
         return
     
     def _rawData(self, datetime_start, include_columns = ['dni']):
+        # This datetime_start coming in is in FixedOffset
+        assert isinstance(datetime_start.tzinfo, pytz._FixedOffset)
+        # But pvlib doesn't like that for some reason and throws errors. Use a
+        # String timezone instead.
+        utc_time = datetime_start.astimezone(pytz.timezone('UTC'))
         data = forecast.NDFD().get_processed_data(
             self.plant_location.latitude,
             self.plant_location.longitude,
             # Sufficiently long time window for NDFD. We also pick a time window
             # prior to the actual start time to work-around pvlib forecast
             # vagaries with how it returns forecasts.
-            datetime_start - pandas.Timedelta(days = 1),
-            datetime_start + pandas.Timedelta(days = 7),
+            utc_time - pandas.Timedelta(days = 1),
+            utc_time + pandas.Timedelta(days = 7),
             how = 'clearsky_scaling',
         )[include_columns]
+        # Convert the index from UTC back into the plant's FixedOffset
+        data.index = data.index.tz_convert(datetime_start.tzinfo)
         data.index = pandas.to_datetime(data.index)
         # Strip out time periods prior to the datetime_start.
         first_index = 0
@@ -152,7 +161,7 @@ class SolarForecast:
         data = self._rawData(datetime_start)
         current_time = self._toUTC(
             pandas.Timestamp(
-                datetime.datetime.now(pytz.timezone(self.plant_location.tz)),
+                datetime.datetime.now(self.plant_location.pytz),
             ),
         )
         instances = [
@@ -177,7 +186,7 @@ class SolarForecast:
     def _updateLatestForecast(self, resolution, horizon):
         self._updateDatabase(
             datetime_start = pandas.Timestamp(
-                 datetime.datetime.now(pytz.timezone(self.plant_location.tz)),
+                 datetime.datetime.now(self.plant_location.pytz),
             ),
         )
         return self.latestForecast(resolution = resolution, horizon = horizon)
@@ -293,8 +302,6 @@ class SolarForecast:
         raw_data['forecast_for'] = \
             raw_data['forecast_for'].map(lambda x: self._toLocal(x))
         raw_data.set_index('forecast_for', inplace=True)
-        datetime_start = pandas.Timestamp(
-            datetime.datetime.now(pytz.timezone(self.plant_location.tz)),
-        )
+        datetime_start = datetime.datetime.now(self.plant_location.pytz)
         data = self._correctTime(raw_data, resolution, horizon, datetime_start)
         return self._applyForecastUncertainty(data)
