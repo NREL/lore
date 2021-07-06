@@ -364,9 +364,9 @@ class Mediator:
 
         Datetimes are in plant-local time.
 
-        If `use_forecast`, replace the 'DNI', 'DHI', 'GHI', 'Wind Speed' columns
-        with the latest NDFD forecast from the forecasts submodule. In addition,
-        create two new columns: 'Clear Sky DNI' and 'Ambient Temperature'.
+        If `use_forecast`, replace the 'DNI', 'DHI', 'GHI', 'Temperature' and
+        'Wind Speed' columns with the latest NDFD forecast from the forecasts
+        submodule. In addition, create a new column: 'Clear Sky DNI'.
         """
         self._validate_plant_local_time(datetime_start)
         self._validate_plant_local_time(datetime_end)
@@ -412,9 +412,7 @@ class Mediator:
                 'dhi': 'DHI',
                 'ghi': 'GHI',
                 'wind_speed': 'Wind Speed',
-                # The TMY data has a column named 'Temperature'.
-                # This is different.
-                'temp_air': 'Ambient Temperature',
+                'temp_air': 'Temperature',
                 # This is not part of the TMY file!
                 'clear_sky': 'Clear Sky DNI',
             }
