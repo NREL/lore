@@ -137,13 +137,15 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'en-us'
 
+# TODO: should this be changed to the plant's TZ?
+# see https://docs.djangoproject.com/en/3.2/topics/i18n/timezones/
 TIME_ZONE = 'UTC'
 
 USE_I18N = True
 
 USE_L10N = True
 
-USE_TZ = False
+USE_TZ = True
 
 
 # Static files (CSS, JavaScript, Images)

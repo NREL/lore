@@ -172,8 +172,6 @@ class Mediator:
         self.tech_wrap.set({'rec_clearsky_dni': clearsky_data_padded})
 
         # TODO(odow): keep pushing timezones through the code.
-        datetime_start = datetime_start.replace(tzinfo = None)
-        datetime_end = datetime_end.replace(tzinfo = None)
 
         # Step 2, Thread 1:
         # a. Call dispatch model, (which includes the 'f_estimates...' tech_wrap function to get estimates) and update inputs for next call

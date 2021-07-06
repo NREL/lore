@@ -86,7 +86,7 @@ class TechWrap:
         if self.MIN_ONE_HOUR_SIMS == True:
             datetime_end_original = datetime_end
             datetime_end = max(datetime_end, datetime_start + datetime.timedelta(hours=1))
-        datetime_newyears = datetime.datetime(datetime_start.year, 1, 1, 0, 0, 0)
+        datetime_newyears = datetime.datetime(datetime_start.year, 1, 1, 0, 0, 0, tzinfo=datetime_start.tzinfo)
         self.ssc.set({'time_start': (datetime_start - datetime_newyears).total_seconds()})      # time at beginning of first timestep, as
                                                                                                 #  seconds since start of current year
         self.ssc.set({'time_stop': (datetime_end - datetime_newyears).total_seconds()})         # time at end of last timestep, as

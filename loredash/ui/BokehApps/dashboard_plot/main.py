@@ -63,8 +63,8 @@ FUTURE_DATA_COLS = [
 def _strip_unit(label):
     return re.sub(' \[.*\]$', '', label)
 
-# This is a global variable that will be updated by the live callback.
-current_datetime = datetime.datetime.now().replace(second=0, microsecond=0)
+# This is a global variable that will be updated by the live callback. Note that timestamps in db are in UTC.
+current_datetime = datetime.datetime.now(datetime.timezone.utc).replace(second=0, microsecond=0)
 
 # A global variable to hold all of the plot lines!
 PLOT_LINES = {}
@@ -95,9 +95,9 @@ def _getDashboardData(queue, start_date, end_date, columns):
 
 def make_dataset(time_box):
     # Prepare data
-    start_date = current_datetime.date()
+    start_date = current_datetime.replace(hour=0, minute=0, second=0, microsecond=0)
     end_date = current_datetime
-    pred_end_date = current_datetime.date() + datetime.timedelta(days=1)
+    pred_end_date = start_date + datetime.timedelta(days=1)
     if time_box != 'Today':
         start_date = current_datetime - TIME_BOXES[time_box]
         pred_end_date = current_datetime
@@ -217,9 +217,9 @@ def make_plot(pred_src, curr_src): # (Predictive, Current)
 
 @gen.coroutine
 def _periodic_callback():
-    ## Do a live update on the minute
+    ## Do a live update on the minute. Note that timestamps in db are in UTC.
     global current_datetime
-    new_current_datetime = datetime.datetime.now().replace(second=0, microsecond=0)
+    new_current_datetime = datetime.datetime.now(datetime.timezone.utc).replace(second=0, microsecond=0)
     q = queue.Queue()
     # Update timeline for current time
     getattr(plot, 'center')[2].location = new_current_datetime

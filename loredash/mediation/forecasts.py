@@ -146,7 +146,7 @@ class SolarForecast:
 
     def _toLocal(self, t):
         "Convert a timezone-naive `t` to local timezone-aware."
-        return t.tz_localize('UTC').astimezone(self.plant_location.tz)
+        return t.tz_convert(self.plant_location.tz)
 
     def _updateDatabase(self, datetime_start):
         data = self._rawData(datetime_start)
@@ -172,7 +172,7 @@ class SolarForecast:
         return
 
     def _hourDiff(self, t):
-        return (datetime.datetime.utcnow() - t).total_seconds() / 3600
+        return (datetime.datetime.now(datetime.timezone.utc) - t).total_seconds() / 3600
 
     def _updateLatestForecast(self, resolution, horizon):
         self._updateDatabase(

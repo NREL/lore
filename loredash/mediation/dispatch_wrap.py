@@ -1207,10 +1207,10 @@ def calculate_time_steps(horizon, step_size, target_step_end_time):
 
 
 def get_time_of_day(date):
-    return (date- datetime.datetime(date.year,date.month,date.day,0,0,0)).total_seconds()
+    return (date- datetime.datetime(date.year,date.month,date.day,0,0,0,tzinfo=date.tzinfo)).total_seconds()
         
 def get_time_of_year(date):
-    return (date - datetime.datetime(date.year,1,1,0,0,0)).total_seconds()
+    return (date - datetime.datetime(date.year,1,1,0,0,0,tzinfo=date.tzinfo)).total_seconds()
 
 # Update annual array to a new timestep (assuming integer multiple of new timesteps in old timestep or vice versa)
 def translate_to_new_timestep(data, old_timestep, new_timestep):
