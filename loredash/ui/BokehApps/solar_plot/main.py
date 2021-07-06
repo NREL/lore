@@ -36,6 +36,7 @@ def latestData(queue):
     data = forecaster.latestForecast().reset_index()
     # Strip the timezone info to prevent Bokeh from trying to show it in
     # computer-local time. The result should be an axis in plant-local time.
+    #TODO: fix timezone and eliminate "RuntimeWarning: DateTimeField SolarForecastData.forecast_for received a naive datetime"
     data['forecast_for'] = data['forecast_for'].dt.tz_localize(None)
     queue.put(data)
     return

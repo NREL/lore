@@ -39,12 +39,12 @@ if settings.RUNNING_DEVSERVER == True:
         profiler = Profiler()
         profiler.start()
 
-    # try:
-    mediator.init_and_mediate()
-    # except OSError as err:
-    #     print("ERROR: OS error: {0}".format(err))
-    # except Exception as err:
-    #     print("ERROR: {0}".format(err))
+    try:
+        mediator.init_and_mediate()
+    except OSError as err:
+        print("ERROR: OS error: {0}".format(err))
+    except Exception as err:
+        print("ERROR: {0}".format(err))
 
     if RUN_PROFILER:
         profiler.stop()
