@@ -29,10 +29,11 @@ class Plant:
             'eta_map':                              [],                                 # efficiency map
             'flux_maps':                            [],                                 # flux maps
         }
+
+        # This is the current plant state, but it's usually only updated at the beginning
+        # and end of a timestep. The names correspond to SSC inputs (hence the 'init's and 0's).
         self.state = {
-            """This is the current plant state, but it's usually only updated at the beginning
-            and end of a timestep. The names correspond to SSC inputs (hence the 'init's and 0's).
-            """
+            'timestamp':                            None,                               # Time of last state update
             # Field and receiver:
             'is_field_tracking_init':               False,                              # Is field tracking?
             'rec_op_mode_initial':                  0,                                  # Receiver operating mode
@@ -94,7 +95,12 @@ class Plant:
         self.state['sf_adjust:hourly'] = self.get_field_availability()[-1]
 
     def set_state(self, state):
-        self.state.update((k, state[k]) for k in state.keys() & self.state.keys())     # update state but don't add any new keys
+        for key, value in state.items():
+            if key in self.state:
+                if type(value) is list and type(self.state[key]) is not list:
+                    self.state[key] = value[-1]     # save only the most recent timeseries value in Plant.state
+                else:
+                    self.state[key] = value
 
     def calc_solar_multiple(self, design):
         return design['Qrec'] / (design['P_ref'] / design['design_eff'])

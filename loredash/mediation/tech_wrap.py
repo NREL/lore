@@ -261,9 +261,9 @@ class TechWrap:
         
         return 0
 
-    def get_simulated_plant_state(self, model_outputs, **kwargs):
+    def get_simulated_plant_states(self, model_outputs, **kwargs):
         '''
-        Returns simulated plant state at end of prior simulation, or if no prior simulation, returns None
+        Returns the simulated plant states at end of each timestep
         The default assumption is that the trailing zeros from a partial-year simulation have already been stripped
         Inputs:
         model_outputs = outputs dictionary from the technology model, gotten via .Outputs.export()
@@ -304,7 +304,7 @@ class TechWrap:
 
         try:
             plant_state_io_map = get_plant_state_io_map()
-            plant_state = {k:model_outputs[v][-1] for (k, v) in plant_state_io_map.items()}      # return last value in each list
+            plant_state = {k:model_outputs[v] for (k, v) in plant_state_io_map.items()}
         except:
             plant_state = None
         return plant_state

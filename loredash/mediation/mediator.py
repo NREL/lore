@@ -151,19 +151,20 @@ class Mediator:
             timestep=datetime.timedelta(minutes=min(self.dispatch_wrap.params['dispatch_steplength_array'])),
             tmy3_path=self.weather_file,
             use_forecast=True)
-        # Sanity check to make sure this is what we expect.
         assert(weather_dispatch.index[0] == datetime_start)
         assert(weather_dispatch.index[-1] == datetime_end_dispatch)
+
         weather_simulate = self.get_weather_df(
             datetime_start=datetime_start,
             datetime_end=datetime_end,
             timestep=datetime.timedelta(hours=1/self.params['time_steps_per_hour']),
             tmy3_path=self.weather_file,
-            use_forecast=False)          # TODO: this use_forecast should probably be True too. Can we optimize these two get_weather_df calls
-                                            #       since getting the forecasts takes significant time?
-        # Sanity check to make sure this is what we expect.
+            use_forecast=False)             # TODO: this use_forecast should probably be True too. Can we optimize these two
+                                            #       get_weather_df calls since getting the forecasts takes significant time?
         assert(weather_simulate.index[0] == datetime_start)
         assert(weather_simulate.index[-1] == datetime_end)
+        self.add_weather_to_db(weather_simulate)
+
         # Set clearsky data
         clearsky_data = np.nan_to_num(np.array(weather_dispatch['Clear Sky DNI']), nan = 0.0)  # TODO: Better handling of nan values in clear-sky data
         clearsky_data_padded = self.tech_wrap.pad_weather_data(list_data = clearsky_data.tolist(), 
@@ -215,18 +216,28 @@ class Mediator:
         validated_outputs = data_validator.validate(tech_outputs, data_validator.ssc_schema)
         toc = time.process_time()
         print("Validation took {seconds:0.2f} seconds".format(seconds=toc-tic))
-        validated_outputs['year_start'] = datetime_start.year                                           # add this so date can be determined from time_hr
-        self.bulk_add_to_db_table(validated_outputs)    # TODO: rename as techmodeldata or something
+        timestamps = list(pd.date_range(
+                          start=datetime_start,
+                          end=datetime_end,
+                          freq=self.simulation_timestep,
+                          closed='right'))   # exclude start
+        validated_outputs['timestamp'] = timestamps
+        self.add_techdata_to_db(validated_outputs)    # TODO: rename as techmodeldata or something
 
         # d. Add simulated plant state and other data to cache and database, and update plant state
-        new_plant_state = self.tech_wrap.get_simulated_plant_state(validated_outputs)                   # for initializing next simulation from a prior one
-        new_plant_state_persistance = self.plant.calc_persistance_vars(validated_outputs, self.simulation_timestep.seconds/3600)
-        new_plant_state.update(new_plant_state_persistance)
-        new_plant_state['sf_adjust:hourly'] = self.plant.get_field_availability()[-1]
-        self.plant.set_state(new_plant_state)
-        new_plant_state['year_start'] = datetime_start.year
-        new_plant_state['time_hr'] = validated_outputs['time_hr'][-1]
-        self.add_to_db_table(new_plant_state)
+        new_plant_states = self.tech_wrap.get_simulated_plant_states(validated_outputs)
+        # TODO: update calc_persistance_vars() so it returns for each timestep, not just end, and add to db
+        new_plant_states['sf_adjust:hourly'] = self.plant.get_field_availability(
+                                                          datetime_start=datetime_start,
+                                                          duration=datetime_end - datetime_start,
+                                                          timestep=self.simulation_timestep
+                                                          )
+        new_plant_states['timestamp'] = timestamps
+        self.add_plantstates_to_db(new_plant_states)
+
+        new_plant_state_persistance = self.plant.calc_persistance_vars(validated_outputs, self.simulation_timestep.seconds/3600)    # for just last timestep
+        new_plant_states.update(new_plant_state_persistance)
+        self.plant.set_state(new_plant_states)
 
         return 0
 
@@ -272,46 +283,84 @@ class Mediator:
         assert(time.tzinfo.zone == self.plant.design['timezone_string'])
         return
 
-    def add_to_db_table(self, records):
-        newyears = datetime.datetime(records['year_start'], 1, 1, 0, 0, 0)
+    def add_weather_to_db(self, df_records):
+        df_records['timestamp'] = df_records.index
+        records = df_records.to_dict('records')
 
-        instance = {
-            'timestamp':                 round_time(newyears + datetime.timedelta(hours=records['time_hr']), 1),       # round to nearest second
-            'is_field_tracking':         records['is_field_tracking_init'],
-            'receiver_mode':             records['rec_op_mode_initial'],
-            'dt_rec_startup_remain':     records['rec_startup_time_remain_init'],
-            'dE_rec_startup_remain':     records['rec_startup_energy_remain_init'] * 1.e-3,
-            'dt_rec_current_mode':       records['disp_rec_persist0'],
-            'dt_rec_not_on':             records['disp_rec_off0'],
-            'sf_adjust':                 records['sf_adjust:hourly'],
-            'T_cold_tank':               records['T_tank_cold_init'],
-            'T_hot_tank':                records['T_tank_hot_init'],
-            'Frac_avail_hot_tank':       records['csp_pt_tes_init_hot_htf_percent'],
-            'cycle_mode':                records['pc_op_mode_initial'],
-            'dt_cycle_startup_remain':   records['pc_startup_time_remain_init'],
-            'dE_cycle_startup_remain':   records['pc_startup_energy_remain_initial'],
-            'dt_cycle_current_mode':     records['disp_pc_persist0'],
-            'dt_cycle_not_on':           records['disp_pc_off0'],
-            'W_cycle':                   records['wdot0'] * 1.e3,
-            'Q_cycle':                   records['qdot0'] * 1.e3,
-        }
+        instances = [
+            models.WeatherData(
+                timestamp =                 record['timestamp'],
+                dni =                       record['DNI'],
+                dhi =                       record['DHI'],
+                ghi =                       record['GHI'],
+                dew_point =                 record['Dew Point'],
+                temperature =               record['Temperature'],
+                pressure =                  record['Pressure'],
+                wind_direction =            record['Wind Direction'],
+                wind_speed =                record['Wind Speed'],
+            )
+            for record in records
+        ]
 
         try:
-            models.PlantStateData.objects.update_or_create(instance)
+            models.WeatherData.objects.bulk_create(instances, ignore_conflicts=True)
+            # If ignore_conflicts=False and if any to-be-added records are already in the database, as indicated by the timestamp,
+            #  an exception is raised and no to-be-added records are added.
+            # If ignore_conflicts=True, all records not already in the database are added. To-be-added records that are already in the
+            #  database do not replace the database records. Therefore, no existing database records are overwritten.
         except IntegrityError as err:
             error_string = format(err)
-            if error_string == "UNIQUE constraint failed: mediation_plantstatedata.timestamp":
+            if error_string == "UNIQUE constraint failed: mediation_weatherdata.timestamp":
                 raise IntegrityError(error_string)      # just re-raise the exception for now
         except Exception as err:
             raise(err)
 
-    def bulk_add_to_db_table(self, records):
-        n_records = len(records['time_hr'])
-        newyears = datetime.datetime(records['year_start'], 1, 1, 0, 0, 0)
+    def add_plantstates_to_db(self, records):
+        n_records = len(records['timestamp'])
+
+        instances = [
+            models.PlantStateData(
+                timestamp =                 records['timestamp'][i],
+                is_field_tracking =         records['is_field_tracking_init'][i],
+                receiver_mode =             records['rec_op_mode_initial'][i],
+                dt_rec_startup_remain =     records['rec_startup_time_remain_init'][i],
+                dE_rec_startup_remain =     records['rec_startup_energy_remain_init'][i] * 1.e-3,
+                # dt_rec_current_mode =       records['disp_rec_persist0'][i],
+                # dt_rec_not_on =             records['disp_rec_off0'][i],
+                sf_adjust =                 records['sf_adjust:hourly'][i],
+                T_cold_tank =               records['T_tank_cold_init'][i],
+                T_hot_tank =                records['T_tank_hot_init'][i],
+                Frac_avail_hot_tank =       records['csp_pt_tes_init_hot_htf_percent'][i],
+                cycle_mode =                records['pc_op_mode_initial'][i],
+                dt_cycle_startup_remain =   records['pc_startup_time_remain_init'][i],
+                dE_cycle_startup_remain =   records['pc_startup_energy_remain_initial'][i],
+                # dt_cycle_current_mode =     records['disp_pc_persist0'][i],
+                # dt_cycle_not_on =           records['disp_pc_off0'][i],
+                W_cycle =                   records['wdot0'][i] * 1.e3,
+                Q_cycle =                   records['qdot0'][i] * 1.e3,
+            )
+            for i in range(n_records)
+        ]
+
+        try:
+            models.PlantStateData.objects.bulk_create(instances, ignore_conflicts=True)
+            # If ignore_conflicts=False and if any to-be-added records are already in the database, as indicated by the timestamp,
+            #  an exception is raised and no to-be-added records are added.
+            # If ignore_conflicts=True, all records not already in the database are added. To-be-added records that are already in the
+            #  database do not replace the database records. Therefore, no existing database records are overwritten.
+        except IntegrityError as err:
+            error_string = format(err)
+            if error_string == "UNIQUE constraint failed: mediation_plantstates.timestamp":
+                raise IntegrityError(error_string)      # just re-raise the exception for now
+        except Exception as err:
+            raise(err)
+
+    def add_techdata_to_db(self, records):
+        n_records = len(records['timestamp'])
 
         instances = [
             models.TechData(
-                timestamp =             round_time(newyears + datetime.timedelta(hours=records['time_hr'][i]), 1),       # round to nearest second
+                timestamp =             records['timestamp'][i],
                 E_tes_charged =         records['e_ch_tes'][i] * 1.e3,
                 eta_tower_thermal =     records['eta_therm'][i],
                 eta_field_optical =     records['eta_field'][i],

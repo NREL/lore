@@ -27,8 +27,8 @@ class PlantStateData(models.Model):
     receiver_mode = models.FloatField(verbose_name="Receiver operating mode [-]", default=None)                       # rec_op_mode_initial [-]
     dt_rec_startup_remain = models.FloatField(verbose_name="Receiver startup time remaining [hr]", default=None)      # rec_startup_time_remain_init [hr]
     dE_rec_startup_remain = models.FloatField(verbose_name="Receiver startup energy remaining [kWh]", default=None)   # rec_startup_energy_remain_init [Wh]
-    dt_rec_current_mode = models.FloatField(verbose_name="Time receiver's been in current state [hr]", default=None)  # disp_rec_persist0 [hr]
-    dt_rec_not_on = models.FloatField(verbose_name="Time receiver's not been on (off or startup) [hr]", default=None) # disp_rec_off0 [hr]
+    # dt_rec_current_mode = models.FloatField(verbose_name="Time receiver's been in current state [hr]", default=None)  # disp_rec_persist0 [hr]
+    # dt_rec_not_on = models.FloatField(verbose_name="Time receiver's not been on (off or startup) [hr]", default=None) # disp_rec_off0 [hr]
     sf_adjust = models.FloatField(verbose_name="Solar field percent unavailable (latest) [%]", default=None)          # sf_adjust:hourly [%]
     T_cold_tank = models.FloatField(verbose_name="Cold tank temperature [C]", default=None)                           # T_tank_cold_init [C]
     T_hot_tank = models.FloatField(verbose_name="Hot tank temperature [C]", default=None)                             # T_tank_hot_init [C]
@@ -36,10 +36,25 @@ class PlantStateData(models.Model):
     cycle_mode = models.FloatField(verbose_name="Initial cycle operating mode [-]", default=None)                     # pc_op_mode_initial [0=startup, 1=on, 2=standby, 3=off, 4=startup_controlled]
     dt_cycle_startup_remain = models.FloatField(verbose_name="Cycle startup time remaining [hr]", default=None)       # pc_startup_time_remain_init [hr]
     dE_cycle_startup_remain = models.FloatField(verbose_name="Cycle startup energy remaining [kWh]", default=None)    # pc_startup_energy_remain_initial [kWh]
-    dt_cycle_current_mode = models.FloatField(verbose_name="Time cycle's been in current state [hr]", default=None)   # disp_pc_persist0 [hr]
-    dt_cycle_not_on = models.FloatField(verbose_name="Time cycle's not been on (off, startup, or standby) [hr]", default=None) # disp_pc_off0 [hr]
+    # dt_cycle_current_mode = models.FloatField(verbose_name="Time cycle's been in current state [hr]", default=None)   # disp_pc_persist0 [hr]
+    # dt_cycle_not_on = models.FloatField(verbose_name="Time cycle's not been on (off, startup, or standby) [hr]", default=None) # disp_pc_off0 [hr]
     W_cycle = models.FloatField(verbose_name="Cycle electricity generation [kWe]", default=None)                      # wdot0 [MWe]
     Q_cycle = models.FloatField(verbose_name="Cycle thermal input [kWt]", default=None)                               # qdot0 [MWt]
+
+    def __str__(self):
+        """shown when entry is generically queried"""
+        return str(self.timestamp)
+
+class WeatherData(models.Model):
+    timestamp = models.DateTimeField(verbose_name="Timestep end", primary_key=True)
+    dni = models.FloatField(verbose_name="Direct normal irradiance [W/m2]", default=None)
+    dhi = models.FloatField(verbose_name="Diffuse horizontal irradiance [W/m2]", default=None)
+    ghi = models.FloatField(verbose_name="Global horizontal irradiance [W/m2]", default=None)
+    dew_point = models.FloatField(verbose_name="Dew point [C]", default=None)
+    temperature = models.FloatField(verbose_name="Ambient dry bulb temperature [C]", default=None)
+    pressure = models.FloatField(verbose_name="Ambient atmospheric pressure [mbar]", default=None)
+    wind_direction = models.FloatField(verbose_name="Horizontal wind direction [deg]", default=None)
+    wind_speed = models.FloatField(verbose_name="Horizontal wind speed [m/s]", default=None)
 
     def __str__(self):
         """shown when entry is generically queried"""
