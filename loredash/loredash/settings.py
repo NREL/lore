@@ -137,9 +137,11 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'en-us'
 
-# TODO: should this be changed to the plant's TZ?
-# see https://docs.djangoproject.com/en/3.2/topics/i18n/timezones/
-TIME_ZONE = 'UTC'
+# For how django handle timezones see: https://docs.djangoproject.com/en/3.2/topics/i18n/timezones/
+# For whether to set this TIME_ZONE parameter or not see: https://docs.djangoproject.com/en/3.2/ref/settings/#time-zone
+# TIME_ZONE = 'UTC'           # leaving unset as recommended by django docs. Datetimes are thus stored as UTC in the db.
+PLANT_TIME_ZONE = None      # this is set in Mediator::init(), as read from the plant config file
+                            #  However, this is not assessible from the Bokeh server (it reads None)
 
 USE_I18N = True
 

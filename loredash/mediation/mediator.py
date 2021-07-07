@@ -51,6 +51,8 @@ class Mediator:
         self.plant = plant_.Plant(
             design=plant_design,
             initial_state=plant_.plant_initial_state)
+        
+        settings.PLANT_TIME_ZONE = plant_design['timezone_string']
 
         default_ssc_params.update(self.plant.get_state())                       # combine default and plant params, overwriting the defaults
         default_ssc_params.update(self.params)                                  # combine default and mediator params, overwriting the defaults
