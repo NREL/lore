@@ -367,7 +367,7 @@ class TechWrap:
             if isinstance(v, (list, tuple)) and len(v) == points_per_year:
                 model_outputs[k] = v[:points_in_simulation]
         toc = time.process_time()
-        print("Stripping zeroes took {seconds:.2f} seconds".format(seconds=toc-tic))
+        # print("Stripping zeroes took {seconds:.2f} seconds".format(seconds=toc-tic))
         return model_outputs
 
     def _save_design_to_file(self):

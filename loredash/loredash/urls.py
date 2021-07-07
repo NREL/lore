@@ -18,7 +18,6 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from pyinstrument import Profiler       # can also profile Django, see: https://github.com/joerick/pyinstrument
-import multiprocessing
 
 from mediation import mediator
 
@@ -32,6 +31,8 @@ if settings.DEBUG is True:
 
 
 # -- Initialization code, needed here in urls.py or it will be run twice, one of which by the bokeh server--
+# NOTE: this may not be a problem anymore now that we're using settings.RUNNING_DEVSERVER,
+#       so maybe could be moved out of urls.py? If so, verify that the Bokeh server isn't also running it.
 RUN_PROFILER = False
 
 if settings.RUNNING_DEVSERVER == True:
@@ -49,12 +50,3 @@ if settings.RUNNING_DEVSERVER == True:
     if RUN_PROFILER:
         profiler.stop()
         profiler.open_in_browser()
-
-    # This is the main production code where the mediator runs continuously
-    # update_interval = 10     # seconds
-    # p = multiprocessing.Process(target=mediator.MediateContinuously, args=(update_interval,))
-    # p.start()
-
-    # This code adds another simultaneous mediate process (although likely not needed):
-    # p = multiprocessing.Process(target=mediator.MediateContinuously, args=(1,))
-    # p.start()

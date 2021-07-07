@@ -15,8 +15,10 @@ from data.mspt_2020_defaults import default_ssc_params
 from mediation import tech_wrap, data_validator, dispatch_wrap, models, forecasts
 import mediation.plant as plant_
 from mediation.plant import Revenue
+import multiprocessing
 
 def init_and_mediate():
+    print("Initializing models...")
     parent_dir = str(Path(__file__).parents[1])
     default_weather_file = parent_dir + "/data/daggett_ca_34.865371_-116.783023_psmv3_60_tmy.csv"
     plant_design_path = parent_dir + "/config/plant_design.json"
@@ -26,11 +28,27 @@ def init_and_mediate():
         weather_file=default_weather_file,
         update_interval=datetime.timedelta(seconds = 5),
     )
+    print("Modeling previous day...")
     result = m.model_previous_day_and_add_to_db()
-    # datetime_start = m.get_current_plant_time()
-    # datetime_end = datetime_start + datetime.timedelta(hours=48)
-    # result = m.run_once(datetime_start, datetime_end)
+    print("Finished modeling previous day.")
+
+    # This call is just for development testing:
+    print("Modeling next periods...")
+    result = m.run_once(
+        datetime_start=m.get_current_plant_time(),
+        timedelta=datetime.timedelta(hours=1))         # hours=3 works, nothing shorter has been found to
+
+    # This call is for production where the mediator runs continuously:
+    # update_interval = 10     # seconds
+    # p = multiprocessing.Process(target=m.run_continuously, args=(update_interval,))
+    # p.start()
+
+    # (This code adds another simultaneous mediate process, although it's likely not needed):
+    # p = multiprocessing.Process(target=m.run_continuously, args=(1,))
+    # p.start()
+
     return
+
 class Mediator:
     tech_wrap = None
 
@@ -75,13 +93,14 @@ class Mediator:
         dispatch_wrap_params.update(self.params)                                                    # include mediator params in with dispatch_wrap_params
         self.dispatch_wrap = dispatch_wrap.DispatchWrap(plant=self.plant, params=dispatch_wrap.dispatch_wrap_params)
     
-    def run_once(self, datetime_start, datetime_end):
+    def run_once(self, datetime_start, datetime_end=None, timedelta=None):
         """Get data from external plant and weather interfaces and run entire set
         of submodels, saving data to database.
 
         Args:
             datetime_start: beginning of first timestep, in plant-local time
             datetime_end:   end of last timestep, in plant-local time
+            timedelta:      alternative to datetime_end
         Returns:
             0 if successful
         Raises:
@@ -116,6 +135,11 @@ class Mediator:
         #   Thread 1:
         #       a. Update previous timestep cache with current timestep cache and then clear current cache
 
+        if datetime_end is None:
+            if timedelta is not None:
+                datetime_end = datetime_start + timedelta
+            else:
+                raise RuntimeError('Mediator::run_once: Either datetime_end or timedelta must have a valid argument.')
 
         # Step 0: Normalize timesteps to even intervals and enforce timestep localization
         if datetime_start.tzinfo is None or datetime_end.tzinfo is None or \
