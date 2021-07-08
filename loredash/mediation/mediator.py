@@ -26,7 +26,7 @@ def init_and_mediate():
         params=mediator_params,
         plant_design_path=plant_design_path,
         weather_file=default_weather_file,
-        update_interval=datetime.timedelta(seconds = 5),
+        update_interval=datetime.timedelta(seconds=5),
     )
     print("Modeling previous day...")
     result = m.model_previous_day_and_add_to_db()
@@ -36,10 +36,10 @@ def init_and_mediate():
     print("Modeling next periods...")
     result = m.run_once(
         datetime_start=m.get_current_plant_time(),
-        timedelta=datetime.timedelta(hours=1))         # hours=3 works, nothing shorter has been found to
+        timedelta=datetime.timedelta(hours=1))
 
     # This call is for production where the mediator runs continuously:
-    # update_interval = 10     # seconds
+    # update_interval = m.simulation_timestep.total_seconds()
     # p = multiprocessing.Process(target=m.run_continuously, args=(update_interval,))
     # p.start()
 
@@ -538,7 +538,7 @@ def normalize_timesteps(datetime_start, datetime_end, timestep):
     timestep [minutes].
     """
     new_start = round_minutes(datetime_start, 'down', timestep)
-    new_end = round_minutes(datetime_end, 'up', timestep)
+    new_end = round_minutes(datetime_end, 'down', timestep)
     print("Requested start:  {datetime}".format(datetime = datetime_start))
     print("Normalized start: {datetime}".format(datetime = new_start))
     print("Normalized end:   {datetime}".format(datetime = new_end))
