@@ -177,7 +177,7 @@ class Mediator:
             timestep=datetime.timedelta(minutes=min(self.dispatch_wrap.params['dispatch_steplength_array'])),
             tmy3_path=self.weather_file,
             use_forecast=True)
-        assert(weather_dispatch.index[0] == datetime_start)
+        assert(weather_dispatch.index[0] == datetime_start + datetime.timedelta(minutes=min(self.dispatch_wrap.params['dispatch_steplength_array'])))
         assert(weather_dispatch.index[-1] == datetime_end_dispatch)
 
         weather_simulate = self.get_weather_df(
@@ -187,7 +187,7 @@ class Mediator:
             tmy3_path=self.weather_file,
             use_forecast=False)             # TODO: this use_forecast should probably be True too. Can we optimize these two
                                             #       get_weather_df calls since getting the forecasts takes significant time?
-        assert(weather_simulate.index[0] == datetime_start)
+        assert(weather_simulate.index[0] == datetime_start + datetime.timedelta(hours=1/self.params['time_steps_per_hour']))
         assert(weather_simulate.index[-1] == datetime_end)
         self.add_weather_to_db(weather_simulate)
 
@@ -433,14 +433,21 @@ class Mediator:
         """
         Return a dataframe of weather data at `timestep` resolution (of
         at-most 1 hour) covering the time-span given by `datetime_start` and
-        `datetime_end`.
+        `datetime_end`, which are in plant-local time.
 
-        Datetimes are in plant-local time.
+        Weather files give data at the middle of the timestep (as they are integrated
+        average values) and the models expect that datetimes designate the end of the
+        timestep; however, they also expect that the start datetime is at the
+        beginning of the first timestep. Therefore, datetime_start is advanced by one
+        timestep before passing to the weather data getter, so it designates the end
+        of the first timestep.
 
         If `use_forecast`, replace the 'DNI', 'DHI', 'GHI', 'Wind Speed' columns
         with the latest NDFD forecast from the forecasts submodule. In addition,
         create two new columns: 'Clear Sky DNI' and 'Ambient Temperature'.
         """
+        datetime_start += timestep      # converting to end of first timestep, by convention
+
         self._validate_plant_local_time(datetime_start)
         self._validate_plant_local_time(datetime_end)
         assert(timestep.total_seconds() <= 3600)
