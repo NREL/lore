@@ -67,7 +67,7 @@ def init_and_mediate():
 class Mediator:
     tech_wrap = None
 
-    def __init__(self, params_path, plant_design_path, weather_file=None,
+    def __init__(self, params_path, plant_design_path, weather_file=None, dispatch_params_path=None,
                  update_interval=datetime.timedelta(seconds=5)):
         with open(params_path) as f:
             self.params = rapidjson.load(f)
@@ -105,7 +105,8 @@ class Mediator:
         self.plant.update_flux_maps(self.tech_wrap.calc_flux_eta_maps(self.plant.get_design(), self.plant.get_state()))
 
         # Setup dispatch_wrap
-        dispatch_wrap_params = dispatch_wrap.dispatch_wrap_params                                   # TODO: replace with a path to a JSON config file
+        with open(dispatch_params_path) as f:
+            dispatch_wrap_params = rapidjson.load(f)                                   # TODO: replace with a path to a JSON config file
         dispatch_wrap_params.update(self.params)                                                    # include mediator params in with dispatch_wrap_params
         self.dispatch_wrap = dispatch_wrap.DispatchWrap(plant=self.plant, params=dispatch_wrap.dispatch_wrap_params)
     
