@@ -102,6 +102,10 @@ class Plant:
                 else:
                     self.state[key] = value
 
+                if (key == 'pc_startup_time_remain_init' or key == 'pc_startup_energy_remain_initial') \
+                    and self.state[key] == None:
+                    self.state[key] = 0.
+
     def calc_solar_multiple(self, design):
         return design['Qrec'] / (design['P_ref'] / design['design_eff'])
     

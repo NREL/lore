@@ -244,8 +244,8 @@ plant_state_schema = Schema( All(
         Required('rec_startup_energy_remain_init'): And(Coerce(float), Range(min=0, max=kBigNumber)),
         Required('T_tank_cold_init'): And(Coerce(float), Range(min=0, max=kBigNumber)),
         Required('T_tank_hot_init'): And(Coerce(float), Range(min=0, max=kBigNumber)),
-        Required('pc_startup_time_remain_init'): And(Coerce(float), Range(min=0, max=24)),
-        Required('pc_startup_energy_remain_initial'): And(Coerce(float), Range(min=0, max=kBigNumber)),
+        Required('pc_startup_time_remain_init'): Any(And(Coerce(float), Range(min=0, max=24)), SetTo(None)),
+        Required('pc_startup_energy_remain_initial'): Any(And(Coerce(float), Range(min=0, max=kBigNumber)), SetTo(None)),
         Required('sf_adjust:hourly'): And(Coerce(float), Range(min=0, max=100))
     },
     list_lengths_must_match
