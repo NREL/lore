@@ -1,0 +1,56 @@
+{
+    "start_date_year":                      2018,                   # TODO: Remove the need for this somewhat arbitrary year
+
+    # Control conditions
+	"time_steps_per_hour":			        12,			            # Simulation time resolution in ssc (1min)   DUPLICATED to: ssc_time_steps_per_hour
+	"is_dispatch":					        0,                      # Always disable dispatch optimization in ssc
+	"is_dispatch_targets":			        true,		            # true if (is_optimize or control_cycle == "CD_data")
+    "is_optimize":					        true,                   # Use dispatch optimization
+    "q_pc_target_su_in":                    [0],
+    "q_pc_target_on_in":                    [0],
+    "q_pc_max_in":                          [0],
+    "is_rec_su_allowed_in":                 [0],
+    "is_rec_sb_allowed_in":                 [0],
+    "is_pc_su_allowed_in":                  [0],
+    "is_pc_sb_allowed_in":                  [0],
+	"control_field":				        "ssc",                  #"CD_data" = use CD data to control heliostats tracking, heliostats offline, and heliostat daily reflectivity.  Receiver startup time is set to zero so that simulated receiver starts when CD tracking begins
+                                                                    #"ssc" = allow ssc to control heliostat field operations, assuming all heliostats are available
+
+	"control_receiver":				        "ssc_clearsky",         #"CD_data" = use CD data to control receiver mass flow. Receiver startup time is set to zero so that simulated receiver starts when CD receiver finishes startup
+                                                                    #"ssc_clearsky" = use expected clearsky DNI to control receiver mass flow.  If field_control = "ssc" then the historical median startup time from CD data will be used to control receiver startup
+                                                                    #"ssc_actual_dni" = use actual DNI to control receiver mass flow.  If field_control = "ssc" then the historical median startup time from CD data will be used to control receiver startup   
+
+	"control_cycle":				        "ssc_heuristic",        # Only used if is_optimize = false
+                                                                    # "CD_data" = use CD actual cycle operation to control cycle dispatch targets
+                                                                    # "ssc_heuristic" = allow ssc heuristic (no consideration of TOD price) to control cycle dispatch
+
+    # Price
+    "price_multiplier_file":                "../data/prices_flat.csv",
+	"ppa_multiplier_model":			        1,
+	"price_steps_per_hour":			        1,                      # Number of steps per hour in electricity price multipliers
+	"avg_price":					        138,                    # Average electricity price ($/MWh):  CD original PPA was $138/MWh
+    "avg_purchase_price":                   30,                     # Average electricity purchase price ($/MWh) (note, this isn"t currently used in the dispatch model)
+    "avg_price_disp_storage_incentive":     0.0,                    # Average electricity price ($/MWh) used in dispatch model storage inventory incentive
+
+    # Field, receiver, and cycle simulation options
+    # "clearsky_file":                        "./model-validation/input_files/weather_files/clearsky_pvlib_ineichen_1min_2018.csv",   # Expected clear-sky DNI from Ineichen model (via pvlib). 
+    "clearsky_file":                        "../data/clearsky_pvlib_ineichen_1min_2018.csv",             # Expected clear-sky DNI from Ineichen model (via pvlib). 
+    "CD_mflow_path1_file":                  "./model-validation/input_files/mflow_path1_2018_1min.csv",  # File containing CD data for receiver path 1 mass flow rate (note, all values are zeros on days without data)
+    "CD_mflow_path2_file":                  "./model-validation/input_files/mflow_path2_2018_1min.csv",  # File containing CD data for receiver path 2 mass flow rate (note, all values are zeros on days without data)
+    "CD_raw_data_direc":                    "./input_files/CD_raw",                                      # Directory containing raw data files from CD
+    "CD_processed_data_direc":              "./input_files/CD_processed",                                # Directory containing files with 1min data already extracted
+	"rec_control_per_path":			        true,
+	"field_model_type":				        3,
+	"eta_map_aod_format":			        false,
+	"is_rec_user_mflow":			        false,		            # or this should be unassigned, true if control_receiver == "CD_data"
+	"rec_clearsky_fraction":		        1.0,
+    "rec_clearsky_model":                   0,
+    "rec_su_delay":                         0.,                     # = 0.01 if control_field == "CD_data" or control_receiver == "CD_data"  Set receiver start time and energy to near zero to enforce CD receiver startup timing
+    "rec_qf_delay":                         0.,                     # = 0.01 if control_field == "CD_data" or control_receiver == "CD_data"
+    "is_rec_to_coldtank_allowed":           true,
+    "use_CD_measured_reflectivity":	        false,                  # Use measured heliostat reflectivity from CD data
+    "fixed_soiling_loss":			        0.02,                   # Fixed soiling loss (if not using CD measured reflectivity) = 1 - (reflectivity / clean_reflectivity)
+	"is_rec_startup_trans":			        false,                  # TODO: Disabling transient startup -> ssc not yet configured to start/stop calculations in the middle of startup with this model
+	"is_rec_model_trans":			        false,                  # TODO: Disabling transient receiver model -> ssc not yet configured to store/retrieve receiver temperature profiles
+    "cycle_type":                           "user_defined",         # "user-defined", "sliding", or "fixed"
+}
