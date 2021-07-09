@@ -24,42 +24,54 @@ services:
         networks:
             app_net:
                 ipv4_address: 10.10.10.12
+        # Networked service-to-service communication uses the CONTAINER_PORT.
+        # When HOST_PORT is defined, the service is accessible outside the swarm as well.
+        # see: https://docs.docker.com/compose/networking/
         ports:
           - 1300:80
         container_name: reverse_proxy
         # Defining this volume gives nginx access to the static files in the 'dash' container in order to serve them
         volumes:
           - static_volume:/loredash/static
+        # depends_on makes sure commands are executed in the correct order
         depends_on:
           - dash
           - migration
         restart: "on-failure"
-    dash:
+    gunicorn:
         build: .
         image: matthewtboyd/lore
         networks:
             app_net:
                 ipv4_address: 10.10.10.10
-        command: sh -c "python manage.py collectstatic --noinput &&
-                        python manage.py run_lore &&
-                        gunicorn loredash.wsgi:application --bind 10.10.10.10:8000 --timeout 24000"
-        container_name: dashboard
+        command: sh -c "gunicorn loredash.wsgi:application --bind 10.10.10.10:8000 --timeout 24000"
+        container_name: webserver
         volumes:
             - static_volume:/loredash/static
             - type: bind
               source: ./config
               target: /loredash/config
         ports:
-            # HOST_PORT:CONTAINER_PORT ('host' is the computer hosting the container)
             - 8000:8000
         expose:
             - 8000
-        # depends_on makes sure commands are executed in the correct order
         depends_on:
             - migration
             - plots
-        # environment:
-            # - FILE_UPLOAD_MAX_MEMORY_SIZE=102400        # add this to avoid 'dashboard exited with code 247'. Originally used 102400.
+    dash:
+        build: .
+        image: matthewtboyd/lore
+        command: sh -c "python manage.py collectstatic --noinput &&
+                        python manage.py run_lore"
+        container_name: dashboard
+        volumes:
+            - static_volume:/loredash/static
+            - type: bind
+              source: ./config
+              target: /loredash/config
+        depends_on:
+            - migration
+            - plots
     plots:
         image: matthewtboyd/lore
         networks:
@@ -95,9 +107,6 @@ services:
               source: ./config
               target: /loredash/config
         ports:
-            # Networked service-to-service communication uses the CONTAINER_PORT.
-            # When HOST_PORT is defined, the service is accessible outside the swarm as well.
-            # see: https://docs.docker.com/compose/networking/
             - 5006:5006
         depends_on:
             - migration

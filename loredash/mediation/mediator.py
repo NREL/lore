@@ -12,10 +12,12 @@ import rapidjson
 from pathlib import Path
 
 from data.mspt_2020_defaults import default_ssc_params
+# import django     # Needed here before "import models" if there's ever error "Apps aren't loaded yet"
+# django.setup()
 from mediation import tech_wrap, data_validator, dispatch_wrap, models, forecasts
 import mediation.plant as plant_
 from mediation.plant import Revenue
-import multiprocessing
+# import multiprocessing
 
 def init_and_mediate():
     print("Initializing models...")
@@ -32,20 +34,24 @@ def init_and_mediate():
     result = m.model_previous_day_and_add_to_db()
     print("Finished modeling previous day.")
 
-    # This call is just for development testing:
     print("Modeling next periods...")
-    result = m.run_once(
-        datetime_start=m.get_current_plant_time(),
-        timedelta=datetime.timedelta(hours=1))
-
-    # This call is for production where the mediator runs continuously:
-    # update_interval = m.simulation_timestep.total_seconds()
-    # p = multiprocessing.Process(target=m.run_continuously, args=(update_interval,))
-    # p.start()
-
-    # (This code adds another simultaneous mediate process, although it's likely not needed):
-    # p = multiprocessing.Process(target=m.run_continuously, args=(1,))
-    # p.start()
+    if settings.RUNNING_DEVSERVER == True:      # just for development testing
+        result = m.run_once(
+            datetime_start=m.get_current_plant_time(),
+            timedelta=datetime.timedelta(hours=1))
+    else:
+        m.run_continuously(update_interval=150)      # NOTE: models may take more than 60 s to run
+        # NOTE: Not able to get around the following error caused by using PySSC:
+        # "AttributeError: Can't pickle local object 'CDLL.__init__.<locals>._FuncPtr'"
+        # Using the pathos package instead of multiprocessing did not help.
+        # Now just instead creating another Docker container for the webserver,
+        # which does not hold up the continuously running Lore models.
+        # update_interval = m.simulation_timestep.total_seconds()
+        # p = multiprocessing.Process(target=m.run_continuously, args=(update_interval,))
+        # p.start()
+        # (The following adds another simultaneous mediate process, though likely not needed):
+        # p = multiprocessing.Process(target=m.run_continuously, args=(1,))
+        # p.start()
 
     return
 
@@ -93,7 +99,7 @@ class Mediator:
         dispatch_wrap_params.update(self.params)                                                    # include mediator params in with dispatch_wrap_params
         self.dispatch_wrap = dispatch_wrap.DispatchWrap(plant=self.plant, params=dispatch_wrap.dispatch_wrap_params)
     
-    def run_once(self, datetime_start, datetime_end=None, timedelta=None):
+    def run_once(self, datetime_start=None, datetime_end=None, timedelta=None):
         """Get data from external plant and weather interfaces and run entire set
         of submodels, saving data to database.
 
@@ -135,11 +141,14 @@ class Mediator:
         #   Thread 1:
         #       a. Update previous timestep cache with current timestep cache and then clear current cache
 
+        if datetime_start is None:
+            datetime_start = self.get_current_plant_time()
+
         if datetime_end is None:
             if timedelta is not None:
                 datetime_end = datetime_start + timedelta
             else:
-                raise RuntimeError('Mediator::run_once: Either datetime_end or timedelta must have a valid argument.')
+                datetime_end = datetime_start + datetime.timedelta(hours=1)
 
         # Step 0: Normalize timesteps to even intervals and enforce timestep localization
         if datetime_start.tzinfo is None or datetime_end.tzinfo is None or \
@@ -267,7 +276,7 @@ class Mediator:
 
         return 0
 
-    def run_continuously(self, update_interval=5):
+    def run_continuously(self, update_interval=150):
         """Continuously get data from external plant and weather interfaces and run
         entire set of submodels, saving data to database
         
