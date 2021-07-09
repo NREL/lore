@@ -451,9 +451,9 @@ class Mediator:
         timestep before passing to the weather data getter, so it designates the end
         of the first timestep.
 
-        If `use_forecast`, replace the 'DNI', 'DHI', 'GHI', 'Wind Speed' columns
-        with the latest NDFD forecast from the forecasts submodule. In addition,
-        create two new columns: 'Clear Sky DNI' and 'Ambient Temperature'.
+        If `use_forecast`, replace the 'DNI', 'DHI', 'GHI', 'Temperature' and
+        'Wind Speed' columns with the latest NDFD forecast from the forecasts
+        submodule. In addition, create a new column: 'Clear Sky DNI'.
         """
         datetime_start += timestep      # converting to end of first timestep, by convention
 
@@ -501,9 +501,7 @@ class Mediator:
                 'dhi': 'DHI',
                 'ghi': 'GHI',
                 'wind_speed': 'Wind Speed',
-                # The TMY data has a column named 'Temperature'.
-                # This is different.
-                'temp_air': 'Ambient Temperature',
+                'temp_air': 'Temperature',
                 # This is not part of the TMY file!
                 'clear_sky': 'Clear Sky DNI',
             }
