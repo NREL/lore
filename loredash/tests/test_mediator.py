@@ -82,12 +82,10 @@ def test_get_weather_df():
         use_forecast = True,
     )
     assert(len(tmy_weather) == 2 * 48)
-    for key in ['DNI', 'DHI', 'GHI', 'Wind Speed']:
+    for key in ['DNI', 'DHI', 'GHI', 'Temperature', 'Wind Speed']:
         assert(key in tmy_weather)
         assert(key in forecast_weather)
-    assert('Ambient Temperature' in forecast_weather)
     assert('Clear Sky DNI' in forecast_weather)
-    assert(not 'Ambient Temperature' in tmy_weather)
     assert(not 'Clear Sky DNI' in tmy_weather)
     assert(len(tmy_weather) == len(forecast_weather))
     assert(sum(tmy_weather['DNI']) != sum(forecast_weather['DNI']))
