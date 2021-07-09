@@ -19,6 +19,14 @@ import mediation.plant as plant_
 from mediation.plant import Revenue
 # import multiprocessing
 
+def run_lore():
+    try:
+        init_and_mediate()
+    except OSError as err:
+        print("ERROR: OS error: {0}".format(err))
+    except Exception as err:
+        print("ERROR: {0}".format(err))
+
 def init_and_mediate():
     print("Initializing models...")
     parent_dir = str(Path(__file__).parents[1])

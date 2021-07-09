@@ -10,5 +10,5 @@ from mediation import mediator
 
 class Command(BaseCommand):
     def handle(self, *args, **kwargs):
-        mediator.init_and_mediate()
+        mediator.run_lore()
         
