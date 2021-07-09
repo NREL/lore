@@ -90,11 +90,6 @@ class Mediator:
 
         default_ssc_params.update(self.plant.get_state())                       # combine default and plant params, overwriting the defaults
         default_ssc_params.update(self.params)                                  # combine default and mediator params, overwriting the defaults
-        self.tech_wrap = tech_wrap.TechWrap(
-            params=default_ssc_params,                                          # already a copy so tech_wrap cannot edit
-            plant=copy.deepcopy(self.plant),                                    # copy so tech_wrap cannot edit
-            dispatch_wrap_params=dispatch_wrap.dispatch_wrap_params.copy(),     # copy so tech_wrap cannot edit
-            weather_file=None)
 
         self.forecaster = forecasts.SolarForecast(
             self.plant.design['latitude'],
@@ -109,7 +104,13 @@ class Mediator:
             dispatch_wrap_params = rapidjson.load(f)                                   # TODO: replace with a path to a JSON config file
         dispatch_wrap_params.update(self.params)                                                    # include mediator params in with dispatch_wrap_params
         self.dispatch_wrap = dispatch_wrap.DispatchWrap(plant=self.plant, params=dispatch_wrap.dispatch_wrap_params)
-    
+
+        self.tech_wrap = tech_wrap.TechWrap(
+            params=default_ssc_params,  # already a copy so tech_wrap cannot edit
+            plant=copy.deepcopy(self.plant),  # copy so tech_wrap cannot edit
+            dispatch_wrap_params=dispatch_wrap.dispatch_wrap_params.copy(),  # copy so tech_wrap cannot edit
+            weather_file=None)
+
     def run_once(self, datetime_start=None, datetime_end=None, timedelta=None):
         """Get data from external plant and weather interfaces and run entire set
         of submodels, saving data to database.
