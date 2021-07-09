@@ -325,6 +325,7 @@ class Plant:
             'longitude':        self.design['longitude'],
             'elevation':        self.design['elevation'],
             'timezone':         self.design['timezone'],
+            'timezone_string':  self.design['timezone_string'],
         }
         return location
 

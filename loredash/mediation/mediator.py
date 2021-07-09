@@ -186,6 +186,7 @@ class Mediator:
 
         # Step 1, Thread 2:
         # a. Get weather data and forecasts
+        self.forecaster.refresh_forecast_in_db(datetime_start)
         datetime_end_dispatch = datetime_start + \
             datetime.timedelta(hours=self.dispatch_wrap.params['dispatch_horizon'])
         weather_dispatch = self.get_weather_df(
@@ -498,7 +499,7 @@ class Mediator:
         data = data[(data.index >= datetime_start) & (data.index <= datetime_end)]
         if use_forecast:
             tic = time.process_time()
-            solar_forecast = self.forecaster.getForecast(
+            solar_forecast = self.forecaster.get_forecast(
                 datetime_start=data.index[0],
                 horizon=data.index[-1] - data.index[0],
                 resolution=timestep)
@@ -509,7 +510,7 @@ class Mediator:
                 'dhi': 'DHI',
                 'ghi': 'GHI',
                 'wind_speed': 'Wind Speed',
-                'temp_air': 'Temperature',
+                'temperature': 'Temperature',
                 # This is not part of the TMY file!
                 'clear_sky': 'Clear Sky DNI',
             }

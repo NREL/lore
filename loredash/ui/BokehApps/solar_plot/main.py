@@ -14,7 +14,6 @@ from bokeh import themes as bokeh_themes
 
 from mediation import forecasts
 
-
 # theme.py is loredash/io/BokehApps/theme/theme.py. It isn't an external
 # package. It's also different from `bokeh.themes`. There is only one constant
 # in it.
@@ -30,10 +29,10 @@ def latestData(queue):
     forecaster = forecasts.SolarForecast(
         38.23895540732931,
         -117.36368180656123,
-        "US/Pacific",
+        -8,
         1524,
     )
-    data = forecaster.latestForecast().reset_index()
+    data = forecaster.get_latest_forecast().reset_index()
     # Strip the timezone info to prevent Bokeh from trying to show it in
     # computer-local time. The result should be an axis in plant-local time.
     #TODO: fix timezone and eliminate "RuntimeWarning: DateTimeField SolarForecastData.forecast_for received a naive datetime"

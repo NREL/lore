@@ -4,6 +4,7 @@
     "longitude":                    -117.36368180656123,
     "elevation":                    1524,
     "timezone":                     -8,
+    "timezone_string":              "US/Pacific",
     "T_htf_cold_des":               290.0, 
     "T_htf_hot_des":                574.0,      
     "P_ref":                        115,          

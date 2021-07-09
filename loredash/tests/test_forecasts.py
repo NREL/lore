@@ -43,14 +43,14 @@ def test_forecaster_from_plant():
     return
 
 @pytest.mark.django_db
-def test_latestForecast():
+def test_latest_forecast():
     forecaster = forecasts.SolarForecast(
         38.2,
         -117.4,
         -8,
         100.0,
     )
-    data = forecaster.latestForecast()
+    data = forecaster.get_latest_forecast()
     assert(len(data) == 50)
     assert('clear_sky' in data.keys())
     assert('0.5' in data.keys())
@@ -62,30 +62,31 @@ def test_latestForecast():
     return
 
 @pytest.mark.django_db
-def test_latestForecast_resolution():
+def test_latest_forecast_resolution():
     forecaster = forecasts.SolarForecast(
         38.2,
         -117.4,
         -8,
         100.0,
     )
-    data = forecaster.latestForecast(resolution = pandas.Timedelta(hours = 2))
+    data = forecaster.get_latest_forecast(resolution = pandas.Timedelta(hours = 2))
     assert(len(data) == 26)
     return
 
 @pytest.mark.django_db
-def test_latestForecast_horizon():
+def test_latest_forecast_horizon():
     forecaster = forecasts.SolarForecast(
         38.2,
         -117.4,
         -8,
         100.0,
     )
-    data = forecaster.latestForecast(horizon = pandas.Timedelta(hours = 24))
+    data = forecaster.get_latest_forecast(horizon = pandas.Timedelta(hours = 24))
     assert(len(data) == 26)
     return
 
-def test_getForecast():
+@pytest.mark.django_db
+def test_get_forecast():
     forecaster = forecasts.SolarForecast(
         38.2,
         -117.4,
@@ -97,7 +98,10 @@ def test_getForecast():
     datetime_start = datetime.datetime.now(pytz.FixedOffset(-480))
     datetime_start = datetime_start - pandas.Timedelta(hours = 24)
     datetime_end = datetime_start + pandas.Timedelta(hours = 24)
-    data = forecaster.getForecast(
+    # === UPDATE THE DATABASE ===
+    forecaster.refresh_forecast_in_db(datetime_start)
+    # ===========================
+    data = forecaster.get_forecast(
         datetime_start = datetime_start,
         horizon = pandas.Timedelta(hours = 24),
         resolution = pandas.Timedelta(minutes = 1),
@@ -108,6 +112,6 @@ def test_getForecast():
     assert('dni' in data)
     assert('dhi' in data)
     assert('ghi' in data)
-    assert('temp_air' in data)
+    assert('temperature' in data)
     assert('wind_speed' in data)
     return

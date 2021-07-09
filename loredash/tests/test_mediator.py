@@ -38,6 +38,7 @@ def test_tmy3_to_df():
     assert(sum(data['DNI']) == 22216)
     return
 
+@pytest.mark.django_db
 def test_get_weather_df():
     plant_design_path = PARENT_DIR + "/../loredash/config/plant_design.json"
     m = mediator.Mediator(
@@ -55,7 +56,7 @@ def test_get_weather_df():
         datetime.timedelta(hours=1),
         m.weather_file,
     )
-    assert(len(weather) == 7 * 24 + 1)
+    assert(len(weather) == 7 * 24)
     # Test getting one day of weather. This should fail because it attempts to
     # get latest forecast, but the time is too old for the NDFD server.
     with pytest.raises(Exception) as err:
@@ -74,6 +75,8 @@ def test_get_weather_df():
         datetime.timedelta(hours=0.5),
         m.weather_file,
     )
+    # Update database
+    m.forecaster.refresh_forecast_in_db(datetime_start)
     forecast_weather = m.get_weather_df(
         datetime_start,
         datetime_start + datetime.timedelta(days = 2),
@@ -81,7 +84,7 @@ def test_get_weather_df():
         m.weather_file,
         use_forecast = True,
     )
-    assert(len(tmy_weather) == 2 * 48)
+    assert(len(tmy_weather) == 2 * 48 - 1)
     for key in ['DNI', 'DHI', 'GHI', 'Temperature', 'Wind Speed']:
         assert(key in tmy_weather)
         assert(key in forecast_weather)
@@ -110,7 +113,7 @@ def test_normalize_timesteps():
         timestep = 5,
     )
     assert(start == datetime.datetime(2021, 1, 1, 1, 30, 0, tzinfo = tzinfo))
-    assert(end == datetime.datetime(2021, 1, 3, 1, 35, 0, tzinfo = tzinfo))
+    assert(end == datetime.datetime(2021, 1, 3, 1, 30, 0, tzinfo = tzinfo))
 
     start, end = mediator.normalize_timesteps(
         datetime_start,
@@ -118,5 +121,5 @@ def test_normalize_timesteps():
         timestep = 15,
     )
     assert(start == datetime.datetime(2021, 1, 1, 1, 30, 0, tzinfo = tzinfo))
-    assert(end == datetime.datetime(2021, 1, 3, 1, 45, 0, tzinfo = tzinfo))
+    assert(end == datetime.datetime(2021, 1, 3, 1, 30, 0, tzinfo = tzinfo))
     return
