@@ -10,14 +10,13 @@ import datetime
 
 from mediation import dispatch_model
 
-
 dispatch_wrap_params = {
     # Dispatch optimization
     'dispatch_horizon':                     48.,                    # Time into future from start of current timestep that dispatch model is modeling (hr)
     'dispatch_steplength_array':            [5, 15, 60],            # Dispatch time step sizes used in the variable timestep operations (min)
     'dispatch_steplength_end_time':         [1, 4, 48],             # End time for dispatch step lengths (hr)
     'nonlinear_model_time':                 4.0,                    # Amount of time to apply nonlinear dispatch model (hr) (not currently used)
-    'disp_time_weighting':                  0.999,                  # Dispatch time weighting factor. 
+    'disp_time_weighting':                  0.999,                  # Dispatch time weighting factor.
     'use_linear_dispatch_at_night':         False,                  # Revert to the linear dispatch model when all of the time-horizon in the nonlinear model is at night.
     'night_clearsky_cutoff':                100.,                   # Cutoff value for clear-sky DNI defining "night"
 
@@ -32,7 +31,6 @@ dispatch_wrap_params = {
     'day_ahead_tol_minus':                  5,                      # Tolerance for under-production relative to day-ahead schedule before incurring penalty (MWhe)
     'day_ahead_ignore_off':                 True,                   # Don't apply schedule penalties when cycle is scheduled to be off for the full hour (MWhe)
 }
-
 
 class DispatchParams:
     def __init__(self):
