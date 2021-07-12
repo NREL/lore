@@ -70,7 +70,7 @@ class Mediator:
     def __init__(self, params_path, plant_design_path, weather_file=None, dispatch_params_path=None,
                  update_interval=datetime.timedelta(seconds=5)):
         with open(params_path) as f:
-            self.params = rapidjson.load(f)
+            self.params = rapidjson.load(f, parse_mode=1)
         self.weather_file = weather_file
         self.update_interval = update_interval
         self.simulation_timestep = datetime.timedelta(hours=1/self.params['time_steps_per_hour'])
@@ -81,7 +81,7 @@ class Mediator:
             self.params['time_steps_per_hour'])
 
         with open(plant_design_path) as f:
-            plant_design = rapidjson.load(f)
+            plant_design = rapidjson.load(f, parse_mode=1)
         self.plant = plant_.Plant(
             design=plant_design,
             initial_state=plant_.plant_initial_state)
@@ -101,7 +101,7 @@ class Mediator:
 
         # Setup dispatch_wrap
         with open(dispatch_params_path) as f:
-            dispatch_wrap_params = rapidjson.load(f)                                   # TODO: replace with a path to a JSON config file
+            dispatch_wrap_params = rapidjson.load(f, parse_mode=1)                                   # TODO: replace with a path to a JSON config file
         dispatch_wrap_params.update(self.params)                                                    # include mediator params in with dispatch_wrap_params
         self.dispatch_wrap = dispatch_wrap.DispatchWrap(plant=self.plant, params=dispatch_wrap.dispatch_wrap_params)
 

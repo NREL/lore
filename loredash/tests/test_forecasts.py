@@ -29,7 +29,7 @@ import rapidjson
 @pytest.mark.django_db
 def test_forecaster_from_plant():
     with open("./config/plant_design.json") as f:
-        plant_design = rapidjson.load(f)
+        plant_design = rapidjson.load(f, parse_mode=1)
     forecaster = forecasts.SolarForecast(
         plant_design['latitude'],
         plant_design['longitude'],
