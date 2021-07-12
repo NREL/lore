@@ -47,7 +47,7 @@ def test_get_weather_df():
         weather_file = PARENT_DIR + "/data/daggett_ca_34.865371_-116.783023_psmv3_60_tmy.csv",
         update_interval = datetime.timedelta(seconds = 5),
     )
-    tzinfo = pytz.FixedOffset(60 * m.plant.design['timezone'])
+    tzinfo = pytz.UTC
     datetime_start = datetime.datetime(2021, 1, 1, 0, 0, 0, tzinfo = tzinfo)
     # Test getting one week of weather. Should be pure TMY data.
     weather = m.get_weather_df(
@@ -76,7 +76,7 @@ def test_get_weather_df():
         m.weather_file,
     )
     # Update database
-    m.forecaster.refresh_forecast_in_db(datetime_start)
+    m.refresh_forecast_in_db(datetime_start)
     forecast_weather = m.get_weather_df(
         datetime_start,
         datetime_start + datetime.timedelta(days = 2),
@@ -104,7 +104,7 @@ def test_get_weather_df():
     return
 
 def test_normalize_timesteps():
-    tzinfo = pytz.FixedOffset(-480)
+    tzinfo = pytz.UTC
     datetime_start = datetime.datetime(2021, 1, 1, 1, 32, 0, tzinfo = tzinfo)
     datetime_end = datetime_start + datetime.timedelta(days = 2)
     start, end = mediator.normalize_timesteps(

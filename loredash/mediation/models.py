@@ -61,8 +61,7 @@ class WeatherData(models.Model):
         return str(self.timestamp)
 
 class SolarForecastData(models.Model):
-    forecast_made = models.DateTimeField(verbose_name="Forecast Made", db_index=True)
-    forecast_for = models.DateTimeField(verbose_name="Forecast For", db_index=True)
+    timestamp = models.DateTimeField(verbose_name="Timestep end", primary_key=True)
     dni = models.FloatField(verbose_name="Direct normal irradiance [W/m2]", default=None)
     dhi = models.FloatField(verbose_name="Diffuse horizontal irradiance [W/m2]", default=None)
     ghi = models.FloatField(verbose_name="Global horizontal irradiance [W/m2]", default=None)
@@ -73,6 +72,10 @@ class SolarForecastData(models.Model):
     wind_speed = models.FloatField(verbose_name="Horizontal wind speed [m/s]", default=None)
     clear_sky = models.FloatField(verbose_name="Clear Sky [W/m2]", default=None)
     ratio = models.FloatField(verbose_name="Ratio [Predicted/Clear Sky]", default=None)
-
+    dni_10 = models.FloatField(verbose_name="Clear Sky 10% probability [W/m2]", default=None)
+    dni_25 = models.FloatField(verbose_name="Clear Sky 25% probability [W/m2]", default=None)
+    dni_50 = models.FloatField(verbose_name="Clear Sky 50% probability [W/m2]", default=None)
+    dni_75 = models.FloatField(verbose_name="Clear Sky 75% probability [W/m2]", default=None)
+    dni_90 = models.FloatField(verbose_name="Clear Sky 90% probability [W/m2]", default=None)
     def __str__(self):
-        return str(self.forecast_for)
+        return str(self.timestep)
