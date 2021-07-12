@@ -33,10 +33,12 @@ def init_and_mediate():
     default_weather_file = parent_dir + "/data/daggett_ca_34.865371_-116.783023_psmv3_60_tmy.csv"
     plant_design_path = parent_dir + "/config/plant_design.json"
     mediator_params_path = parent_dir + "/config/mediator_settings.json"
+    dispatch_params_path = parent_dir + "/config/dispatch_settings.json"
     m = Mediator(
         params_path=mediator_params_path,
         plant_design_path=plant_design_path,
         weather_file=default_weather_file,
+        dispatch_params_path=dispatch_params_path,
         update_interval=datetime.timedelta(seconds=5),
     )
     print("Modeling previous day...")
