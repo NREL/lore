@@ -103,12 +103,12 @@ class Mediator:
         with open(dispatch_params_path) as f:
             dispatch_wrap_params = rapidjson.load(f, parse_mode=1)                                   # TODO: replace with a path to a JSON config file
         dispatch_wrap_params.update(self.params)                                                    # include mediator params in with dispatch_wrap_params
-        self.dispatch_wrap = dispatch_wrap.DispatchWrap(plant=self.plant, params=dispatch_wrap.dispatch_wrap_params)
+        self.dispatch_wrap = dispatch_wrap.DispatchWrap(plant=self.plant, params=dispatch_wrap_params)
 
         self.tech_wrap = tech_wrap.TechWrap(
             params=default_ssc_params,  # already a copy so tech_wrap cannot edit
             plant=copy.deepcopy(self.plant),  # copy so tech_wrap cannot edit
-            dispatch_wrap_params=dispatch_wrap.dispatch_wrap_params.copy(),  # copy so tech_wrap cannot edit
+            dispatch_wrap_params=dispatch_wrap_params.copy(),  # copy so tech_wrap cannot edit
             weather_file=None)
 
         self.plant.update_flux_maps(self.tech_wrap.calc_flux_eta_maps(self.plant.get_design(), self.plant.get_state()))
