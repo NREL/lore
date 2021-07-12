@@ -104,9 +104,14 @@ class SolarForecast:
         self.forecast_uncertainty = ForecastUncertainty(uncertainty_bands)
         return
         
-    def get_raw_data(self, datetime_start, include_columns):
-        # This datetime_start coming in is in FixedOffset
+    def get_raw_data(self, datetime_start):
+        """
+        Get the forecast data from pvlib, beginning at `datetime_start`. This
+        includes the probabilistic forecasts of DNI.
+        """
+        # This datetime_start coming in is in UTC.
         assert(datetime_start.tzinfo == pytz.UTC)
+        include_columns = ['dni', 'ghi', 'dhi', 'temp_air', 'wind_speed']
         data = forecast.NDFD().get_processed_data(
             self.plant_location.latitude,
             self.plant_location.longitude,

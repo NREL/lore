@@ -441,10 +441,7 @@ class Mediator:
         """
         Update the database with the latest forecast.
         """
-        data = self.forecaster.get_raw_data(
-            datetime_start,
-            include_columns=['dni', 'ghi', 'dhi', 'temp_air', 'wind_speed'],
-        )
+        data = self.forecaster.get_raw_data(datetime_start)
         instances = [
             models.SolarForecastData(
                 timestamp=pytz.UTC.normalize(time),

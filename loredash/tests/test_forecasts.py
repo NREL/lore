@@ -13,10 +13,7 @@ def test_get_forecast():
     # data for.
     datetime_start = datetime.datetime.now(pytz.UTC)
     datetime_start = datetime_start - datetime.timedelta(hours = 24)
-    data = forecaster.get_raw_data(
-        datetime_start, 
-        ['dni', 'dhi', 'temp_air', 'wind_speed', 'ghi'],
-    )
+    data = forecaster.get_raw_data(datetime_start)
     assert(len(data) >= 24)
     assert(datetime_start >= data.index[0])
     assert('dni' in data)
