@@ -45,12 +45,12 @@
 	"is_rec_user_mflow":			        false,		            // or this should be unassigned, true if control_receiver == "CD_data"
 	"rec_clearsky_fraction":		        1.0,
     "rec_clearsky_model":                   0,
-    "rec_su_delay":                         0.,                     // = 0.01 if control_field == "CD_data" or control_receiver == "CD_data"  Set receiver start time and energy to near zero to enforce CD receiver startup timing
-    "rec_qf_delay":                         0.,                     // = 0.01 if control_field == "CD_data" or control_receiver == "CD_data"
+    "rec_su_delay":                         0.0,                     // = 0.01 if control_field == "CD_data" or control_receiver == "CD_data"  Set receiver start time and energy to near zero to enforce CD receiver startup timing
+    "rec_qf_delay":                         0.0,                     // = 0.01 if control_field == "CD_data" or control_receiver == "CD_data"
     "is_rec_to_coldtank_allowed":           true,
     "use_CD_measured_reflectivity":	        false,                  // Use measured heliostat reflectivity from CD data
     "fixed_soiling_loss":			        0.02,                   // Fixed soiling loss (if not using CD measured reflectivity) = 1 - (reflectivity / clean_reflectivity)
 	"is_rec_startup_trans":			        false,                  // TODO: Disabling transient startup -> ssc not yet configured to start/stop calculations in the middle of startup with this model
 	"is_rec_model_trans":			        false,                  // TODO: Disabling transient receiver model -> ssc not yet configured to store/retrieve receiver temperature profiles
-    "cycle_type":                           "user_defined",         // "user-defined", "sliding", or "fixed"
+    "cycle_type":                           "user_defined"         // "user-defined", "sliding", or "fixed"
 }
