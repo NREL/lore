@@ -575,7 +575,9 @@ class PySSC:
 
 ###########################################################################################
 if __name__ == '__main__':
-    from data.mspt_2021_develop_defaults import default_ssc_params  # exported from latest open-source develop as JSON inputs
+    parent_dir = str(Path(__file__).parents[1])
+    with open(parent_dir + './data/mspt_2021_develop_defaults.json', 'r') as f:
+        default_ssc_params = rapidjson.load(f)
     weather_file = "C:/SAM/2020.11.29/solar_resource/daggett_ca_34.865371_-116.783023_psmv3_60_tmy.csv"
 
     # # Run PySAM normally

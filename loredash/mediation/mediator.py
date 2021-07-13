@@ -11,7 +11,6 @@ import numpy as np
 import rapidjson
 from pathlib import Path
 
-from data.mspt_2020_defaults import default_ssc_params
 # import django     # Needed here before "import models" if there's ever error "Apps aren't loaded yet"
 # django.setup()
 from mediation import tech_wrap, data_validator, dispatch_wrap, models, forecasts
@@ -90,8 +89,11 @@ class Mediator:
         
         settings.PLANT_TIME_ZONE = plant_design['timezone_string']
 
-        default_ssc_params.update(self.plant.get_state())                       # combine default and plant params, overwriting the defaults
-        default_ssc_params.update(self.params)                                  # combine default and mediator params, overwriting the defaults
+        parent_dir = str(Path(__file__).parents[1])
+        with open(parent_dir + './data/mspt_2020_defaults.json', 'r') as f:
+            ssc_params = rapidjson.load(f)
+        ssc_params.update(self.plant.get_state())                       # combine default and plant params, overwriting the defaults
+        ssc_params.update(self.params)                                  # combine default and mediator params, overwriting the defaults
 
         self.forecaster = forecasts.SolarForecast(
             self.plant.design['latitude'],
@@ -106,7 +108,7 @@ class Mediator:
         self.dispatch_wrap = dispatch_wrap.DispatchWrap(plant=self.plant, params=dispatch_wrap_params)
 
         self.tech_wrap = tech_wrap.TechWrap(
-            params=default_ssc_params,  # already a copy so tech_wrap cannot edit
+            params=ssc_params,  # already a copy so tech_wrap cannot edit
             plant=copy.deepcopy(self.plant),  # copy so tech_wrap cannot edit
             dispatch_wrap_params=dispatch_wrap_params.copy(),  # copy so tech_wrap cannot edit
             weather_file=None)
