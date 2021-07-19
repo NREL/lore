@@ -7,6 +7,13 @@ import pytz
 
 from mediation import forecasts
 
+def test_ambient_pressure():
+    forecaster = forecasts.SolarForecast(38.2, -117.4, -8, 0.0)
+    assert(abs(forecaster.ambient_pressure() - 1013.25) < 1)
+    forecaster = forecasts.SolarForecast(38.2, -117.4, -8, 1000.0)
+    assert(abs(forecaster.ambient_pressure() - 898.75) < 1)
+    return
+
 def test_get_forecast():
     forecaster = forecasts.SolarForecast(38.2, -117.4, -8, 100.0)
     # Choose a start time that is not current, but that NDFD will still have
@@ -27,4 +34,5 @@ def test_get_forecast():
     assert('0.75' in data)
     assert('0.9' in data)
     assert((data['0.9'] >= data['0.1']).all())
+    assert('pressure' in data)
     return

@@ -11,6 +11,7 @@ warnings.filterwarnings(
     message = "The forecast module algorithms and features are highly experimental.",
 )
 
+from pvlib import atmosphere
 from pvlib import forecast
 from pvlib import location
 
@@ -161,4 +162,15 @@ class SolarForecast:
         )
         for k in forecast_columns:
             new_data[str(k)] = new_data[str(k)] * new_data['clear_sky']
+        new_data['pressure'] = self.ambient_pressure()
         return new_data
+
+    def ambient_pressure(self):
+        """
+        Return the atmospheric pressure [mbar] at the plant location.
+
+        This is based solely on altitude, and does not take into account current
+        weather conditions.
+        """
+        # 100 conversion needed becauses alt2pres returns Pascals.
+        return atmosphere.alt2pres(self.plant_location.altitude) / 100

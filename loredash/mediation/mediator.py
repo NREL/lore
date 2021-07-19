@@ -453,6 +453,7 @@ class Mediator:
                 dhi=row.dhi,
                 ghi=row.ghi,
                 temperature=row.temp_air,
+                pressure=row.pressure,
                 wind_speed=row.wind_speed,
                 clear_sky=row.clear_sky,
                 ratio=row.ratio,

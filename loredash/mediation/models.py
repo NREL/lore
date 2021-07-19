@@ -67,7 +67,7 @@ class SolarForecastData(models.Model):
     ghi = models.FloatField(verbose_name="Global horizontal irradiance [W/m2]", default=None)
     # dew_point = models.FloatField(verbose_name="Dew point [C]", default=None)
     temperature = models.FloatField(verbose_name="Ambient dry bulb temperature [C]", default=None)
-    # pressure = models.FloatField(verbose_name="Ambient atmospheric pressure [mbar]", default=None)
+    pressure = models.FloatField(verbose_name="Ambient atmospheric pressure [mbar]", default=None)
     # wind_direction = models.FloatField(verbose_name="Horizontal wind direction [deg]", default=None)
     wind_speed = models.FloatField(verbose_name="Horizontal wind speed [m/s]", default=None)
     clear_sky = models.FloatField(verbose_name="Clear Sky [W/m2]", default=None)
