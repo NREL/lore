@@ -97,7 +97,7 @@ class Mediator:
         self.forecaster = forecasts.SolarForecast(
             self.plant.design['latitude'],
             self.plant.design['longitude'],
-            self.plant.design['timezone_string'],
+            self.plant.design['timezone'],  # Fixed offset!
             self.plant.design['elevation'])
 
         self.plant.update_flux_maps(self.tech_wrap.calc_flux_eta_maps(self.plant.get_design(), self.plant.get_state()))
@@ -162,11 +162,12 @@ class Mediator:
         if datetime_start.tzinfo is None or datetime_end.tzinfo is None or \
             datetime_start.tzinfo != datetime_end.tzinfo:
             print("WARNING: Timesteps in run_once were not properly localized.")
-            _tz = pytz.timezone(self.plant.design['timezone_string'])
-            datetime_start = _tz.localize(datetime_start)
-            datetime_end = _tz.localize(datetime_end)
-        self._validate_plant_local_time(datetime_start)
-        self._validate_plant_local_time(datetime_end)
+            # Assume the datetime was given for the plant.
+            _tz = pytz.FixedOffset(60 * self.plant.design['timezone'])
+            datetime_start = pytz.UTC.normalize(_tz.localize(datetime_start))
+            datetime_end = pytz.UTC.normalize(_tz.localize(datetime_end))
+        self._validate_UTC_time(datetime_start)
+        self._validate_UTC_time(datetime_end)
 
         datetime_start, datetime_end = normalize_timesteps(
             datetime_start,
@@ -186,6 +187,7 @@ class Mediator:
 
         # Step 1, Thread 2:
         # a. Get weather data and forecasts
+        self.refresh_forecast_in_db(datetime_start)
         datetime_end_dispatch = datetime_start + \
             datetime.timedelta(hours=self.dispatch_wrap.params['dispatch_horizon'])
         weather_dispatch = self.get_weather_df(
@@ -296,10 +298,8 @@ class Mediator:
         reactor.run()
 
     def get_current_plant_time(self):
-        "Return the current time in plant-local time."
-        return datetime.datetime.now(
-            pytz.timezone(self.plant.design['timezone_string']),
-        )
+        "Return the current time in UTC."
+        return datetime.datetime.now(pytz.UTC)
 
     def model_previous_day_and_add_to_db(self):
         """Simulate previous day and add to database
@@ -319,11 +319,9 @@ class Mediator:
         self.run_once(datetime_start_prev_day, datetime_end_current_day)
         return 0
     
-    def _validate_plant_local_time(self, time):
-        """A helper function that validates the given `time` is localized to the
-        timezone of the plant.
-        """
-        assert(time.tzinfo.zone == self.plant.design['timezone_string'])
+    def _validate_UTC_time(self, time):
+        "A helper function that validates the given `time` is in UTC."
+        assert(time.tzinfo == pytz.UTC)
         return
 
     def add_weather_to_db(self, df_records):
@@ -439,6 +437,79 @@ class Mediator:
         fixed_tz = pytz.FixedOffset(60 * self.plant.design['timezone'])
         return time.astimezone(fixed_tz).replace(tzinfo=None)
 
+    def refresh_forecast_in_db(self, datetime_start):
+        """
+        Update the database with the latest forecast.
+        """
+        data = self.forecaster.get_raw_data(datetime_start)
+        instances = [
+            models.SolarForecastData(
+                timestamp=pytz.UTC.normalize(time),
+                # Choice: use DNI directly from pvlib, or our forecast?
+                # In data from the site, we observed a bias in the NDFD data 
+                # that underestimates actual DNI. The forecast corrects that.
+                # dni=row.dni,   # pvlib
+                dni=row['0.5'],  # our forecast
+                dhi=row.dhi,
+                ghi=row.ghi,
+                temperature=row.temp_air,
+                wind_speed=row.wind_speed,
+                clear_sky=row.clear_sky,
+                ratio=row.ratio,
+                dni_10=row['0.1'],
+                dni_25=row['0.25'],
+                dni_50=row['0.5'],
+                dni_75=row['0.75'],
+                dni_90=row['0.9'],
+            )
+            # Okay, I know data.iterrows is slow. But the dataframe is never
+            # very big.
+            for (time, row) in data.iterrows()
+        ]
+        models.SolarForecastData.objects.bulk_create(
+            instances, 
+            ignore_conflicts=True,
+        )
+        return
+
+    def get_forecast(
+        self,
+        index,
+        resolution=pd.Timedelta(hours=1),
+    ):
+        """
+        Return the most recent DNI forecast issued before `datetime_start`,
+        covering the time between `datetime_start` and `datetime_end`.
+
+        Parameters
+        ----------
+        datetime_start : timezone aware datetime
+            Start of the forecast window.
+        resolution : pd.Timedelta
+            The resolution passed to `pd.resample` for resampling the
+            NDFD forecast into finer resolution. Defaults to `hours = 1`.
+        horizon : pd.Timedelta
+            Length of the forecast window.
+        """
+        query = models.SolarForecastData.objects.filter(
+            timestamp__gte=index[0] - datetime.timedelta(hours=1)
+        )
+        raw_data = pd.DataFrame(query.values())
+        raw_data.set_index('timestamp', inplace=True)
+        data = raw_data.resample(resolution).mean()
+        # Clean up the ratio by imputing any NaNs that arose to the nearest
+        # non-NaN value. This means we assume that the start of the day acts
+        # like the earliest observation, and the end of the day looks like the
+        # last observation.
+        data.interpolate(method='linear', inplace=True)
+        # However, nearest only works when there are non-NaN values either side.
+        # For the first and last NaNs, use bfill and ffill:
+        data.fillna(method='bfill', inplace=True)
+        data.fillna(method='ffill', inplace=True)
+        data = data[data.index >= index[0]]
+        data = data[data.index <= index[-1]]
+        return data
+        
     def get_weather_df(
         self,
         datetime_start,
@@ -464,9 +535,8 @@ class Mediator:
         submodule. In addition, create a new column: 'Clear Sky DNI'.
         """
         datetime_start += timestep      # converting to end of first timestep, by convention
-
-        self._validate_plant_local_time(datetime_start)
-        self._validate_plant_local_time(datetime_end)
+        self._validate_UTC_time(datetime_start)
+        self._validate_UTC_time(datetime_end)
         assert(timestep.total_seconds() <= 3600)
         # The timezone of the TMY file:
         tmy_tz = pytz.FixedOffset(60 * self.plant.design['timezone'])
@@ -479,7 +549,7 @@ class Mediator:
         )
         # Re-localize the datetimes again. First add the TMY timezone, and then
         # convert to plant-local time.
-        data.index = data.index.tz_localize(tmy_tz).tz_convert(datetime_start.tzinfo)
+        data.index = data.index.tz_localize(tmy_tz).tz_convert(pytz.UTC)
         # Resample data into finer timesteps, filling with previous value.
         data = data.resample(timestep).pad()
         # Extrapolate out last point, filling with last value
@@ -493,15 +563,12 @@ class Mediator:
             ),
         )
         data = data.reindex(dates)
-        data.fillna(method = 'ffill', inplace = True)
+        data.fillna(method='ffill', inplace=True)
         # Now strip the data back to what the user asked for:
         data = data[(data.index >= datetime_start) & (data.index <= datetime_end)]
         if use_forecast:
             tic = time.process_time()
-            solar_forecast = self.forecaster.getForecast(
-                datetime_start=data.index[0],
-                horizon=data.index[-1] - data.index[0],
-                resolution=timestep)
+            solar_forecast = self.get_forecast(data.index, resolution=timestep)
             toc = time.process_time()
             print("Generating forecast took {seconds:.2f} seconds".format(seconds=toc-tic))
             key_map = {
@@ -509,7 +576,7 @@ class Mediator:
                 'dhi': 'DHI',
                 'ghi': 'GHI',
                 'wind_speed': 'Wind Speed',
-                'temp_air': 'Temperature',
+                'temperature': 'Temperature',
                 # This is not part of the TMY file!
                 'clear_sky': 'Clear Sky DNI',
             }
