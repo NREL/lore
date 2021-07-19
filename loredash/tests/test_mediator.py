@@ -85,7 +85,7 @@ def test_get_weather_df():
         use_forecast = True,
     )
     assert(len(tmy_weather) == 2 * 48 - 1)
-    for key in ['DNI', 'DHI', 'GHI', 'Temperature', 'Wind Speed']:
+    for key in ['DNI', 'DHI', 'GHI', 'Temperature', 'Pressure', 'Wind Speed']:
         assert(key in tmy_weather)
         assert(key in forecast_weather)
     assert('Clear Sky DNI' in forecast_weather)
@@ -100,7 +100,7 @@ def test_get_weather_df():
     # TMY must be too.
     for (tmy, forecast) in zip(tmy_weather['DNI'], forecast_weather['Clear Sky DNI']):
         if forecast < 100:
-            assert(tmy <= 200)
+            assert(tmy <= 500)
     return
 
 def test_normalize_timesteps():
