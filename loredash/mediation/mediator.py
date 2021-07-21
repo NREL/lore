@@ -453,6 +453,7 @@ class Mediator:
                 dhi=row.dhi,
                 ghi=row.ghi,
                 temperature=row.temp_air,
+                pressure=row.pressure,
                 wind_speed=row.wind_speed,
                 clear_sky=row.clear_sky,
                 ratio=row.ratio,
@@ -579,6 +580,7 @@ class Mediator:
                 'temperature': 'Temperature',
                 # This is not part of the TMY file!
                 'clear_sky': 'Clear Sky DNI',
+                'pressure': 'Pressure',
             }
             for (k, v) in key_map.items():
                 data.loc[:, v] = list(solar_forecast[k])
