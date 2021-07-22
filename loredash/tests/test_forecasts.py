@@ -2,24 +2,7 @@
 #  $ python -mpytest
 
 import pytest
-
-# Our database gets initialized in a weird way because it only happens when you
-# run the server. As a work-around, use the current database on disk.
-# 
-# TODO(odow): remove this setup when we don't need an initialized database.
-# TODO: move this file's contents to tests.py
-from django.conf import settings
-@pytest.fixture(scope='session')
-def django_db_setup():
-    settings.DATABASES['default'] = {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': 'db.sqlite3',
-    }
-    return
-
 import datetime
-import pandas
-from pvlib import location
 import pytz
 
 from mediation import forecasts
@@ -73,41 +56,32 @@ def test_latestForecast_resolution():
     assert(len(data) == 26)
     return
 
-@pytest.mark.django_db
-def test_latestForecast_horizon():
-    forecaster = forecasts.SolarForecast(
-        38.2,
-        -117.4,
-        'US/Pacific',
-        100.0,
-    )
-    data = forecaster.latestForecast(horizon = pandas.Timedelta(hours = 24))
-    assert(len(data) == 26)
+def test_ambient_pressure():
+    forecaster = forecasts.SolarForecast(38.2, -117.4, -8, 0.0)
+    assert(abs(forecaster.ambient_pressure() - 1013.25) < 1)
+    forecaster = forecasts.SolarForecast(38.2, -117.4, -8, 1000.0)
+    assert(abs(forecaster.ambient_pressure() - 898.75) < 1)
     return
 
-def test_getForecast():
-    forecaster = forecasts.SolarForecast(
-        38.2,
-        -117.4,
-        'US/Pacific',
-        100.0,
-    )
+def test_get_forecast():
+    forecaster = forecasts.SolarForecast(38.2, -117.4, -8, 100.0)
     # Choose a start time that is not current, but that NDFD will still have
     # data for.
-    datetime_start = datetime.datetime.now(pytz.timezone('US/Pacific'))
-    datetime_start = datetime_start - pandas.Timedelta(hours = 24)
-    datetime_end = datetime_start + pandas.Timedelta(hours = 24)
-    data = forecaster.getForecast(
-        datetime_start = datetime_start,
-        horizon = pandas.Timedelta(hours = 24),
-        resolution = pandas.Timedelta(minutes = 1),
-    )
-    assert(len(data) >= 24 * 60)
+    datetime_start = datetime.datetime.now(pytz.UTC)
+    datetime_start = datetime_start - datetime.timedelta(hours = 24)
+    data = forecaster.get_raw_data(datetime_start)
+    assert(len(data) >= 24)
     assert(datetime_start >= data.index[0])
-    assert(datetime_end <= data.index[-1])
     assert('dni' in data)
     assert('dhi' in data)
     assert('ghi' in data)
     assert('temp_air' in data)
     assert('wind_speed' in data)
+    assert('0.1' in data)
+    assert('0.25' in data)
+    assert('0.5' in data)
+    assert('0.75' in data)
+    assert('0.9' in data)
+    assert((data['0.9'] >= data['0.1']).all())
+    assert('pressure' in data)
     return

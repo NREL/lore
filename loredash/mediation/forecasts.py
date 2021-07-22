@@ -11,10 +11,9 @@ warnings.filterwarnings(
     message = "The forecast module algorithms and features are highly experimental.",
 )
 
+from pvlib import atmosphere
 from pvlib import forecast
 from pvlib import location
-
-from mediation.models import SolarForecastData
 
 class ForecastUncertainty:
     """
@@ -84,17 +83,19 @@ class SolarForecast:
             The latitude of the plant.
         longitude : float
             The longitude of the plant.
-        timezone : float
-            The timezone of the plant.
+        timezone : int
+            The timezone of the plant in fixed-offset.
         altitude : float
             The altitude of the plant. Used to compute clear-sky DNI.
         uncertainty_bands : str
             The filename of a CSV file containing the uncertainty matrices.
         """
+        if not isinstance(timezone, int):
+            raise TypeError("Expected the timezone to be an integer representing the FixedOffset time.")
         self.plant_location = location.Location(
             latitude,
             longitude,
-            timezone,
+            pytz.FixedOffset(60 * timezone),
             altitude,
         )
         if uncertainty_bands == "":
@@ -103,8 +104,15 @@ class SolarForecast:
             )
         self.forecast_uncertainty = ForecastUncertainty(uncertainty_bands)
         return
-    
-    def _rawData(self, datetime_start, include_columns = ['dni']):
+        
+    def get_raw_data(self, datetime_start):
+        """
+        Get the forecast data from pvlib, beginning at `datetime_start`. This
+        includes the probabilistic forecasts of DNI.
+        """
+        # This datetime_start coming in is in UTC.
+        assert(datetime_start.tzinfo == pytz.UTC)
+        include_columns = ['dni', 'ghi', 'dhi', 'temp_air', 'wind_speed']
         data = forecast.NDFD().get_processed_data(
             self.plant_location.latitude,
             self.plant_location.longitude,
@@ -138,163 +146,31 @@ class SolarForecast:
         # For the first and last NaNs, use bfill and ffill:
         data.fillna(method = 'bfill', inplace = True)
         data.fillna(method = 'ffill', inplace = True)
-        return data
-    
-    def _toUTC(self, t):
-        "Convert a timezone-aware `t` to UTC and strip timezone info."
-        return t.astimezone('UTC').replace(tzinfo = None)
-
-    def _toLocal(self, t):
-        "Convert a timezone-naive `t` to local timezone-aware."
-        return t.tz_convert(self.plant_location.tz)
-
-    def _updateDatabase(self, datetime_start):
-        data = self._rawData(datetime_start)
-        current_time = self._toUTC(
-            pandas.Timestamp(
-                datetime.datetime.now(pytz.timezone(self.plant_location.tz)),
-            ),
-        )
-        instances = [
-            SolarForecastData(
-                # Note how these are now in UTC! Remember this when we get them
-                # back.
-                forecast_made = current_time,
-                forecast_for = self._toUTC(time),
-                clear_sky = row.clear_sky,
-                ratio = row.ratio,
-            )
-            # Okay, I know data.iterrows is slow. But the dataframe is never 
-            # very big.
-            for (time, row) in data.iterrows()
-        ]
-        SolarForecastData.objects.bulk_create(instances, ignore_conflicts=True)
-        return
-
-    def _hourDiff(self, t):
-        return (datetime.datetime.now(datetime.timezone.utc) - t).total_seconds() / 3600
-
-    def _updateLatestForecast(self, resolution, horizon):
-        self._updateDatabase(
-            datetime_start = pandas.Timestamp(
-                 datetime.datetime.now(pytz.timezone(self.plant_location.tz)),
-            ),
-        )
-        return self.latestForecast(resolution = resolution, horizon = horizon)
-
-    def _correctTime(self, raw_data, resolution, horizon, datetime_start=None):
-        """
-        Return a modified version of `raw_data`, imputed as necessary so that it
-        has the correct number of rows to match the resolution and horizon, as
-        measured from the first row in `raw_data`.
-        """
-        data = raw_data.resample(resolution).mean()
-        # Clean up the ratio by imputing any NaNs that arose to the nearest
-        # non-NaN value. This means we assume that the start of the day acts
-        # like the earliest observation, and the end of the day looks like the
-        # last observation.
-        data.interpolate(method = 'linear', inplace = True)
-        # However, nearest only works when there are non-NaN values either side.
-        # For the first and last NaNs, use bfill and ffill:
-        data.fillna(method = 'bfill', inplace = True)
-        data.fillna(method = 'ffill', inplace = True)
-        if datetime_start is None:
-            datetime_start = data.index[0]
-        datetime_end = datetime_start + horizon
-        data = data[data.index < datetime_end + resolution]
-        data = data[data.index > datetime_start - resolution]
-        return data
-
-    def _applyForecastUncertainty(self, data):
         # For each row (level = 0), convert the median ratio estimate into a
         # probabilistic ratio estimate.
-        data = data.groupby(level = 0).apply(
+        probabilistic_data = data.groupby(level = 0).apply(
             lambda df: self.forecast_uncertainty.forecast(
                 (df.index[0] - data.index[0]).seconds / 3_600,
                 df['ratio'][0],
             )
         )
-        # Get clear-sky estimates for the new time-points.
-        data['clear_sky'] = self.plant_location.get_clearsky(data.index)['dni']
-        # Convert the ratio estimates back to DNI-space by multiplying by the
-        # clear-sky.
-        for k in data.keys():
-            if k == 'clear_sky':
-                continue
-            data[k] = data[k] * data['clear_sky']
-        data.rename(columns = {k: str(k) for k in data.keys()}, inplace=True)
-        return data
-
-    def getForecast(
-        self,
-        datetime_start,
-        resolution = pandas.Timedelta(hours = 1),
-        horizon = pandas.Timedelta(hours = 48),
-    ):
-        """
-        Return the most recent DNI forecast issued before `datetime_start`,
-        covering the time between `datetime_start` and `datetime_end`.
-
-        Parameters
-        ----------
-        datetime_start : timezone aware datetime
-            Start of the forecast window.
-        resolution : pandas.Timedelta
-            The resolution passed to `pandas.ressample` for resampling the
-            NDFD forecast into finer resolution. Defaults to `hours = 1`.
-        horizon : pandas.Timedelta
-            Length of the forecast window.
-        """
-        raw_data = self._rawData(
-            datetime_start,
-            include_columns = ['dni', 'ghi', 'dhi', 'temp_air', 'wind_speed'],
+        new_data = probabilistic_data.join(data)
+        forecast_columns = [0.0, 0.1, 0.25, 0.5, 0.75, 0.9, 1.0]
+        new_data.rename(
+            columns = {k: str(k) for k in forecast_columns}, 
+            inplace=True,
         )
-        return self._correctTime(raw_data, resolution, horizon, datetime_start)
+        for k in forecast_columns:
+            new_data[str(k)] = new_data[str(k)] * new_data['clear_sky']
+        new_data['pressure'] = self.ambient_pressure()
+        return new_data
 
-    def latestForecast(
-        self, 
-        resolution = pandas.Timedelta(hours = 1),
-        update_threshold = 3,
-        horizon = pandas.Timedelta(hours = 48),
-    ):
+    def ambient_pressure(self):
         """
-        Return the latest DNI forecast and update the database. This should be
-        called by the forecast plotter.
+        Return the atmospheric pressure [mbar] at the plant location.
 
-        Parameters
-        ----------
-        resolution : str
-            The resolution passed to `pandas.resample` for resampling the
-            NDFD forecast into finer resolution. Defaults to `1h`.
-        update_threshold : int
-            If the latest forecast was retrieved more than `update_threshold` 
-            hours ago, refresh the database before returing the latest forecast.
-        horizon : pandas.Timedelta
-            Length of the forecast window.
+        This is based solely on altitude, and does not take into account current
+        weather conditions.
         """
-        # First, read latest forecast data from database, and convert it to the
-        # plant's timezone.
-        try:
-            latest = SolarForecastData.objects.latest('forecast_made').forecast_made
-        except SolarForecastData.DoesNotExist:
-            return self._updateLatestForecast(
-                resolution = resolution,
-                horizon = horizon,
-            )
-        if self._hourDiff(latest) >= update_threshold:
-            return self._updateLatestForecast(
-                resolution = resolution,
-                horizon = horizon,
-            )
-        raw_data = pandas.DataFrame(
-            SolarForecastData.objects.filter(forecast_made = latest).values()
-        )
-        raw_data.drop(columns = ['forecast_made', 'id'], inplace=True)
-        raw_data['forecast_for'] = \
-            raw_data['forecast_for'].map(lambda x: self._toLocal(x))
-        raw_data.set_index('forecast_for', inplace=True)
-        datetime_start = pandas.Timestamp(
-            datetime.datetime.now(pytz.timezone(self.plant_location.tz)),
-        )
-        data = self._correctTime(raw_data, resolution, horizon, datetime_start)
-        return self._applyForecastUncertainty(data)
+        # 100 conversion needed becauses alt2pres returns Pascals.
+        return atmosphere.alt2pres(self.plant_location.altitude) / 100

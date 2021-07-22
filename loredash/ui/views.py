@@ -1,134 +1,76 @@
 from django.shortcuts import render
-from django.http import HttpResponse, Http404, HttpResponseRedirect
-from django.db import transaction
-
 from bokeh.embed import server_session
 from bokeh.util import token
+import datetime
 
-# Other package imports
-from datetime import datetime, timedelta
-import matplotlib.pyplot as plt, mpld3
-from io import StringIO
-import pandas
-from ui import apps
+from mediation.models import TechData
 
 #global variables
 PROGRESS_BAR_WIDTH = 160
-
-# Create your views here.
-#-------------------------------------------------------------
-#-------------------------------------------------------------
-
-
-# def getPysamData():
-#     """Collect data from PySAM run"""
-#     pysam_output = mspt.get_pysam_data()
-#     pysam_output['time'] = list(pysam_output['time_hr'])
-#     pysam_output['time'] = [timedelta(hours=int(x)) for x in pysam_output['time']]
-#     pysam_output['time'] = list(map(lambda hr: hr + datetime(2010, 1, 1), pysam_output['time'])) # Jan 1, 2010 used because that is the start of our solar data
-#     return pysam_output
-
-# apps.pysam_output = getPysamData()
 
 def getLiveStatusData():
     """Returns the last update time and connection and model statuses at the top of the main page."""
 
     return {
             'connection_status' : True,
-            'model_status' : False,
-            'last_refresh' : datetime.now(),
+            'model_status' : True,
+            'last_refresh' : datetime.datetime.now(),
             }
 
 def getLiveBarData():
-    """Returns the data displayed in the 5 small boxes at the top of the main dashboard page."""
+    """Returns the data displayed in the 5 small boxes at the top of the dashboard pages.
+    """
+    # Latest data:
+    try:
+        queryset = TechData.objects.latest('timestamp')
+        timestamp_latest = queryset.timestamp
+        E_tes_charged = queryset.E_tes_charged                      # TES charge
+        eta_tower_thermal = queryset.eta_tower_thermal              # Receiver/tower thermal efficiency
+        W_grid_no_derate = queryset.W_grid_no_derate                # Net output power
+        eta_field_optical = queryset.eta_field_optical              # Field optical efficiency
+    except:
+        E_tes_charged = None
+        eta_tower_thermal = None
+        W_grid_no_derate = None
+        eta_field_optical = None
 
+    # Data from 24 hr previous
+    try:
+        timestamp_prev = timestamp_latest - datetime.timedelta(days=1)
+        queryset = TechData.objects.filter(timestamp=timestamp_prev)
+        E_tes_charged_prev = queryset[0].E_tes_charged              # TES charge
+        eta_tower_thermal_prev = queryset[0].eta_tower_thermal      # Receiver/tower thermal efficiency
+        W_grid_no_derate_prev = queryset[0].W_grid_no_derate        # Net output power
+        eta_field_optical_prev = queryset[0].eta_field_optical      # Field optical efficiency
+    except:
+        E_tes_charged = None
+        eta_tower_thermal = None
+        W_grid_no_derate = None
+        eta_field_optical = None
 
-    # DATA NEEDS TO BE PULLED FROM THE DATABASE INSTEAD OF RUNNING PYSAM HERE
+    # Percent difference between latest and previous
+    def perc_diff(latest, prev):
+        if latest is None or prev is None:
+            return None
+        elif prev != 0:
+            return (latest - prev) / prev * 100
+        else:
+            return latest - prev
+    E_tes_charged_percdiff = perc_diff(E_tes_charged, E_tes_charged_prev)
+    eta_tower_thermal_percdiff = perc_diff(eta_tower_thermal, eta_tower_thermal_prev)
+    W_grid_no_derate_percdiff = perc_diff(W_grid_no_derate, W_grid_no_derate_prev)
+    eta_field_optical_percdiff = perc_diff(eta_field_optical, eta_field_optical_prev)
 
-
-    # pysam_output = apps.pysam_output
-
-    # ## Collects the data from the pysam_output stored on the server (as of now).
-    # ## This will update the bar on the hour (the frequency of the data entries in the weather file).
-
-    # # get current date and hour as well as yesterdays datetime 24 hours from the current
-    # current_time = datetime.today().replace(year=2010, minute=0, second=0, microsecond=0)
-    # prev_day = current_time - timedelta(days=1)
-
-    # live_data_index = {
-    #     "time": 0,
-    #     "e_ch_tes": 1, 
-    #     "eta_therm": 2,
-    #     "tou_value": 3, 
-    #     "P_out_net": 4,
-    #     "eta_field": 5}
-
-    # ## Live Data
-    # # Zip desired live data, and place into a list format
-    # live_data = list(zip(
-    #     pysam_output["time"],
-    #     pysam_output["e_ch_tes"],
-    #     pysam_output["eta_therm"],
-    #     pysam_output["tou_value"],
-    #     pysam_output["P_out_net"],
-    #     pysam_output["eta_field"]
-    # ))
-
-    # # Get data from both the previous day and current date and hour
-    # prev_days_data = list(filter(lambda t: t[0] == prev_day, live_data))[0]
-    # curr_live_data = list(filter(lambda t: t[0] == current_time, live_data))[0]
-
-    # # tes charge
-    # tes_charge = curr_live_data[live_data_index['e_ch_tes']]
-    # prev_tes_charge = prev_days_data[live_data_index['e_ch_tes']]
-    # # Get % change
-    # if prev_tes_charge != 0:
-    #     tes_charge_pct_change = ((tes_charge - prev_tes_charge) / prev_tes_charge) * 100
-    # else:
-    #     tes_charge_pct_change = ((tes_charge - prev_tes_charge) / 1) * 100
-
-    # # receiver thermal efficiency
-    # receiver_therm_eff = curr_live_data[live_data_index['eta_therm']] * 100
-    # prev_receiver_therm_eff = prev_days_data[live_data_index['eta_therm']] * 100
-    # # Get % change
-    # if prev_receiver_therm_eff != 0:
-    #     receiver_therm_eff_pct_change = ((receiver_therm_eff - prev_receiver_therm_eff) / prev_receiver_therm_eff) * 100
-    # else:
-    #     receiver_therm_eff_pct_change = ((receiver_therm_eff - prev_receiver_therm_eff) / 1) * 100
-
-    # # net power out
-    # net_power_out = curr_live_data[live_data_index['P_out_net']]
-    # prev_net_power_out = prev_days_data[live_data_index['P_out_net']]
-    # # Get % change
-    # if prev_net_power_out != 0:
-    #     net_power_out_pct_change = ((net_power_out - prev_net_power_out) / prev_net_power_out) * 100
-    # else:
-    #     net_power_out_pct_change = ((net_power_out - prev_net_power_out) / 1) * 100
-
-    # # CSP time of use value
-    # tou_value = curr_live_data[live_data_index['tou_value']]
-
-    # # field optical efficiency
-    # field_optical_eff = curr_live_data[live_data_index['eta_field']] * 100
-    # prev_field_optical_eff = prev_days_data[live_data_index['eta_field']] * 100
-    # # Get % change
-    # if prev_field_optical_eff != 0:
-    #     field_optical_eff_pct_change = ((field_optical_eff - prev_field_optical_eff) / prev_field_optical_eff) * 100
-    # else:
-    #     field_optical_eff_pct_change = ((field_optical_eff - prev_field_optical_eff) / 1) * 100
-
-    # Export live data such that it can be used with the django template
-    # CURRENTLY JUST PLACEHOLDERS -> NEED TO QUERY ACTUAL FROM A DATABASE TABLE
     live_data = {
-        "tes" : 1143.5,                             # tes_charge,
-        "tes_change" : -1.439,                      # tes_charge_pct_change,
-        "receiver_therm_eff" : 95.60,               # receiver_therm_eff,
-        "receiver_therm_eff_change" : -0.01211,     # receiver_therm_eff_pct_change,
-        "net_power_out" : 104.5,                    # net_power_out,
-        "net_power_out_change" : -1.311,            # net_power_out_pct_change,
-        "tou_value" : 5.0,                          # tou_value,
-        "field_optical_eff" : 56.67,                # field_optical_eff,
-        "field_optical_eff_change" : -0.08169       # field_optical_eff_pct_change
+        "tes" : E_tes_charged * 1.e-3,                              # [MWht]
+        "tes_change" : E_tes_charged_percdiff,
+        "receiver_therm_eff" : eta_tower_thermal * 100.,            # [%]
+        "receiver_therm_eff_change" : eta_tower_thermal_percdiff,
+        "net_power_out" : W_grid_no_derate * 1.e-3,                 # [MWe]
+        "net_power_out_change" : W_grid_no_derate_percdiff,
+        "tou_value" : 5.0,
+        "field_optical_eff" : eta_field_optical * 100.,             # [%]
+        "field_optical_eff_change" : eta_field_optical_percdiff
     }
 
     return live_data

@@ -38,6 +38,7 @@ def test_tmy3_to_df():
     assert(sum(data['DNI']) == 22216)
     return
 
+@pytest.mark.django_db
 def test_get_weather_df():
     plant_design_path = PARENT_DIR + "/../loredash/config/plant_design.json"
     mediator_params_path = PARENT_DIR + "/config/mediator_settings.json"
@@ -49,7 +50,7 @@ def test_get_weather_df():
         dispatch_params_path=dispatch_params_path,
         update_interval = datetime.timedelta(seconds = 5),
     )
-    tzinfo = pytz.timezone(m.plant.design['timezone_string'])
+    tzinfo = pytz.UTC
     datetime_start = datetime.datetime(2021, 1, 1, 0, 0, 0, tzinfo = tzinfo)
     # Test getting one week of weather. Should be pure TMY data.
     weather = m.get_weather_df(
@@ -77,6 +78,8 @@ def test_get_weather_df():
         datetime.timedelta(hours=0.5),
         m.weather_file,
     )
+    # Update database
+    m.refresh_forecast_in_db(datetime_start)
     forecast_weather = m.get_weather_df(
         datetime_start,
         datetime_start + datetime.timedelta(days = 2),
@@ -84,8 +87,8 @@ def test_get_weather_df():
         m.weather_file,
         use_forecast = True,
     )
-    assert(len(tmy_weather) == 2 * 48)
-    for key in ['DNI', 'DHI', 'GHI', 'Temperature', 'Wind Speed']:
+    assert(len(tmy_weather) == 2 * 48 - 1)
+    for key in ['DNI', 'DHI', 'GHI', 'Temperature', 'Pressure', 'Wind Speed']:
         assert(key in tmy_weather)
         assert(key in forecast_weather)
     assert('Clear Sky DNI' in forecast_weather)
@@ -96,18 +99,15 @@ def test_get_weather_df():
     assert(not tmy_weather['DNI'].isnull().values.any())
     assert(sum(forecast_weather['DNI']) > 100)
     assert(not forecast_weather['DNI'].isnull().values.any())
-    # Check that they are linked up timezone-wise. (If it's sunny in the 
-    # forecast, it must be sunny in the TMY file too.
-    # It 's a little tricky with some tolerances (what if the forecast is all 
-    # 0 today?), but we use the rule the that the forecast shouldn't exceed the
-    # TMY by too much. The most likely reason is that the forecast high when the 
-    # TMY is off (at night).
-    for (tmy, forecast) in zip(tmy_weather['DNI'], forecast_weather['DNI']):
-        assert(forecast - tmy < 400)
+    # Check that they are linked up timezone-wise. If the clear-sky is low, the
+    # TMY must be too.
+    for (tmy, forecast) in zip(tmy_weather['DNI'], forecast_weather['Clear Sky DNI']):
+        if forecast < 100:
+            assert(tmy <= 500)
     return
 
 def test_normalize_timesteps():
-    tzinfo = pytz.timezone('US/Pacific')
+    tzinfo = pytz.UTC
     datetime_start = datetime.datetime(2021, 1, 1, 1, 32, 0, tzinfo = tzinfo)
     datetime_end = datetime_start + datetime.timedelta(days = 2)
     start, end = mediator.normalize_timesteps(
@@ -116,7 +116,7 @@ def test_normalize_timesteps():
         timestep = 5,
     )
     assert(start == datetime.datetime(2021, 1, 1, 1, 30, 0, tzinfo = tzinfo))
-    assert(end == datetime.datetime(2021, 1, 3, 1, 35, 0, tzinfo = tzinfo))
+    assert(end == datetime.datetime(2021, 1, 3, 1, 30, 0, tzinfo = tzinfo))
 
     start, end = mediator.normalize_timesteps(
         datetime_start,
@@ -124,5 +124,5 @@ def test_normalize_timesteps():
         timestep = 15,
     )
     assert(start == datetime.datetime(2021, 1, 1, 1, 30, 0, tzinfo = tzinfo))
-    assert(end == datetime.datetime(2021, 1, 3, 1, 45, 0, tzinfo = tzinfo))
+    assert(end == datetime.datetime(2021, 1, 3, 1, 30, 0, tzinfo = tzinfo))
     return

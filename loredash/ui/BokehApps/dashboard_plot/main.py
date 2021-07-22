@@ -80,6 +80,17 @@ def getDashboardData(queue, date_range, columns):
         df.columns = columns
     else:
         df = pandas.DataFrame(columns=columns)
+
+    # Scale values
+    if 'W_grid_no_derate' in df.columns:
+        df['W_grid_no_derate'] *= 1.e-3             # [MWh]
+    if 'W_grid_with_derate' in df.columns:
+        df['W_grid_with_derate'] *= 1.e-3           # [MWh]
+    if 'Q_tower_incident' in df.columns:
+        df['Q_tower_incident'] *= 1.e-3             # [MWh]
+    if 'Q_field_incident' in df.columns:
+        df['Q_field_incident'] *= 1.e-3             # [MWh]
+
     queue.put(df)
     return
 

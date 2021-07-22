@@ -1,9 +1,10 @@
 import sys, os
 sys.path.insert(1, os.path.join(sys.path[0], '..'))
 import colorcet
-from pathlib import Path
+import datetime
+import pandas
+import pytz
 import queue 
-import rapidjson
 import threading
 from bokeh import events as bokeh_events
 from bokeh import io as bokeh_io
@@ -12,8 +13,7 @@ from bokeh import models as bokeh_models
 from bokeh import plotting as bokeh_plotting
 from bokeh import themes as bokeh_themes
 
-from mediation import forecasts
-
+from mediation.models import SolarForecastData
 
 # theme.py is loredash/io/BokehApps/theme/theme.py. It isn't an external
 # package. It's also different from `bokeh.themes`. There is only one constant
@@ -21,23 +21,29 @@ from mediation import forecasts
 from theme import theme as _loredash_ui_theme
 LOREDASH_UI_THEME = _loredash_ui_theme.json
 
-# TODO: Pull the forecasts from a database table--don't call forecasts methods
-#       in the plotting server. Also, config files should only be read once, during
-#       mediator initialization.
-# with open("plant_design.json") as f:
-#     PLANT_DESIGN = rapidjson.load(f)
-def latestData(queue):
-    forecaster = forecasts.SolarForecast(
-        38.23895540732931,
-        -117.36368180656123,
-        "US/Pacific",
-        1524,
+def latestData(queue, resolution = datetime.timedelta(hours=1)):
+    datetime_start = datetime.datetime.now(pytz.UTC)
+    query = SolarForecastData.objects.filter(
+        timestamp__gte = datetime_start,
     )
-    data = forecaster.latestForecast().reset_index()
-    # Strip the timezone info to prevent Bokeh from trying to show it in
-    # computer-local time. The result should be an axis in plant-local time.
-    #TODO: fix timezone and eliminate "RuntimeWarning: DateTimeField SolarForecastData.forecast_for received a naive datetime"
-    data['forecast_for'] = data['forecast_for'].dt.tz_localize(None)
+    raw_data = pandas.DataFrame(query.values())
+    raw_data.set_index('timestamp', inplace=True)
+    data = raw_data.resample(resolution).mean()
+    # Clean up the ratio by imputing any NaNs that arose to the nearest
+    # non-NaN value. This means we assume that the start of the day acts
+    # like the earliest observation, and the end of the day looks like the
+    # last observation.
+    data.interpolate(method = 'linear', inplace = True)
+    # However, nearest only works when there are non-NaN values either side.
+    # For the first and last NaNs, use bfill and ffill:
+    data.fillna(method = 'bfill', inplace = True)
+    data.fillna(method = 'ffill', inplace = True)
+    if datetime_start is None:
+        datetime_start = data.index[0]
+    datetime_end = datetime_start + datetime.timedelta(hours=48)
+    data = data[data.index < datetime_end + resolution]
+    data = data[data.index > datetime_start - resolution]
+    print(data)
     queue.put(data)
     return
 
@@ -56,7 +62,7 @@ def makePlot():
         tooltips=[
             ('Data','$name'),
             ('Date', '$x{%a %b, %Y}'),
-            ('Time', '$x{%R}'),
+            ('Time (UTC)', '$x{%R}'),
             ('Value', '$y W/m^2')
         ],
         formatters={
@@ -84,7 +90,7 @@ def makePlot():
     # Hide the toolbar
     plot.toolbar_location = None
     clear_sky = plot.line(
-        x = 'forecast_for',
+        x = 'timestamp',
         y = 'clear_sky',
         source = source,
         name = 'Clear sky',
@@ -93,8 +99,8 @@ def makePlot():
         line_width = 2,
     )
     best_guess = plot.line(
-        x = 'forecast_for',
-        y = '0.5',
+        x = 'timestamp',
+        y = 'dni_50',
         source = source,
         name = 'Best guess',
         line_color = colorcet.fire[200],
@@ -105,11 +111,11 @@ def makePlot():
         ('Best guess', [best_guess])
     ]
     for (c, name, l, u) in [
-        (100, '80% chance', '0.1', '0.9'),
-        (150, '50% chance', '0.25', '0.75')
+        (100, '80% chance', 'dni_10', 'dni_90'),
+        (150, '50% chance', 'dni_25', 'dni_75')
     ]:
         varea = plot.varea(
-            x = 'forecast_for',
+            x = 'timestamp',
             y1 = l,
             y2 = u,
             name = name,
