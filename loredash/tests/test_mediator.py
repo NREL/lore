@@ -41,10 +41,13 @@ def test_tmy3_to_df():
 @pytest.mark.django_db
 def test_get_weather_df():
     plant_design_path = PARENT_DIR + "/../loredash/config/plant_design.json"
+    mediator_params_path = PARENT_DIR + "/config/mediator_settings.json"
+    dispatch_params_path = PARENT_DIR + "/config/dispatch_settings.json"
     m = mediator.Mediator(
-        params = mediator.mediator_params,
+        params_path = mediator_params_path,
         plant_design_path=plant_design_path,
         weather_file = PARENT_DIR + "/data/daggett_ca_34.865371_-116.783023_psmv3_60_tmy.csv",
+        dispatch_params_path=dispatch_params_path,
         update_interval = datetime.timedelta(seconds = 5),
     )
     tzinfo = pytz.UTC

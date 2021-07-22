@@ -37,7 +37,6 @@ from mediation import dispatch_wrap
 from mediation import mediator
 from mediation import plant as plant_
 from mediation import tech_wrap
-from data.mspt_2020_defaults import default_ssc_params
 
 def test_plant_config_validation():
     plant_config = {

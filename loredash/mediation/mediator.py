@@ -11,7 +11,6 @@ import numpy as np
 import rapidjson
 from pathlib import Path
 
-from data.mspt_2020_defaults import default_ssc_params
 # import django     # Needed here before "import models" if there's ever error "Apps aren't loaded yet"
 # django.setup()
 from mediation import tech_wrap, data_validator, dispatch_wrap, models, forecasts
@@ -32,10 +31,13 @@ def init_and_mediate():
     parent_dir = str(Path(__file__).parents[1])
     default_weather_file = parent_dir + "/data/daggett_ca_34.865371_-116.783023_psmv3_60_tmy.csv"
     plant_design_path = parent_dir + "/config/plant_design.json"
+    mediator_params_path = parent_dir + "/config/mediator_settings.json"
+    dispatch_params_path = parent_dir + "/config/dispatch_settings.json"
     m = Mediator(
-        params=mediator_params,
+        params_path=mediator_params_path,
         plant_design_path=plant_design_path,
         weather_file=default_weather_file,
+        dispatch_params_path=dispatch_params_path,
         update_interval=datetime.timedelta(seconds=5),
     )
     print("Modeling previous day...")
@@ -66,9 +68,10 @@ def init_and_mediate():
 class Mediator:
     tech_wrap = None
 
-    def __init__(self, params, plant_design_path, weather_file=None,
+    def __init__(self, params_path, plant_design_path, weather_file=None, dispatch_params_path=None,
                  update_interval=datetime.timedelta(seconds=5)):
-        self.params = params
+        with open(params_path) as f:
+            self.params = rapidjson.load(f, parse_mode=1)
         self.weather_file = weather_file
         self.update_interval = update_interval
         self.simulation_timestep = datetime.timedelta(hours=1/self.params['time_steps_per_hour'])
@@ -79,20 +82,18 @@ class Mediator:
             self.params['time_steps_per_hour'])
 
         with open(plant_design_path) as f:
-            plant_design = rapidjson.load(f)
+            plant_design = rapidjson.load(f, parse_mode=1)
         self.plant = plant_.Plant(
             design=plant_design,
             initial_state=plant_.plant_initial_state)
         
         settings.PLANT_TIME_ZONE = plant_design['timezone_string']
 
-        default_ssc_params.update(self.plant.get_state())                       # combine default and plant params, overwriting the defaults
-        default_ssc_params.update(self.params)                                  # combine default and mediator params, overwriting the defaults
-        self.tech_wrap = tech_wrap.TechWrap(
-            params=default_ssc_params,                                          # already a copy so tech_wrap cannot edit
-            plant=copy.deepcopy(self.plant),                                    # copy so tech_wrap cannot edit
-            dispatch_wrap_params=dispatch_wrap.dispatch_wrap_params.copy(),     # copy so tech_wrap cannot edit
-            weather_file=None)
+        parent_dir = str(Path(__file__).parents[1])
+        with open(parent_dir + './data/mspt_2020_defaults.json', 'r') as f:
+            ssc_params = rapidjson.load(f)
+        ssc_params.update(self.plant.get_state())                       # combine default and plant params, overwriting the defaults
+        ssc_params.update(self.params)                                  # combine default and mediator params, overwriting the defaults
 
         self.forecaster = forecasts.SolarForecast(
             self.plant.design['latitude'],
@@ -100,13 +101,20 @@ class Mediator:
             self.plant.design['timezone'],  # Fixed offset!
             self.plant.design['elevation'])
 
+        # Setup dispatch_wrap
+        with open(dispatch_params_path) as f:
+            dispatch_wrap_params = rapidjson.load(f, parse_mode=1)                                   # TODO: replace with a path to a JSON config file
+        dispatch_wrap_params.update(self.params)                                                    # include mediator params in with dispatch_wrap_params
+        self.dispatch_wrap = dispatch_wrap.DispatchWrap(plant=self.plant, params=dispatch_wrap_params)
+
+        self.tech_wrap = tech_wrap.TechWrap(
+            params=ssc_params,  # already a copy so tech_wrap cannot edit
+            plant=copy.deepcopy(self.plant),  # copy so tech_wrap cannot edit
+            dispatch_wrap_params=dispatch_wrap_params.copy(),  # copy so tech_wrap cannot edit
+            weather_file=None)
+
         self.plant.update_flux_maps(self.tech_wrap.calc_flux_eta_maps(self.plant.get_design(), self.plant.get_state()))
 
-        # Setup dispatch_wrap
-        dispatch_wrap_params = dispatch_wrap.dispatch_wrap_params                                   # TODO: replace with a path to a JSON config file
-        dispatch_wrap_params.update(self.params)                                                    # include mediator params in with dispatch_wrap_params
-        self.dispatch_wrap = dispatch_wrap.DispatchWrap(plant=self.plant, params=dispatch_wrap.dispatch_wrap_params)
-    
     def run_once(self, datetime_start=None, datetime_end=None, timedelta=None):
         """Get data from external plant and weather interfaces and run entire set
         of submodels, saving data to database.
@@ -688,60 +696,3 @@ def get_weatherfile_location(tmy3_path):
         'elevation': float(df_meta['Elevation'][0])
     }
 
-# This is duplicated in case_study.py
-mediator_params = {
-    'start_date_year':                      2018,                   # TODO: Remove the need for this somewhat arbitrary year
-
-    # Control conditions
-	'time_steps_per_hour':			        12,			            # Simulation time resolution in ssc (1min)   DUPLICATED to: ssc_time_steps_per_hour
-	'is_dispatch':					        0,                      # Always disable dispatch optimization in ssc
-	'is_dispatch_targets':			        True,		            # True if (is_optimize or control_cycle == 'CD_data')
-    'is_optimize':					        True,                   # Use dispatch optimization
-    'q_pc_target_su_in':                    [0],
-    'q_pc_target_on_in':                    [0],
-    'q_pc_max_in':                          [0],
-    'is_rec_su_allowed_in':                 [0],
-    'is_rec_sb_allowed_in':                 [0],
-    'is_pc_su_allowed_in':                  [0],
-    'is_pc_sb_allowed_in':                  [0],
-	'control_field':				        'ssc',                  #'CD_data' = use CD data to control heliostats tracking, heliostats offline, and heliostat daily reflectivity.  Receiver startup time is set to zero so that simulated receiver starts when CD tracking begins
-                                                                    #'ssc' = allow ssc to control heliostat field operations, assuming all heliostats are available
-
-	'control_receiver':				        'ssc_clearsky',         #'CD_data' = use CD data to control receiver mass flow. Receiver startup time is set to zero so that simulated receiver starts when CD receiver finishes startup
-                                                                    #'ssc_clearsky' = use expected clearsky DNI to control receiver mass flow.  If field_control = 'ssc' then the historical median startup time from CD data will be used to control receiver startup
-                                                                    #'ssc_actual_dni' = use actual DNI to control receiver mass flow.  If field_control = 'ssc' then the historical median startup time from CD data will be used to control receiver startup   
-
-	'control_cycle':				        'ssc_heuristic',        # Only used if is_optimize = False
-                                                                    # 'CD_data' = use CD actual cycle operation to control cycle dispatch targets
-                                                                    # 'ssc_heuristic' = allow ssc heuristic (no consideration of TOD price) to control cycle dispatch
-
-    # Price
-    'price_multiplier_file':                '../data/prices_flat.csv',
-	'ppa_multiplier_model':			        1,
-	'price_steps_per_hour':			        1,                      # Number of steps per hour in electricity price multipliers
-	'avg_price':					        138,                    # Average electricity price ($/MWh):  CD original PPA was $138/MWh
-    'avg_purchase_price':                   30,                     # Average electricity purchase price ($/MWh) (note, this isn't currently used in the dispatch model)
-    'avg_price_disp_storage_incentive':     0.0,                    # Average electricity price ($/MWh) used in dispatch model storage inventory incentive
-
-    # Field, receiver, and cycle simulation options
-    # 'clearsky_file':                        './model-validation/input_files/weather_files/clearsky_pvlib_ineichen_1min_2018.csv',   # Expected clear-sky DNI from Ineichen model (via pvlib). 
-    'clearsky_file':                        '../data/clearsky_pvlib_ineichen_1min_2018.csv',             # Expected clear-sky DNI from Ineichen model (via pvlib). 
-    'CD_mflow_path1_file':                  './model-validation/input_files/mflow_path1_2018_1min.csv',  # File containing CD data for receiver path 1 mass flow rate (note, all values are zeros on days without data)
-    'CD_mflow_path2_file':                  './model-validation/input_files/mflow_path2_2018_1min.csv',  # File containing CD data for receiver path 2 mass flow rate (note, all values are zeros on days without data)
-    'CD_raw_data_direc':                    './input_files/CD_raw',                                      # Directory containing raw data files from CD
-    'CD_processed_data_direc':              './input_files/CD_processed',                                # Directory containing files with 1min data already extracted
-	'rec_control_per_path':			        True,
-	'field_model_type':				        3,
-	'eta_map_aod_format':			        False,
-	'is_rec_user_mflow':			        False,		            # or this should be unassigned, True if control_receiver == 'CD_data'
-	'rec_clearsky_fraction':		        1.0,
-    'rec_clearsky_model':                   0,
-    'rec_su_delay':                         0.,                     # = 0.01 if control_field == 'CD_data' or control_receiver == 'CD_data'  Set receiver start time and energy to near zero to enforce CD receiver startup timing
-    'rec_qf_delay':                         0.,                     # = 0.01 if control_field == 'CD_data' or control_receiver == 'CD_data'
-    'is_rec_to_coldtank_allowed':           True,
-    'use_CD_measured_reflectivity':	        False,                  # Use measured heliostat reflectivity from CD data
-    'fixed_soiling_loss':			        0.02,                   # Fixed soiling loss (if not using CD measured reflectivity) = 1 - (reflectivity / clean_reflectivity)
-	'is_rec_startup_trans':			        False,                  # TODO: Disabling transient startup -> ssc not yet configured to start/stop calculations in the middle of startup with this model
-	'is_rec_model_trans':			        False,                  # TODO: Disabling transient receiver model -> ssc not yet configured to store/retrieve receiver temperature profiles
-    'cycle_type':                           'user_defined',         # 'user-defined', 'sliding', or 'fixed'
-}

@@ -10,30 +10,6 @@ import datetime
 
 from mediation import dispatch_model
 
-
-dispatch_wrap_params = {
-    # Dispatch optimization
-    'dispatch_horizon':                     48.,                    # Time into future from start of current timestep that dispatch model is modeling (hr)
-    'dispatch_steplength_array':            [5, 15, 60],            # Dispatch time step sizes used in the variable timestep operations (min)
-    'dispatch_steplength_end_time':         [1, 4, 48],             # End time for dispatch step lengths (hr)
-    'nonlinear_model_time':                 4.0,                    # Amount of time to apply nonlinear dispatch model (hr) (not currently used)
-    'disp_time_weighting':                  0.999,                  # Dispatch time weighting factor. 
-    'use_linear_dispatch_at_night':         False,                  # Revert to the linear dispatch model when all of the time-horizon in the nonlinear model is at night.
-    'night_clearsky_cutoff':                100.,                   # Cutoff value for clear-sky DNI defining "night"
-
-    # Day-ahead schedule targets
-	'use_day_ahead_schedule':		        True,                   # Use day-ahead generation targets
-	'day_ahead_schedule_from':		        'calculated',           # 'calculated' = calculate day-ahead schedule during solution, 'NVE'= use NVE-provided schedule for CD
-	'day_ahead_schedule_time':		        10,                     # Time of day at which day-ahead schedule is due (hr, 0-23), assumed to be in standard time
-	'day_ahead_schedule_steps_per_hour':    1,                      # Time resolution of day-ahead schedule
-    'day_ahead_pen_plus':                   500,                    # Penalty for over-generation relative to day-ahead schedule ($/MWhe)
-    'day_ahead_pen_minus':                  500,                    # Penalty for under-generation relative to day-ahead schedule ($/MWhe)
-    'day_ahead_tol_plus':                   5,                      # Tolerance for over-production relative to day-ahead schedule before incurring penalty (MWhe)
-    'day_ahead_tol_minus':                  5,                      # Tolerance for under-production relative to day-ahead schedule before incurring penalty (MWhe)
-    'day_ahead_ignore_off':                 True,                   # Don't apply schedule penalties when cycle is scheduled to be off for the full hour (MWhe)
-}
-
-
 class DispatchParams:
     def __init__(self):
         
