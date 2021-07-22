@@ -575,6 +575,8 @@ class PySSC:
 
 ###########################################################################################
 if __name__ == '__main__':
+    import rapidjson
+    from pathlib import Path
     parent_dir = str(Path(__file__).parents[1])
     with open(parent_dir + './data/mspt_2021_develop_defaults.json', 'r') as f:
         default_ssc_params = rapidjson.load(f)

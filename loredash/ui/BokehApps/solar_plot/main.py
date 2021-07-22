@@ -43,7 +43,6 @@ def latestData(queue, resolution = datetime.timedelta(hours=1)):
     datetime_end = datetime_start + datetime.timedelta(hours=48)
     data = data[data.index < datetime_end + resolution]
     data = data[data.index > datetime_start - resolution]
-    print(data)
     queue.put(data)
     return
 

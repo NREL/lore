@@ -90,7 +90,7 @@ class Mediator:
         settings.PLANT_TIME_ZONE = plant_design['timezone_string']
 
         parent_dir = str(Path(__file__).parents[1])
-        with open(parent_dir + './data/mspt_2020_defaults.json', 'r') as f:
+        with open(parent_dir + '/data/mspt_2020_defaults.json', 'r') as f:
             ssc_params = rapidjson.load(f)
         ssc_params.update(self.plant.get_state())                       # combine default and plant params, overwriting the defaults
         ssc_params.update(self.params)                                  # combine default and mediator params, overwriting the defaults
