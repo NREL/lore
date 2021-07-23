@@ -46,6 +46,19 @@ def init_and_mediate():
 
     print("Modeling next periods...")
     if settings.RUNNING_DEVSERVER == True:      # just for development testing
+        #NOTE: To run continuously in development:
+        # - Run the following in a terminal:
+        #    python manage.py runserver 127.0.0.1:8000 --noreload
+        # - And then either:
+        #   a.
+        #    - Run the following in another terminal:
+        #       python manage.py run_lore
+        #    - Run the bokeh server in an IDE
+        #
+        #   b.
+        #    - Run run_bokeh_server.ps1/.sh
+        #    - Run the following in an IDE:
+        #       python manage.py run_lore
         result = m.run_once(
             datetime_start=m.get_current_plant_time(),
             timedelta=datetime.timedelta(hours=1))

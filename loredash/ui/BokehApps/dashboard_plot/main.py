@@ -233,7 +233,7 @@ def _periodic_callback():
     new_current_datetime = datetime.datetime.now(datetime.timezone.utc).replace(second=0, microsecond=0)
     q = queue.Queue()
     # Update timeline for current time
-    getattr(plot, 'center')[2].location = new_current_datetime
+    getattr(plot, 'center')[2].location = new_current_datetime      # update position of vertical dotted line to current time
     # Current Data
     current_data_df = _getDashboardData(
         q,
@@ -241,9 +241,11 @@ def _periodic_callback():
         new_current_datetime,
         CURRENT_DATA_COLS,
     )
-    curr_src.stream(current_data_df)
-    df_temp = curr_src.to_df().drop([0]).drop('index', axis=1)
-    curr_src.data.update(ColumnDataSource(df_temp).data)
+    if not current_data_df.empty:       # updating the columndatasource with an empty dataframe will change the timestamp column data format to an integer
+        print(str(current_data_df['timestamp'].values[-1]))
+        curr_src.stream(current_data_df)                            # add new data to plot
+        df_temp = curr_src.to_df().drop([0]).drop('index', axis=1)  # drop first row (oldest data) then drop index column
+        curr_src.data.update(ColumnDataSource(df_temp).data)        # create new columndata object, extract just the data, then update the original columndata source of the data...why?
     # Future Data
     predictive_data_df = _getDashboardData(
         q,
@@ -251,9 +253,10 @@ def _periodic_callback():
         new_current_datetime,
         FUTURE_DATA_COLS,  # the last parameter isn't really the 'scheduled'
     )
-    pred_src.stream(predictive_data_df)
-    df_temp = pred_src.to_df().drop([0]).drop('index', 1)
-    pred_src.data.update(ColumnDataSource(df_temp).data)
+    if not predictive_data_df.empty:
+        pred_src.stream(predictive_data_df)
+        df_temp = pred_src.to_df().drop([0]).drop('index', 1)
+        pred_src.data.update(ColumnDataSource(df_temp).data)
     current_datetime = new_current_datetime
     return
 
