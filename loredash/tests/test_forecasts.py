@@ -48,3 +48,10 @@ def test_openweathermap():
     assert(min(owm['humidity']) >= 0)
     assert(max(owm['humidity']) <= 100)
     return
+
+def test_openweathermap_fake_no_appid():
+    forecaster = forecasts.SolarForecast(38.2, -117.4, -8, 100.0)
+    forecaster.openweathermap.APPID = None
+    owm = forecaster.openweathermap.get()
+    assert(len(owm) == 0)
+    return

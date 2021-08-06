@@ -64,7 +64,10 @@ class OpenWeatherMap:
     def __init__(self, latitude, longitude):
         self.latitude = str(latitude)
         self.longitude = str(longitude)
-        self.APPID = os.environ['OPENWEATHERMAP_SECRET_KEY']
+        if not 'OPENWEATHERMAP_SECRET_KEY' in os.environ:
+            self.APPID = None
+        else:
+            self.APPID = os.environ['OPENWEATHERMAP_SECRET_KEY']
         return
 
     def _json_request(self):
@@ -90,9 +93,12 @@ class OpenWeatherMap:
         """
         Return a pandas DataFrame of the forecast.
 
+        Index
+        -----
+         - timestamp      [UTC]
+
         Columns
         -------
-         - timestamp      [UTC]
          - temperature    [degrees celscius]
          - pressure       [mbar]
          - humdity        [%]
@@ -100,6 +106,18 @@ class OpenWeatherMap:
          - wind_direction [degrees]
          - clouds         [% cloudy]
         """
+        if self.APPID is None:
+            df =  pandas.DataFrame({
+                'timestamp': [],
+                'temperature': [],
+                'pressure': [],
+                'humdity': [],
+                'wind_speed': [],
+                'wind_direction': [],
+                'clouds': [],
+            })
+            df.set_index('timestamp', inplace=True)
+            return df
         data = self._json_request()
         df = pandas.DataFrame([self._get_hour(d) for d in data['hourly']])
         df.set_index('timestamp', inplace=True)
