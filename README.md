@@ -61,3 +61,7 @@ LORE utilizes the following open-source libraries:
 | Project | Version | Usage |
 |---------|---------|-------|
 | [RapidJSON](https://github.com/Tencent/rapidjson)  	| v1.1.0 	| JSON read-write library for project files |
+
+## SSL Requests
+
+LORE utilizes SSL requests to obtain weather data that serve as inputs to the dispatch optimzation model.  These requests can cause an SSL error when LORE is run thorugh a virtual network connection, and firewall settings may need to be adjusted to allow requests to the [THREDDS server](https://ds.nccs.nasa.gov/).
