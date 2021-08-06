@@ -60,7 +60,7 @@ def makePlot():
         line_policy='nearest',
         tooltips=[
             ('Data','$name'),
-            ('Date', '$x{%a %b, %Y}'),
+            ('Date', '$x{%a %b %d, %Y}'),
             ('Time (UTC)', '$x{%R}'),
             ('Value', '$y W/m^2')
         ],

@@ -140,7 +140,7 @@ def make_plot(pred_src, curr_src): # (Predictive, Current)
     hover_tool = HoverTool(
         tooltips=[
             ('Data', '$name'),
-            ('Date', '$x{%a %b, %Y}'),
+            ('Date', '$x{%a %b %d, %Y}'),
             ('Time', '$x{%R}'),
             ('Value', '$y'),
         ],
