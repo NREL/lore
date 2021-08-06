@@ -3,6 +3,7 @@ import numpy
 import os
 import pandas
 import pytz
+import requests
 
 # pvlib.forecasts issues a warning on init. Silence it.
 import warnings
@@ -56,15 +57,64 @@ class ForecastUncertainty:
             )
         )
 
+class OpenWeatherMap:
+    """
+    A class to manage interactions with openweathermap.org.
+    """
+    def __init__(self, latitude, longitude):
+        self.latitude = str(latitude)
+        self.longitude = str(longitude)
+        self.APPID = os.environ['OPENWEATHERMAP_SECRET_KEY']
+        return
+
+    def _json_request(self):
+        url = "http://api.openweathermap.org/data/2.5/onecall?appid=" + self.APPID
+        url += "&exclude=current,minutely,daily,alerts&units=metric"
+        url += "&lat=" + self.latitude
+        url += "&lon=" + self.longitude
+        r = requests.get(url)
+        return r.json()
+
+    def _get_hour(self, data):
+        return {
+            'timestamp': datetime.datetime.utcfromtimestamp(data['dt']),
+            'temperature': data['temp'],
+            'pressure': data['pressure'],
+            'humidity': data['humidity'],
+            'wind_speed': data['wind_speed'],
+            'wind_direction': data['wind_deg'],
+            'clouds': data['clouds'],
+        }
+
+    def get(self):
+        """
+        Return a pandas DataFrame of the forecast.
+
+        Columns
+        -------
+         - timestamp      [UTC]
+         - temperature    [degrees celscius]
+         - pressure       [mbar]
+         - humdity        [%]
+         - wind_speed     [m/s^2]
+         - wind_direction [degrees]
+         - clouds         [% cloudy]
+        """
+        data = self._json_request()
+        df = pandas.DataFrame([self._get_hour(d) for d in data['hourly']])
+        df.set_index('timestamp', inplace=True)
+        return df
+
 class SolarForecast:
     """
-    A class to manage DNI forecasts from NDFD.
+    A class to manage a range of forecasts.
     
     Attributes
     ----------
     plant_location : pvlib.location.Location
         The location of the plant.
     forecast_uncertainty : ForecastUncertainty
+    openweathermap : OpenWeatherMap
     """
     plant_location = None
     forecast_uncertainty = None
@@ -103,6 +153,7 @@ class SolarForecast:
                 os.path.dirname(__file__), '../data/solar_forecast_bands.csv'
             )
         self.forecast_uncertainty = ForecastUncertainty(uncertainty_bands)
+        self.openweathermap = OpenWeatherMap(latitude, longitude)
         return
         
     def get_raw_data(self, datetime_start):

@@ -36,3 +36,15 @@ def test_get_forecast():
     assert((data['0.9'] >= data['0.1']).all())
     assert('pressure' in data)
     return
+
+def test_openweathermap():
+    forecaster = forecasts.SolarForecast(38.2, -117.4, -8, 100.0)
+    owm = forecaster.openweathermap.get()
+    assert(len(owm) == 48)
+    # Check pressure in mbar
+    assert(min(owm['pressure']) > 800)
+    assert(max(owm['pressure']) < 1200)
+    # Check humdity in %
+    assert(min(owm['humidity']) >= 0)
+    assert(max(owm['humidity']) <= 100)
+    return
