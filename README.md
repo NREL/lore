@@ -68,4 +68,4 @@ LORE utilizes the following open-source libraries:
 
 ## SSL Requests
 
-LORE utilizes SSL requests to obtain weather data that serve as inputs to the dispatch optimzation model.  These requests can cause an SSL error when LORE is run thorugh a virtual network connection, and firewall settings may need to be adjusted to allow requests to the [THREDDS server](https://ds.nccs.nasa.gov/).
+LORE utilizes SSL requests to obtain weather data that serve as inputs to the dispatch optimzation model.  These requests can cause an SSL error when LORE is run thorugh a virtual network connection, and firewall settings may need to be adjusted to allow an exception for requests to the [THREDDS server](https://ds.nccs.nasa.gov/).
