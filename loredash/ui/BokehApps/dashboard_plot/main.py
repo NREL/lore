@@ -14,8 +14,10 @@ import queue
 import re
 import threading
 from tornado import gen
+import pytz
 
 from mediation.models import TechData
+from ui import TIMEZONE_STRING
 
 # theme.py is loredash/io/BokehApps/theme/theme.py. It isn't an external
 # package. It's also different from `bokeh.themes`. There is only one constant
@@ -78,6 +80,10 @@ def getDashboardData(queue, date_range, columns):
     df = pandas.DataFrame.from_records(rows)
     if not df.empty:
         df.columns = columns
+
+        # Convert UTC to local time then strip out timezone info as bokeh.ColumnDataSource improperly handles it
+        tz = pytz.timezone(TIMEZONE_STRING)
+        df['timestamp'] = df['timestamp'].dt.tz_convert(tz).dt.tz_localize(None)
     else:
         df = pandas.DataFrame(columns=columns)
 
@@ -180,9 +186,11 @@ def make_plot(pred_src, curr_src): # (Predictive, Current)
     legend = Legend(orientation='horizontal', location='top_center', spacing=10)
     
     # Add current time vertical line
+    tz = pytz.timezone(TIMEZONE_STRING)
+    current_datetime_local = current_datetime.astimezone(tz).replace(tzinfo=None)
     plot.add_layout(
         Span(
-            location=current_datetime,
+            location=current_datetime_local,
             dimension='height',
             line_color='white',
             line_dash='dashed',

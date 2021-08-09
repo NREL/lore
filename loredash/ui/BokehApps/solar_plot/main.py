@@ -14,6 +14,7 @@ from bokeh import plotting as bokeh_plotting
 from bokeh import themes as bokeh_themes
 
 from mediation.models import SolarForecastData
+from ui import TIMEZONE_STRING
 
 # theme.py is loredash/io/BokehApps/theme/theme.py. It isn't an external
 # package. It's also different from `bokeh.themes`. There is only one constant
@@ -43,6 +44,11 @@ def latestData(queue, resolution = datetime.timedelta(hours=1)):
     datetime_end = datetime_start + datetime.timedelta(hours=48)
     data = data[data.index < datetime_end + resolution]
     data = data[data.index > datetime_start - resolution]
+
+    # Convert UTC to local time then strip out timezone info as bokeh.ColumnDataSource improperly handles it
+    tz = pytz.timezone(TIMEZONE_STRING)
+    data.index = data.index.tz_convert(tz).tz_localize(None)
+
     queue.put(data)
     return
 
