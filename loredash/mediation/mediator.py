@@ -462,7 +462,22 @@ class Mediator:
         """
         Update the database with the latest forecast.
         """
-        data = self.forecaster.get_raw_data(datetime_start)
+        if self.get_current_plant_time() - datetime.timedelta(days=1) <= datetime_start:
+            data = self.forecaster.get_raw_data(datetime_start)
+        else:  #if using a datetime in the past, pretend TMY weather is the forecast
+            data = self.get_weather_df(
+                datetime_start=datetime_start,
+                datetime_end=datetime_start+datetime.timedelta(days=7),
+                timestep=datetime.timedelta(hours=1/self.params['time_steps_per_hour']),
+                tmy3_path=self.weather_file,
+                use_forecast=False
+            )
+            data['dni'] = data['DNI']
+            data['dhi'] = data['DHI']
+            data['ghi'] = data['GHI']
+            data['temp_air'] = data['Temperature']
+            data['wind_speed'] = data['Wind Speed']
+            data = self.forecaster.get_clear_sky_and_forecasts(data)
         instances = [
             models.SolarForecastData(
                 timestamp=pytz.UTC.normalize(time),
