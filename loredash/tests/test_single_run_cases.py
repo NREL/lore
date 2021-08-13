@@ -4,10 +4,12 @@ import pytest
 import pathlib
 import datetime
 import pytz
+import pandas as pd
 
 PARENT_DIR = str(pathlib.Path(__file__).parents[1])
 
 from mediation import mediator
+from mediation.models import TechData
 
 @pytest.mark.django_db
 def test_single_run_case():
@@ -26,6 +28,14 @@ def test_single_run_case():
     datetime_end = datetime.datetime(2021, 6, 3, 0, 0, 0, tzinfo=tzinfo)
     m.run_once(datetime_start=datetime_start,
                          datetime_end=datetime_end)
+    queryset = TechData.objects.values_list('W_grid_no_derate', 'E_tes_charged')
+    df = pd.DataFrame.from_records(queryset)
+    df.to_csv("queryset.csv")
+    W_grid_no_derate = round(df[0].values.sum() / 12000, 0) # Net output energy [MWh-e]
+    avg_tes = round(df[1].values.sum() / (1000*len(df[1].values)), 0) # Avg. TES SOC [MWh-t]
+    assert(W_grid_no_derate == 1113)
+    assert(avg_tes == 1266)
+
 
 if __name__ == "__main__":
     test_single_run_case()
