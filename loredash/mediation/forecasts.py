@@ -3,6 +3,7 @@ import numpy
 import os
 import pandas
 import pytz
+import requests
 
 # pvlib.forecasts issues a warning on init. Silence it.
 import warnings
@@ -56,15 +57,84 @@ class ForecastUncertainty:
             )
         )
 
+class OpenWeatherMap:
+    """
+    A class to manage interactions with openweathermap.org.
+    """
+    def __init__(self, latitude, longitude):
+        self.latitude = str(latitude)
+        self.longitude = str(longitude)
+        if not 'OPENWEATHERMAP_SECRET_KEY' in os.environ:
+            self.APPID = None
+        else:
+            self.APPID = os.environ['OPENWEATHERMAP_SECRET_KEY']
+        return
+
+    def _json_request(self):
+        url = "http://api.openweathermap.org/data/2.5/onecall?appid=" + self.APPID
+        url += "&exclude=current,minutely,daily,alerts&units=metric"
+        url += "&lat=" + self.latitude
+        url += "&lon=" + self.longitude
+        r = requests.get(url)
+        return r.json()
+
+    def _get_hour(self, data):
+        return {
+            'timestamp': datetime.datetime.utcfromtimestamp(data['dt']),
+            'temperature': data['temp'],
+            'pressure': data['pressure'],
+            'humidity': data['humidity'],
+            'wind_speed': data['wind_speed'],
+            'wind_direction': data['wind_deg'],
+            'clouds': data['clouds'],
+        }
+
+    def get(self):
+        """
+        Return a pandas DataFrame of the forecast.
+
+        Index
+        -----
+         - timestamp      [UTC]
+
+        Columns
+        -------
+         - temperature    [degrees celscius]
+         - pressure       [mbar]
+         - humdity        [%]
+         - wind_speed     [m/s^2]
+         - wind_direction [degrees]
+         - clouds         [% cloudy]
+        """
+        if self.APPID is None:
+            df =  pandas.DataFrame({
+                'timestamp': [],
+                'temperature': [],
+                'pressure': [],
+                'humdity': [],
+                'wind_speed': [],
+                'wind_direction': [],
+                'clouds': [],
+            })
+            df.set_index('timestamp', inplace=True)
+            return df
+        data = self._json_request()
+        df = pandas.DataFrame([self._get_hour(d) for d in data['hourly']])
+        df['timestamp'] = pandas.to_datetime(df['timestamp'])
+        df.set_index('timestamp', inplace=True)
+        df.index = df.index.tz_localize(pytz.UTC)
+        return df
+
 class SolarForecast:
     """
-    A class to manage DNI forecasts from NDFD.
+    A class to manage a range of forecasts.
     
     Attributes
     ----------
     plant_location : pvlib.location.Location
         The location of the plant.
     forecast_uncertainty : ForecastUncertainty
+    openweathermap : OpenWeatherMap
     """
     plant_location = None
     forecast_uncertainty = None
@@ -103,6 +173,7 @@ class SolarForecast:
                 os.path.dirname(__file__), '../data/solar_forecast_bands.csv'
             )
         self.forecast_uncertainty = ForecastUncertainty(uncertainty_bands)
+        self.openweathermap = OpenWeatherMap(latitude, longitude)
         return
         
     def get_raw_data(self, datetime_start):
@@ -127,9 +198,10 @@ class SolarForecast:
         # Strip out time periods prior to the datetime_start.
         first_index = 0
         for i in range(len(data)):
-            if data.index[1] >= datetime_start:
+            if data.index[i] > datetime_start:
                 first_index = i - 1
-        data = data[first_index:]
+				break
+        data = data[max(0, first_index):]
         return data
 
     def get_clear_sky_and_forecasts(self, data):
@@ -176,7 +248,14 @@ class SolarForecast:
         )
         for k in forecast_columns:
             new_data[str(k)] = new_data[str(k)] * new_data['clear_sky']
-        new_data['pressure'] = self.ambient_pressure()
+        owm = self.openweathermap.get()
+        if len(owm) > 0:
+            new_data = new_data.join(owm, rsuffix = '_OWM')
+            # Fill in any missing pressure readings with the default.
+            new_data['pressure'].fillna(self.ambient_pressure(), inplace=True)
+        else:
+            # If no OWM, just use the altitude estimate at all times.
+            new_data['pressure'] = self.ambient_pressure()
         return new_data
 
     def ambient_pressure(self):
