@@ -454,7 +454,9 @@ class Mediator:
             raise(err)
     
     def _toTMYTime(self, time):
-        "Convert a time to TMY timezone, which uses a fixed offset."
+        """
+        Convert a time to TMY timezone, which uses a fixed offset.
+        """
         fixed_tz = pytz.FixedOffset(60 * self.plant.design['timezone'])
         return time.astimezone(fixed_tz).replace(tzinfo=None)
 
