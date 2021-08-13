@@ -479,7 +479,7 @@ class Mediator:
             data['ghi'] = data['GHI']
             data['temp_air'] = data['Temperature']
             data['wind_speed'] = data['Wind Speed']
-            data = self.forecaster.get_clear_sky_and_forecasts(data)
+        data = self.forecaster.get_clear_sky_and_forecasts(data)
         instances = [
             models.SolarForecastData(
                 timestamp=pytz.UTC.normalize(time),
