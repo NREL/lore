@@ -120,7 +120,9 @@ class OpenWeatherMap:
             return df
         data = self._json_request()
         df = pandas.DataFrame([self._get_hour(d) for d in data['hourly']])
+        df['timestamp'] = pandas.to_datetime(df['timestamp'])
         df.set_index('timestamp', inplace=True)
+        df.index = df.index.tz_localize(pytz.UTC)
         return df
 
 class SolarForecast:
@@ -196,9 +198,10 @@ class SolarForecast:
         # Strip out time periods prior to the datetime_start.
         first_index = 0
         for i in range(len(data)):
-            if data.index[1] >= datetime_start:
+            if data.index[i] > datetime_start:
                 first_index = i - 1
-        data = data[first_index:]
+                break
+        data = data[max(0, first_index):]
         data['clear_sky'] = self.plant_location.get_clearsky(data.index)['dni']
         # Map the values to a normalized dni/clear-sky ratio space to allow us
         # to convert the median estimate from NDFD to a probabilistic estimate.
@@ -231,7 +234,14 @@ class SolarForecast:
         )
         for k in forecast_columns:
             new_data[str(k)] = new_data[str(k)] * new_data['clear_sky']
-        new_data['pressure'] = self.ambient_pressure()
+        owm = self.openweathermap.get()
+        if len(owm) > 0:
+            new_data = new_data.join(owm, rsuffix = '_OWM')
+            # Fill in any missing pressure readings with the default.
+            new_data['pressure'].fillna(self.ambient_pressure(), inplace=True)
+        else:
+            # If no OWM, just use the altitude estimate at all times.
+            new_data['pressure'] = self.ambient_pressure()
         return new_data
 
     def ambient_pressure(self):
