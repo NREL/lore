@@ -31,10 +31,9 @@ def test_single_run_case():
                          datetime_end=datetime_end)
     queryset = TechData.objects.values_list('W_grid_no_derate', 'E_tes_charged')
     df = pd.DataFrame.from_records(queryset)
-    df.to_csv("queryset.csv")
-    W_grid_no_derate = round(df[0].values.sum() / 12000, 0) # Net output energy [MWh-e]
+    sum_w_grid_no_derate = round(df[0].values.sum() / 12000, 0) # Net output energy [MWh-e]
     avg_tes = round(df[1].values.sum() / (1000*len(df[1].values)), 0) # Avg. TES SOC [MWh-t]
-    assert(W_grid_no_derate == 1113)
+    assert(sum_w_grid_no_derate == 1113)
     assert(avg_tes == 1266)
 
 
