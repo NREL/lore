@@ -13,13 +13,14 @@ from mediation.models import TechData
 
 @pytest.mark.django_db
 def test_single_run_case():
-    plant_design_path = PARENT_DIR + "/../loredash/config/plant_design.json"
-    mediator_params_path = PARENT_DIR + "/config/mediator_settings.json"
-    dispatch_params_path = PARENT_DIR + "/config/dispatch_settings.json"
+    plant_design_path = PARENT_DIR + "/tests/inputs/plant_design_test.json"
+    mediator_params_path = PARENT_DIR + "/tests/inputs/mediator_settings_test.json"
+    dispatch_params_path = PARENT_DIR + "/tests/inputs/dispatch_settings_test.json"
+    weather_file_path = PARENT_DIR + "/data/daggett_ca_34.865371_-116.783023_psmv3_60_tmy.csv"
     m = mediator.Mediator(
         params_path = mediator_params_path,
         plant_design_path=plant_design_path,
-        weather_file = PARENT_DIR + "/data/daggett_ca_34.865371_-116.783023_psmv3_60_tmy.csv",
+        weather_file = weather_file_path,
         dispatch_params_path=dispatch_params_path,
         update_interval = datetime.timedelta(seconds = 5),
     )
