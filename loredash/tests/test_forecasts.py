@@ -23,6 +23,7 @@ def test_get_forecast():
     data = forecaster.get_raw_data(datetime_start)
     assert(len(data) >= 24)
     assert(datetime_start >= data.index[0])
+    assert(datetime_start - data.index[0] <= datetime.timedelta(hours = 1))
     assert('dni' in data)
     assert('dhi' in data)
     assert('ghi' in data)
@@ -35,4 +36,28 @@ def test_get_forecast():
     assert('0.9' in data)
     assert((data['0.9'] >= data['0.1']).all())
     assert('pressure' in data)
+    # The first value should be the default
+    assert(data['pressure'][0] == forecaster.ambient_pressure())
+    if forecaster.openweathermap.APPID is not None:
+        # But if we have OWM, some things should be different
+        assert(not (data['pressure'] == forecaster.ambient_pressure()).all())
+    return
+
+def test_openweathermap():
+    forecaster = forecasts.SolarForecast(38.2, -117.4, -8, 100.0)
+    owm = forecaster.openweathermap.get()
+    assert(len(owm) == 48)
+    # Check pressure in mbar
+    assert(min(owm['pressure']) > 800)
+    assert(max(owm['pressure']) < 1200)
+    # Check humdity in %
+    assert(min(owm['humidity']) >= 0)
+    assert(max(owm['humidity']) <= 100)
+    return
+
+def test_openweathermap_fake_no_appid():
+    forecaster = forecasts.SolarForecast(38.2, -117.4, -8, 100.0)
+    forecaster.openweathermap.APPID = None
+    owm = forecaster.openweathermap.get()
+    assert(len(owm) == 0)
     return
