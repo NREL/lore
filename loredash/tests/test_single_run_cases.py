@@ -22,8 +22,8 @@ def test_single_run_case():
         update_interval = datetime.timedelta(seconds = 5),
     )
     tzinfo = pytz.UTC
-    datetime_start = datetime.datetime(2021, 1, 1, 0, 0, 0, tzinfo=tzinfo)
-    datetime_end = datetime.datetime(2021, 1, 3, 0, 0, 0, tzinfo=tzinfo)
+    datetime_start = datetime.datetime(2021, 6, 1, 0, 0, 0, tzinfo=tzinfo)
+    datetime_end = datetime.datetime(2021, 6, 3, 0, 0, 0, tzinfo=tzinfo)
     m.run_once(datetime_start=datetime_start,
                          datetime_end=datetime_end)
 
