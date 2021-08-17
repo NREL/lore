@@ -202,6 +202,20 @@ class SolarForecast:
                 first_index = i - 1
                 break
         data = data[max(0, first_index):]
+        return data
+
+    def get_clear_sky_and_forecasts(self, data):
+        """
+        get clear sky estimates from an existing dataframe.
+
+        Parameters
+        ===========
+        data : pandas.DataFrame | raw forecast data
+
+        Returns
+        ===========
+        data : pandas.DataFrame | raw forecast data with clear sky and forecast columns
+        """
         data['clear_sky'] = self.plant_location.get_clearsky(data.index)['dni']
         # Map the values to a normalized dni/clear-sky ratio space to allow us
         # to convert the median estimate from NDFD to a probabilistic estimate.

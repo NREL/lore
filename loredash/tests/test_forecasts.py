@@ -21,6 +21,7 @@ def test_get_forecast():
     datetime_start = datetime.datetime.now(pytz.UTC)
     datetime_start = datetime_start - datetime.timedelta(hours = 24)
     data = forecaster.get_raw_data(datetime_start)
+    data = forecaster.get_clear_sky_and_forecasts(data)
     assert(len(data) >= 24)
     assert(datetime_start >= data.index[0])
     assert(datetime_start - data.index[0] <= datetime.timedelta(hours = 1))
