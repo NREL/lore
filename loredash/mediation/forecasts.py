@@ -200,7 +200,7 @@ class SolarForecast:
         for i in range(len(data)):
             if data.index[i] > datetime_start:
                 first_index = i - 1
-				break
+                break
         data = data[max(0, first_index):]
         return data
 
