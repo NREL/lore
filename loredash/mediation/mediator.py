@@ -129,17 +129,27 @@ class Mediator:
 
         self.plant.update_flux_maps(self.tech_wrap.calc_flux_eta_maps(self.plant.get_design(), self.plant.get_state()))
 
-    def run_once(self, datetime_start=None, datetime_end=None, timedelta=None):
-        """Get data from external plant and weather interfaces and run entire set
-        of submodels, saving data to database.
+    def run_once(
+        self, 
+        datetime_start=None, 
+        datetime_end=None, 
+        timedelta=None,
+        run_without_adding_to_database=False,
+    ):
+        """
+        Get data from external plant and weather interfaces and run entire set
+        of submodels.
 
-        Args:
+        ## Arguments
+
             datetime_start: beginning of first timestep, in plant-local time
             datetime_end:   end of last timestep, in plant-local time
             timedelta:      alternative to datetime_end
-        Returns:
-            0 if successful
-        Raises:
+
+        ## Returns
+
+            if `run_without_adding_to_database`, returns a dictionary of
+            validated outputs. Otherwise, return `0` on success.
         """
         # Code Design:
         # Step 0: Normalize timesteps to even intervals and enforce timestep localization
@@ -297,6 +307,8 @@ class Mediator:
                           freq=self.simulation_timestep,
                           closed='right'))   # exclude start
         validated_outputs['timestamp'] = timestamps
+        if run_without_adding_to_database:
+            return validated_outputs
         self.add_techdata_to_db(validated_outputs)    # TODO: rename as techmodeldata or something
 
         # d. Add simulated plant state and other data to cache and database, and update plant state
