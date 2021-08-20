@@ -101,6 +101,19 @@ To run the suite of tests during the development process, navigate to `/lore/lor
 python -m pytest
 ```
 
+# Generating Keys
+## Django Secret Key
+1. Open python terminal by typing 'python' at a terminal
+2. Run:
+	```
+	from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())
+	```
+## Bokeh Secret Key
+1. At a terminal (regular, not Python), run:
+	```
+	bokeh secret
+	```
+
 # Dashboard Plots
 
 The Dashboard stack currently uses Django and Bokeh both running on a server. These will both be run in production mode once on the local plant server.
