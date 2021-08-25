@@ -275,6 +275,12 @@ class Mediator:
             weather_dataframe=weather_simulate)
         print("Generated Energy [kWh]= ", tech_outputs["annual_energy"])
 
+        try:   #only perform plotting if plots_file is specified
+            self.ssc_dispatch_compare_plots(self.params["plots_file"], dispatch_outputs["ssc_dispatch_targets"],
+                                            tech_outputs)
+        except KeyError:
+            pass
+
         # c. Validate output data
         # TODO: fix timezones in these db tables
         tech_outputs = {k:(list(v) if isinstance(v, tuple) else v) for (k,v) in tech_outputs.items()}   # converts tuples to lists so they can be edited
@@ -623,6 +629,9 @@ class Mediator:
             for (k, v) in key_map.items():
                 data.loc[:, v] = list(solar_forecast[k])
         return data
+
+    def ssc_dispatch_compare_plots(self, filename, dispatch_targets, tech_outputs):
+        pass
 
 def mediate_continuously(update_interval=5):
     mediator = Mediator()
