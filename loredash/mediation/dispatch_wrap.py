@@ -1053,17 +1053,35 @@ class DispatchWrap:
             self.ursd0 = dispatch_soln.get_value_at_time(self.dispatch_params, update_interval, 'ursd')      # set to False when it doesn't exist 
             self.yrsd0 = dispatch_soln.get_value_at_time(self.dispatch_params, update_interval, 'yrsd')      # set to False when it doesn't exist
 
+            #--- Additional dispatch measures for comparing to ssc
+            T_rout = dispatch_soln.T_rout
+            T_hs = dispatch_soln.T_hs
+            Q_thermal = dispatch_soln.xr
+            cycle_input = dispatch_soln.x
+            gross_output = dispatch_soln.wdot
 
-        else:  # Infeasible solution was returned, revert back to running ssc without dispatch targets
+        else:  # Infeasible solution was returned, revert back to running ssc without dispatch targetsLegendary Oaks Golf Course
             Rdisp = None
             ssc_dispatch_targets = None
+            T_rout = None
+            T_hs = None
+            Q_thermal = None
+            cycle_input = None
+            gross_output = None
 
         dispatch_outputs = {
             'ssc_dispatch_targets': ssc_dispatch_targets,
             'Rdisp': Rdisp,
 	        'current_day_schedule': list(self.current_day_schedule),
-	        'next_day_schedule': list(self.next_day_schedule)
+	        'next_day_schedule': list(self.next_day_schedule),
+            'T_rout': T_rout,
+            'T_hs': T_hs,
+            'Q_thermal': Q_thermal,
+            'cycle_input': cycle_input,
+            'gross_output': gross_output
         }
+
+        print(dispatch_outputs['Q_thermal'])
 
         self.results = dispatch_outputs
 
