@@ -63,7 +63,6 @@ def plot_solution(dispatch_soln, tech_outputs, datetime_start, datetime_end, sav
 
     # DNI
     j = 0
-    ax[j].plot(times, cs.results['beam'][inds], lw = 0.75, color = 'steelblue', label = 'Actual')
     ax[j].plot(times, np.array(tech_outputs['rec_clearsky_dni'])*np.array(tech_outputs["rec_clearsky_fraction"]), lw = 0.75, color = 'steelblue', label = 'Actual')
     ax[j].plot(times, tech_outputs['rec_clearsky_dni'], lw = 0.75, color = 'maroon', label = 'Clear-sky')
     #ax[j].plot(times, cs.current_forecast_weather_data['dn'][p:p+n], '-', lw = 0.75, color = 'darkgoldenrod', label = 'Forecast')
@@ -91,17 +90,17 @@ def plot_solution(dispatch_soln, tech_outputs, datetime_start, datetime_end, sav
     ax[j].set_ylim([0,1.02])
     
     
-    # Day-ahead schedule
-    j+=1
-    if cs.use_day_ahead_schedule:
-        da_step = 1./cs.day_ahead_schedule_steps_per_hour
-        da_times = np.linspace(0, 24, int(24/da_step)+1)
-        for i in range(startday, nday):
-            if cs.schedules[i] is not None:
-                ax[j].plot(24*i+np.repeat(da_times,2)[1:-1], np.repeat(cs.schedules[i],2), lw = 0.75, color = 'k')
-                ax[j].fill_between(24*i+np.repeat(da_times,2)[1:-1], np.repeat(cs.schedules[i],2), lw = 0.75, alpha = 0.15, color = 'grey')
-    ax[j].set_ylabel('Day-ahead \nschedule (MWhe)')    
-    ax[j].set_ylim([0, 1.05*cs.design.P_ref])
+    # # Day-ahead schedule
+    # j+=1
+    # if cs.use_day_ahead_schedule:
+    #     da_step = 1./cs.day_ahead_schedule_steps_per_hour
+    #     da_times = np.linspace(0, 24, int(24/da_step)+1)
+    #     for i in range(startday, nday):
+    #         if cs.schedules[i] is not None:
+    #             ax[j].plot(24*i+np.repeat(da_times,2)[1:-1], np.repeat(cs.schedules[i],2), lw = 0.75, color = 'k')
+    #             ax[j].fill_between(24*i+np.repeat(da_times,2)[1:-1], np.repeat(cs.schedules[i],2), lw = 0.75, alpha = 0.15, color = 'grey')
+    # ax[j].set_ylabel('Day-ahead \nschedule (MWhe)')
+    # ax[j].set_ylim([0, 1.05*cs.design.P_ref])
     
     # Receiver thermal power (and target operating states from dispatch)
     j += 1
