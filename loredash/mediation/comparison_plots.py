@@ -54,10 +54,6 @@ def get_label(name):
 
 #-----------------------------------------------------------------------------
 def plot_solution(dispatch_soln, tech_outputs, datetime_start, datetime_end, savename = None):
-
-    if nday is None:
-        nday = int(0.5+(datetime_end-datetime_start).days)
-    nday = min(nday, cs.sim_days - startday)
     npts = len(inds)
     times = np.arange(npts) * 1./tech_outputs["time_steps_per_hour"]
 
@@ -210,108 +206,4 @@ def plot_solution(dispatch_soln, tech_outputs, datetime_start, datetime_end, sav
     else:
         plt.show()
  
-    return   
-
-
-
-#-----------------------------------------------------------------------------
-# Plot all computed dispatch solutions for debugging
-def plot_dispatch_soln_states(cs, startday = 0, nday = None):
-    if nday is None:
-        nday = cs.sim_days - startday
-    nday = min(nday, cs.sim_days - startday)
-    freq = cs.dispatch_frequency
-    nplot = int(nday*24 / freq)
-    i = int(startday / freq)    
-    nrow = 15
-    ncol = ceil(nplot / nrow)
-    
-    nplot = 1
-    names = [['cycle_on', 'cycle_startup', 'cycle_standby']]
-    if len(cs.disp_soln_tracking[0].receiver_on)>0:
-        nplot = 2
-        names = [['receiver_on', 'receiver_startup', 'receiver_standby']] + names
-
-    for q in range(nplot):
-        [fig, ax, nrow, ncol] = setup_subplots(nrow = nrow, ncol = ncol, wsub = 2.0*nday, hsub = 0.5, wspace = 0.3, hspace = 0.2, left = 0.7, right = 0.7, bot = 0.5, top = 0.1)  
-        tmax = (nday+1)*24
-        for r in range(nrow):
-            for c in range(ncol):
-                k = c*nrow+r
-                p = r*ncol+c
-                ax[p].set_ylim(0, 1.02)
-                ax[p].set_xlim(0, tmax)
-                if i+k < len(cs.disp_soln_tracking) and cs.disp_soln_tracking[i+k] is not None:
-                    t_elapsed = np.array(cs.disp_params_tracking[i+k].Delta_e)
-                    times = k*freq + (t_elapsed - np.array(cs.disp_params_tracking[i+k].Delta))
-                    tstart = k*freq
-                    tend = k*freq+t_elapsed[-1]
-                    plottimes = np.repeat(times,2)[1:-1] 
-                    on = getattr(cs.disp_soln_tracking[i+k], names[q][0])
-                    startup = getattr(cs.disp_soln_tracking[i+k], names[q][1])
-                    standby = getattr(cs.disp_soln_tracking[i+k], names[q][2])                
-                    ax[p].fill_between(plottimes, np.repeat(on,2)[0:-2], lw = 0.75, color = 'grey', alpha = 0.3, label = 'On')
-                    ax[p].fill_between(plottimes, np.repeat(startup,2)[0:-2], lw = 0.75, color = 'darkgreen', alpha = 0.3, label = 'Startup')
-                    ax[p].fill_between(plottimes, np.repeat(standby,2)[0:-2], lw = 0.75, color = 'maroon', alpha = 0.3, label = 'Standby')
-                    ax[p].plot([tstart, tstart], [0,1.02], '-', lw =0.5, color = 'k')
-                    ax[p].plot([tend, tend], [0,1.02], '-', lw =0.5, color = 'k')
-                    ax[p].annotate('%.1f - %.1f'%(tstart, tend), xy = [0.5*tmax, 0.8], fontsize = 6)
-                    if p == 0:
-                        ax[p].legend(fontsize = 6)
-                    
-                ax[p].set_xticks(np.arange(0, tmax, 12))  
-                ax[p].tick_params(axis='both', which='major', labelsize=6)
-                if r == nrow-1:
-                    ax[p].set_xlabel('Time (hr)')
-
-    plt.show()
     return
-        
-
-def plot_dispatch_soln_singlevar(cs, name, startday = 0, nday = None):
-    if nday is None:
-        nday = cs.sim_days - startday
-    nday = min(nday, cs.sim_days - startday)
-    freq = cs.dispatch_frequency
-    nplot = int(nday*24 / freq)
-    i = int(startday / freq)    
-    nrow = 15
-    ncol = ceil(nplot / nrow)
-    
-    scale = 1.0
-    if name in ['receiver_power', 'thermal_input_to_cycle', 'electrical_output_from_cycle']:
-        scale =1.e-3
-    elif name == 'tes_soc':
-        scale = 1./cs.dispatch_params.Eu
-
-    [fig, ax, nrow, ncol] = setup_subplots(nrow = nrow, ncol = ncol, wsub = 2.0*nday, hsub = 0.5, wspace = 0.3, hspace = 0.2, left = 0.7, right = 0.7, bot = 0.5, top = 0.1)  
-    tmax = (nday+1)*24
-    
-    ymax = -1e10
-    for j in range(nplot):
-        if cs.disp_soln_tracking[i+j] != False:
-            vals = getattr(cs.disp_soln_tracking[i+j], name)*scale
-            ymax = max(ymax, 1.02*vals.max())
-
-    for r in range(nrow):
-        for c in range(ncol):
-            k = c*nrow+r
-            p = r*ncol+c
-            ax[p].set_xlim(0, tmax)
-            ax[p].set_ylim(0,ymax)
-            if i+k < len(cs.disp_soln_tracking) and cs.disp_soln_tracking[i+k] is not None:
-                t_elapsed = np.array(cs.disp_params_tracking[i+k].Delta_e)
-                times = k*freq + (t_elapsed - np.array(cs.disp_params_tracking[i+k].Delta))
-                plottimes = np.repeat(times,2)[1:-1] 
-                vals = getattr(cs.disp_soln_tracking[i+k], name)*scale
-                ax[p].plot(plottimes, np.repeat(vals,2)[0:-2], '-', lw = 0.5, color = 'k')
-                ax[p].fill_between(plottimes, np.repeat(vals,2)[0:-2], color = 'grey', alpha = 0.3, label = 'On')
-                ax[p].annotate('%.1f - %.1f'%(k*freq, k*freq+t_elapsed[-1]), xy = [0.5*tmax, 0.75*ymax], fontsize = 6)
-            ax[p].set_xticks(np.arange(0, tmax, 12))  
-            ax[p].tick_params(axis='both', which='major', labelsize=6)
-            if r == nrow-1:
-                ax[p].set_xlabel('Time (hr)')
-
-    plt.show()
-
-    return       
