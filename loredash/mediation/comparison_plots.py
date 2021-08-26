@@ -1,4 +1,3 @@
-import util
 from math import floor, ceil
 import numpy as np
 import datetime
@@ -52,62 +51,6 @@ def get_label(name):
              }
     return namemap[name]
 
-
-#----------------------------------------------------------------------------- 
-# Plot weather forecast (from file) vs actual weather 
-def compare_forecast_from_file(date, offset30 = True):    
-    nph = 60  # Steps per hour in ground truth and clear-sky weather data
-    ground_truth_weather = util.read_weather_data('../model-validation/input_files/weather_files/ssc_weatherfile_1min_2018.csv')
-    clearsky = np.genfromtxt('../model-validation/input_files/weather_files/clearsky_pvlib_ineichen_1min_2018.csv')
-
-    wfdata = util.read_weather_forecast(date, offset30)
-    n = len(wfdata['dn'])
-    tstart = -9 if offset30 else -8.5    # Start time in forecast relative to 12am PST on the provided date
-    t = int(util.get_time_of_year(date)/3600) + tstart   # Time of year (hr)
-    pgt = int(t*60) # Time point in ground-truth weather file
-    tforecast = np.repeat(np.arange(n),2)[1:-1] + tstart
-    tactual = np.arange(n*nph) * 1./nph + tstart
-    
-    plot_vars = ['dn', 'tdry', 'wspd']
-    [fig, ax, nrow, ncol] = setup_subplots(nrow = len(plot_vars), ncol = 1, wsub = 6.0, hsub = 1.5, wspace = 0.0, hspace = 0.4, left = 0.6, right = 0.2, bot = 0.45, top = 0.1) 
-    for j in range(nrow):
-        plt.sca(ax[j])
-        k = plot_vars[j]
-        plt.plot(tforecast, np.repeat(wfdata[k],2)[0:-2], '-', lw = 0.75, color = 'k', label = 'Forecast')
-        plt.plot(tactual, ground_truth_weather[k][pgt:pgt+n*nph], '-', lw = 0.75, color = 'steelblue', label = 'Actual')
-        if  k == 'dn':
-            plt.plot(tactual, clearsky[pgt:pgt+n*nph], '-', lw = 0.75, color = 'maroon', label = 'Clearsky')
-        plt.ylabel(get_label(k))
-        plt.xlabel('Time (hr)')   
-        plt.legend()
-    plt.show()
-    return
-
-
-def compare_forecast_from_annual_data(cs, startday = 0, nday = 2):
-    nday = min(nday, cs.sim_days - startday)
-    nph = cs.ssc_time_steps_per_hour
-    startime = datetime.datetime(cs.start_date.year, cs.start_date.month, cs.start_date.day) + datetime.timedelta(days = startday)
-    starthour = int(util.get_time_of_year(startime) / 3600)  # Time (hours) elapsed since beginning of year
-    p = starthour * nph
-    n = nday*24*nph
-    times = np.arange(0, n)
-    
-    plot_vars = ['dn', 'tdry', 'wspd']
-    [fig, ax, nrow, ncol] = setup_subplots(nrow = len(plot_vars), ncol = 1, wsub = 3.0*nday, hsub = 1.1, wspace = 0, hspace = 0.3, left = 0.7, right = 0.7, bot = 0.5, top = 0.1)
-    for j in range(nrow):
-        k = plot_vars[j]
-        ax[j].plot(times, cs.ground_truth_weather_data[k][p:p+n], '-', lw = 0.75, color = 'steelblue', label = 'Actual')
-        ax[j].plot(times, cs.current_forecast_weather_data[k][p:p+n], '-', lw = 0.75, color = 'maroon', label = 'Forecast')
-        if j == 0:
-            ax[j].plot(times, cs.clearsky_data[p:p+n], '-', lw = 0.75, color = 'darkgreen', label = 'Expected clearsky')
-        ax[j].set_ylabel(get_label(k))
-        ax[j].set_xlabel('Time (hr)')   
-        ax[j].legend()
-    plt.show()
-    return
-
-    
 
 #-----------------------------------------------------------------------------
 def plot_solution(cs, startday = 0, nday = 4, savename = None):
