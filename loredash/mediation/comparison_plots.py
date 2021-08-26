@@ -71,12 +71,12 @@ def plot_solution(dispatch_soln, tech_outputs, datetime_start, datetime_end, sav
     #ax[j].plot(times, cs.current_forecast_weather_data['dn'][p:p+n], '-', lw = 0.75, color = 'darkgoldenrod', label = 'Forecast')
     styles = ['-', '--']
     colors = ['grey', 'darkgoldenrod']
-    for i in range(nday):
-        offset30 = True
-        wfdata = util.read_weather_forecast(startime+datetime.timedelta(days = i), offset30)
-        n = len(wfdata['dn'])
-        tstart = 24*i + (-9 if offset30 else -8.5)    # Start time in forecast relative to 12am PST on the provided date
-        ax[j].plot( tstart + np.repeat(np.arange(n+1),2)[3:-1], np.repeat(wfdata['dn'],2)[2:], lw = 0.75, color = colors[i%2], linestyle = styles[i%2], label = 'Forecast' if i in[0,1] else '')
+    # for i in range(nday):
+    #     offset30 = True
+    #     wfdata = util.read_weather_forecast(startime+datetime.timedelta(days = i), offset30)
+    #     n = len(wfdata['dn'])
+    #     tstart = 24*i + (-9 if offset30 else -8.5)    # Start time in forecast relative to 12am PST on the provided date
+    #     ax[j].plot( tstart + np.repeat(np.arange(n+1),2)[3:-1], np.repeat(wfdata['dn'],2)[2:], lw = 0.75, color = colors[i%2], linestyle = styles[i%2], label = 'Forecast' if i in[0,1] else '')
     ax[j].set_ylabel('DNI (W/m$^2$)')
     ax[j].set_ylim([0, 1050])
     ax[j].legend()
