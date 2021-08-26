@@ -54,7 +54,8 @@ def get_label(name):
 
 #-----------------------------------------------------------------------------
 def plot_solution(dispatch_soln, tech_outputs, datetime_start, datetime_end, savename = None):
-    npts = len(inds)
+    nday = int(0.5+(datetime_end-datetime_start).days)
+    npts = len(tech_outputs['rec_clearsky_dni'])
     times = np.arange(npts) * 1./tech_outputs["time_steps_per_hour"]
 
     nrow = 9
@@ -63,7 +64,8 @@ def plot_solution(dispatch_soln, tech_outputs, datetime_start, datetime_end, sav
     # DNI
     j = 0
     ax[j].plot(times, cs.results['beam'][inds], lw = 0.75, color = 'steelblue', label = 'Actual')
-    ax[j].plot(times, cs.results['clearsky'][inds], lw = 0.75, color = 'maroon', label = 'Clear-sky')
+    ax[j].plot(times, np.array(tech_outputs['rec_clearsky_dni'])*np.array(tech_outputs["rec_clearsky_fraction"]), lw = 0.75, color = 'steelblue', label = 'Actual')
+    ax[j].plot(times, tech_outputs['rec_clearsky_dni'], lw = 0.75, color = 'maroon', label = 'Clear-sky')
     #ax[j].plot(times, cs.current_forecast_weather_data['dn'][p:p+n], '-', lw = 0.75, color = 'darkgoldenrod', label = 'Forecast')
     styles = ['-', '--']
     colors = ['grey', 'darkgoldenrod']
