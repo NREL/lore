@@ -53,20 +53,13 @@ def get_label(name):
 
 
 #-----------------------------------------------------------------------------
-def plot_solution(cs, startday = 0, nday = 4, savename = None):
+def plot_solution(dispatch_soln, tech_outputs, datetime_start, datetime_end, savename = None):
 
     if nday is None:
-        nday = cs.sim_days - startday
+        nday = int(0.5+(datetime_end-datetime_start).days)
     nday = min(nday, cs.sim_days - startday)
-    nph = cs.ssc_time_steps_per_hour
-    inds = np.arange(startday*24*nph, (startday+nday)*24*nph)
     npts = len(inds)
-    times = np.arange(npts) * 1./nph
-
-    startime = datetime.datetime(cs.start_date.year, cs.start_date.month, cs.start_date.day) + datetime.timedelta(days = startday)
-    #starthour = int(util.get_time_of_year(startime) / 3600)  # Time (hours) elapsed since beginning of year
-    #p = starthour * nph
-    n = nday*24*nph
+    times = np.arange(npts) * 1./tech_outputs["time_steps_per_hour"]
 
     nrow = 9
     [fig, ax, nrow, ncol] = setup_subplots(nrow = nrow, ncol = 1, wsub = 3.5*nday, hsub = 0.75, wspace = 0, hspace = 0.3, left = 0.7, right = 0.7, bot = 0.5, top = 0.1)
