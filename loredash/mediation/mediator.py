@@ -276,7 +276,7 @@ class Mediator:
         print("Generated Energy [kWh]= ", tech_outputs["annual_energy"])
 
         try:   #only perform plotting if plots_file is specified
-            self.ssc_dispatch_compare_plots(self.params["plots_file"], dispatch_outputs["ssc_dispatch_targets"],
+            self.ssc_dispatch_compare_plots(self.params["plots_file"], datetime_start, datetime_end, dispatch_outputs,
                                             tech_outputs)
         except KeyError:
             pass
@@ -630,8 +630,10 @@ class Mediator:
                 data.loc[:, v] = list(solar_forecast[k])
         return data
 
-    def ssc_dispatch_compare_plots(self, filename, dispatch_targets, tech_outputs):
-        pass
+    def ssc_dispatch_compare_plots(self, filename, datetime_start, datetime_end, dispatch_solution, tech_outputs):
+        from mediation import comparison_plots
+        return comparison_plots.plot_solution(dispatch_solution, tech_outputs, datetime_start, datetime_end, filename)
+
 
 def mediate_continuously(update_interval=5):
     mediator = Mediator()
