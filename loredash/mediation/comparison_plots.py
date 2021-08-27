@@ -123,7 +123,7 @@ def plot_solution(dispatch_soln, tech_outputs, datetime_start, datetime_end, sav
     ax[j].set_ylim([0, 1+1.05*max(dispatch_soln['Rdisp']['disp_thermal_input_to_cycle'])])
     ax[j].legend(loc = 'lower left')
     ax2 = ax[j].twinx()
-    ax2.fill_between(times, [1 if dispatch_soln['Rdisp']['disp_thermal_input_to_cycle'][idx] > 1e-6 else 0 for idx in range(len(npts))], lw = 0.75, color = 'grey', alpha = 0.3, label = 'On')
+    ax2.fill_between(times, [1 if dispatch_soln['Rdisp']['disp_thermal_input_to_cycle'][idx] > 1e-6 else 0 for idx in range(npts)], lw = 0.75, color = 'grey', alpha = 0.3, label = 'On')
     ax2.fill_between(times, dispatch_soln['Rdisp']['disp_cycle_startup'], lw = 0.75, color = 'darkgreen', alpha = 0.3, label = 'Startup')
     ax2.fill_between(times, dispatch_soln['Rdisp']['disp_cycle_standby'], lw = 0.75, color = 'maroon', alpha = 0.3, label = 'Standby')
     ax2.set_ylabel('Target cycle \nstate')
@@ -158,13 +158,13 @@ def plot_solution(dispatch_soln, tech_outputs, datetime_start, datetime_end, sav
 
     # TES T
     j+=1 
-    ax[j].plot(times, tech_outputs['T_tes_hot'][inds], lw = 0.75, color = 'maroon', label = 'Hot storage')
+    ax[j].plot(times, tech_outputs['T_tes_hot'], lw = 0.75, color = 'maroon', label = 'Hot storage')
     # TODO add temperature for linear, nonlinear pyomo options
     ax[j].set_ylabel('T$_{hot}$ ($^{\circ}$C)')  
     ax[j].set_ylim([475, 580])
     ax[j].legend(loc = 'lower left')
     ax2 = ax[j].twinx()
-    ax2.plot(times, tech_outputs['T_tes_cold'][inds], lw = 0.75, color = 'steelblue', label = 'Cold storage')
+    ax2.plot(times, tech_outputs['T_tes_cold'], lw = 0.75, color = 'steelblue', label = 'Cold storage')
     # TODO add temperature for linear, nonlinear pyomo options
     ax2.set_ylabel('T$_{cold}$ ($^{\circ}$C)')
     ax2.legend(loc = 'lower right')        

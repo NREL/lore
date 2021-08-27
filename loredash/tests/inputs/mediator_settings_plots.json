@@ -55,5 +55,5 @@
     "cycle_type":                           "user_defined",         // "user-defined", "sliding", or "fixed"
 	
 	//Output options
-	"plots_file":                           "./dispatch_plots.csv"  // Filepath for plots
+	"plots_file":                           "./dispatch_plots.png"  // Filepath for plots
 }
