@@ -57,7 +57,7 @@ def plot_solution(dispatch_soln, tech_outputs, datetime_start, datetime_end, sav
     nday = int(0.5+(datetime_end-datetime_start).days)
     npts = len(tech_outputs['rec_clearsky_dni'])
     times = np.arange(npts) * 1./tech_outputs["time_steps_per_hour"]
-    nrow = 9
+    nrow = 8
     [fig, ax, nrow, ncol] = setup_subplots(nrow = nrow, ncol = 1, wsub = 3.5*nday, hsub = 0.75, wspace = 0, hspace = 0.3, left = 0.7, right = 0.7, bot = 0.5, top = 0.1)
 
     # DNI
@@ -106,7 +106,7 @@ def plot_solution(dispatch_soln, tech_outputs, datetime_start, datetime_end, sav
     ax[j].plot(times, tech_outputs['q_startup'], lw = 0.75, color = 'lightblue', label = 'ssc (startup)')
     ax[j].plot(times, np.array(dispatch_soln['Rdisp']['disp_receiver_power'])/1000, '--', lw = 0.75, color = 'maroon', label = 'Dispatch')
     ax[j].set_ylabel(get_label('Q_thermal'))
-    ax[j].set_ylim(0, 1.05*max(dispatch_soln['Rdisp']['disp_receiver_power']))  #TODO: make this the upper bound instead of max value from solution
+    ax[j].set_ylim(0, 1.05E-3*max(dispatch_soln['Rdisp']['disp_receiver_power']))  #TODO: make this the upper bound instead of max value from solution
     ax[j].legend(loc = 'lower left')
     ax2 = ax[j].twinx()
     ax2.fill_between(times, dispatch_soln['Rdisp']['disp_receiver_standby'], lw=0.75, color='maroon',
@@ -120,7 +120,7 @@ def plot_solution(dispatch_soln, tech_outputs, datetime_start, datetime_end, sav
     ax[j].plot(times, tech_outputs['q_pb'], lw = 0.75, color = 'steelblue', label = 'ssc')
     ax[j].plot(times, np.array(np.array(dispatch_soln['Rdisp']['disp_thermal_input_to_cycle']))/1000, '--', lw = 0.75, color = 'maroon', label = 'Dispatch')
     ax[j].set_ylabel('Cycle thermal\ninput (MWt)')
-    ax[j].set_ylim([0, 1+1.05*max(dispatch_soln['Rdisp']['disp_thermal_input_to_cycle'])])
+    ax[j].set_ylim([0, 1+1.05E-3*max(dispatch_soln['Rdisp']['disp_thermal_input_to_cycle'])])
     ax[j].legend(loc = 'lower left')
     ax2 = ax[j].twinx()
     ax2.fill_between(times, [1 if dispatch_soln['Rdisp']['disp_thermal_input_to_cycle'][idx] > 1e-6 else 0 for idx in range(npts)], lw = 0.75, color = 'grey', alpha = 0.3, label = 'On')
@@ -145,9 +145,9 @@ def plot_solution(dispatch_soln, tech_outputs, datetime_start, datetime_end, sav
     ax[j].plot(times, tech_outputs['e_ch_tes'], lw = 0.75, color = 'steelblue', label = 'ssc')
     ax[j].plot(times, np.array(dispatch_soln['Rdisp']['disp_tes_soc'])/1000, '--', lw = 0.75, color = 'maroon', label = 'Dispatch')
     ax[j].set_ylabel('TES (MWht)')  
-    ax[j].set_ylim([0, 1.05*max(dispatch_soln['Rdisp']['disp_tes_soc'])]) #TODO: make this the upper bound instead of max value from solution
-    ax[j].legend(loc = 'lower left')  
     
+    ax[j].set_ylim([0, 1.05E-3*max(dispatch_soln['Rdisp']['disp_tes_soc'])]) #TODO: make this the upper bound instead of max value from solution
+    ax[j].legend(loc = 'lower left')
     # Receiver outlet T
     j += 1
     ax[j].plot(times, tech_outputs['T_rec_out'], lw = 0.75, color = 'maroon', label = 'Receiver')
