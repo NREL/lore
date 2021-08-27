@@ -60,6 +60,7 @@ def plot_solution(dispatch_soln, tech_outputs, datetime_start, datetime_end, sav
     nrow = 8
     [fig, ax, nrow, ncol] = setup_subplots(nrow = nrow, ncol = 1, wsub = 3.5*nday, hsub = 0.75, wspace = 0, hspace = 0.3, left = 0.7, right = 0.7, bot = 0.5, top = 0.1)
 
+    # TODO: fix dni (ssc output not giving us anything useful)
     # DNI
     j = 0
     ax[j].plot(times, np.array(tech_outputs['rec_clearsky_dni'])*np.array(tech_outputs["rec_clearsky_fraction"]), lw = 0.75, color = 'steelblue', label = 'Actual')
