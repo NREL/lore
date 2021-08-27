@@ -57,7 +57,6 @@ def plot_solution(dispatch_soln, tech_outputs, datetime_start, datetime_end, sav
     nday = int(0.5+(datetime_end-datetime_start).days)
     npts = len(tech_outputs['rec_clearsky_dni'])
     times = np.arange(npts) * 1./tech_outputs["time_steps_per_hour"]
-
     nrow = 9
     [fig, ax, nrow, ncol] = setup_subplots(nrow = nrow, ncol = 1, wsub = 3.5*nday, hsub = 0.75, wspace = 0, hspace = 0.3, left = 0.7, right = 0.7, bot = 0.5, top = 0.1)
 
@@ -85,7 +84,7 @@ def plot_solution(dispatch_soln, tech_outputs, datetime_start, datetime_end, sav
     
     # Solar field adjustment (e.g. soiling if not using CD data, or soiling/tracking/offline if using CD data)
     j+=1
-    ax[j].plot(times, cs.results['sf_adjust_out'][inds], lw = 0.75, color = 'grey', label = 'sf_adjust')
+    ax[j].plot(times, tech_outputs['sf_adjust_out'], lw = 0.75, color = 'grey', label = 'sf_adjust')
     ax[j].set_ylabel('Field\nAvailability')
     ax[j].set_ylim([0,1.02])
     
@@ -101,97 +100,73 @@ def plot_solution(dispatch_soln, tech_outputs, datetime_start, datetime_end, sav
     #             ax[j].fill_between(24*i+np.repeat(da_times,2)[1:-1], np.repeat(cs.schedules[i],2), lw = 0.75, alpha = 0.15, color = 'grey')
     # ax[j].set_ylabel('Day-ahead \nschedule (MWhe)')
     # ax[j].set_ylim([0, 1.05*cs.design.P_ref])
-    
     # Receiver thermal power (and target operating states from dispatch)
     j += 1
-    ax[j].plot(times, cs.results['Q_thermal'][inds], lw = 0.75, color = 'steelblue', label = 'ssc')
-    ax[j].plot(times, cs.results['q_startup'][inds], lw = 0.75, color = 'lightblue', label = 'ssc (startup)')
-    if cs.is_optimize:
-        ax[j].plot(times, cs.results['disp_receiver_power'][inds]/1000, '--', lw = 0.75, color = 'maroon', label = 'Dispatch')    
-    ax[j].set_ylabel(get_label('Q_thermal'))   
-    ax[j].set_ylim(0, 1.05*cs.design.Qrec)
+    ax[j].plot(times, tech_outputs['Q_thermal'], lw = 0.75, color = 'steelblue', label = 'ssc')
+    ax[j].plot(times, tech_outputs['q_startup'], lw = 0.75, color = 'lightblue', label = 'ssc (startup)')
+    ax[j].plot(times, np.array(dispatch_soln['Rdisp']['disp_receiver_power'])/1000, '--', lw = 0.75, color = 'maroon', label = 'Dispatch')
+    ax[j].set_ylabel(get_label('Q_thermal'))
+    ax[j].set_ylim(0, 1.05*max(dispatch_soln['Rdisp']['disp_receiver_power']))  #TODO: make this the upper bound instead of max value from solution
     ax[j].legend(loc = 'lower left')
-    if cs.control_cycle == 'CD_data' and max(cs.ssc_dispatch_targets.is_rec_sb_allowed_in) > 0:
-        ax2 = ax[j].twinx()
-        ax2.fill_between(times, cs.ssc_dispatch_targets.is_rec_sb_allowed_in, lw = 0.75, color = 'maroon', alpha = 0.3, label = 'Standby')
-        ax2.set_ylabel('Target receiver \nstate')
-        ax2.set_ylim([0, 1.02]) 
-        ax2.legend(loc = 'lower right')   
-    if cs.is_optimize:
-        ax2 = ax[j].twinx()
-        ax2.fill_between(times, cs.results['disp_receiver_on'][inds], lw = 0.75, color = 'grey', alpha = 0.3, label = 'On')
-        ax2.fill_between(times, cs.results['disp_receiver_startup'][inds], lw = 0.75, color = 'darkgreen', alpha = 0.3, label = 'Startup')
-        ax2.fill_between(times, cs.results['disp_receiver_standby'][inds], lw = 0.75, color = 'maroon', alpha = 0.3, label = 'Standby')
-        ax2.set_ylabel('Target receiver \nstate')
-        ax2.set_ylim([0, 1.02])
-        ax2.legend(loc = 'lower right')  
-
+    ax2 = ax[j].twinx()
+    ax2.fill_between(times, dispatch_soln['Rdisp']['disp_receiver_standby'], lw=0.75, color='maroon',
+                         alpha=0.3, label='Standby')
+    ax2.fill_between(times, dispatch_soln['Rdisp']['disp_receiver_startup'], lw = 0.75, color = 'darkgreen', alpha = 0.3, label = 'Startup')
+    ax2.set_ylabel('Target receiver \nstate')
+    ax2.set_ylim([0, 1.02])
+    ax2.legend(loc = 'lower right')
     # Cycle thermal input (and target operating states from dispatch)
     j += 1
-    ax[j].plot(times, cs.results['q_pb'][inds], lw = 0.75, color = 'steelblue', label = 'ssc')
-    if cs.is_optimize:
-        ax[j].plot(times, cs.results['disp_thermal_input_to_cycle'][inds]/1000, '--', lw = 0.75, color = 'maroon', label = 'Dispatch')
-    if cs.control_cycle == 'CD_data':
-        ax[j].plot(times, np.array(cs.ssc_dispatch_targets.q_pc_target_on_in)[inds], '--', lw = 0.75, color = 'maroon', label = 'CD Target')
-    ax[j].set_ylabel('Cycle thermal\ninput (MWt)')  
-    ax[j].set_ylim([0, 1.05*cs.design.get_cycle_thermal_rating() * cs.properties.cycle_max_frac])
-    ax[j].legend(loc = 'lower left')  
-    if cs.is_optimize:
-        ax2 = ax[j].twinx()
-        ax2.fill_between(times, cs.results['disp_cycle_on'][inds], lw = 0.75, color = 'grey', alpha = 0.3, label = 'On')
-        ax2.fill_between(times, cs.results['disp_cycle_startup'][inds], lw = 0.75, color = 'darkgreen', alpha = 0.3, label = 'Startup')
-        ax2.fill_between(times, cs.results['disp_cycle_standby'][inds], lw = 0.75, color = 'maroon', alpha = 0.3, label = 'Standby')
-        ax2.set_ylabel('Target cycle \nstate')
-        ax2.set_ylim([0, 1.02])
-        ax2.legend(loc = 'lower right')    
+    ax[j].plot(times, tech_outputs['q_pb'], lw = 0.75, color = 'steelblue', label = 'ssc')
+    ax[j].plot(times, np.array(np.array(dispatch_soln['Rdisp']['disp_thermal_input_to_cycle']))/1000, '--', lw = 0.75, color = 'maroon', label = 'Dispatch')
+    ax[j].set_ylabel('Cycle thermal\ninput (MWt)')
+    ax[j].set_ylim([0, 1+1.05*max(dispatch_soln['Rdisp']['disp_thermal_input_to_cycle'])])
+    ax[j].legend(loc = 'lower left')
+    ax2 = ax[j].twinx()
+    ax2.fill_between(times, [1 if dispatch_soln['Rdisp']['disp_thermal_input_to_cycle'][idx] > 1e-6 else 0 for idx in range(len(npts))], lw = 0.75, color = 'grey', alpha = 0.3, label = 'On')
+    ax2.fill_between(times, dispatch_soln['Rdisp']['disp_cycle_startup'], lw = 0.75, color = 'darkgreen', alpha = 0.3, label = 'Startup')
+    ax2.fill_between(times, dispatch_soln['Rdisp']['disp_cycle_standby'], lw = 0.75, color = 'maroon', alpha = 0.3, label = 'Standby')
+    ax2.set_ylabel('Target cycle \nstate')
+    ax2.set_ylim([0, 1.02])
+    ax2.legend(loc = 'lower right')
 
     # Cycle electrical output
     j += 1
-    ax[j].plot(times, cs.results['P_cycle'][inds], lw = 0.75, color = 'steelblue', label = 'ssc (gross)')
-    ax[j].plot(times, cs.results['P_out_net'][inds], lw = 0.75, color = 'k', label = 'ssc (net)')
-    if cs.control_cycle == 'CD_data':
-        ax[j].plot(times, np.array(cs.CD_data_for_plotting['Gross Power [MW]'])[inds], '--', lw = 0.75, color = 'maroon', label = 'CD (gross)')
-        ax[j].plot(times, np.array(cs.CD_data_for_plotting['Net Power [MW]'])[inds], '--', lw = 0.75, color = 'darkgoldenrod', label = 'CD (net)')
-    if cs.is_optimize:
-        ax[j].plot(times, cs.results['disp_electrical_output_from_cycle'][inds]/1000, '--', lw = 0.75, color = 'maroon', label = 'Dispatch (gross)')
-        ax[j].plot(times, cs.results['disp_net_electrical_output'][inds]/1000, '--', lw = 0.75, color = 'darkgoldenrod', label = 'Dispatch (net)')
+    ax[j].plot(times, tech_outputs['P_cycle'], lw = 0.75, color = 'steelblue', label = 'ssc (gross)')
+    ax[j].plot(times, tech_outputs['P_out_net'], lw = 0.75, color = 'k', label = 'ssc (net)')
+    ax[j].plot(times, np.array(dispatch_soln['Rdisp']['disp_electrical_output_from_cycle'])/1000, '--', lw = 0.75, color = 'maroon', label = 'Dispatch (gross)')
+    ax[j].plot(times, np.array(dispatch_soln['Rdisp']['disp_net_electrical_output'])/1000, '--', lw = 0.75, color = 'darkgoldenrod', label = 'Dispatch (net)')
     ax[j].set_ylabel('Cycle gross\noutput (MWe)')  
-    ax[j].set_ylim([0, 1.05*cs.design.P_ref])
+    ax[j].set_ylim([0, 1.05E-3*max(dispatch_soln['Rdisp']['disp_electrical_output_from_cycle'])]) #TODO: make this the upper bound instead of max value from solution
     ax[j].legend()  
     
     # TES
     j += 1
-    ax[j].plot(times, cs.results['e_ch_tes'][inds], lw = 0.75, color = 'steelblue', label = 'ssc')
-    if cs.control_cycle == 'CD_data':
-        ax[j].plot(times, np.array(cs.CD_data_for_plotting['E charge TES [MWht]'])[inds], '--', lw = 0.75, color = 'maroon', label = 'CD')
-    if cs.is_optimize:
-        ax[j].plot(times, cs.results['disp_tes_soc'][inds]/1000, '--', lw = 0.75, color = 'maroon', label = 'Dispatch')
+    ax[j].plot(times, tech_outputs['e_ch_tes'], lw = 0.75, color = 'steelblue', label = 'ssc')
+    ax[j].plot(times, np.array(dispatch_soln['Rdisp']['disp_tes_soc'])/1000, '--', lw = 0.75, color = 'maroon', label = 'Dispatch')
     ax[j].set_ylabel('TES (MWht)')  
-    ax[j].set_ylim([0, 1.05*cs.design.get_cycle_thermal_rating() * cs.design.tshours])
+    ax[j].set_ylim([0, 1.05*max(dispatch_soln['Rdisp']['disp_tes_soc'])]) #TODO: make this the upper bound instead of max value from solution
     ax[j].legend(loc = 'lower left')  
     
     # Receiver outlet T
     j += 1
-    ax[j].plot(times, cs.results['T_rec_out'][inds], lw = 0.75, color = 'maroon', label = 'Receiver')
-    if cs.control_cycle == 'CD_data' and cs.control_field == 'CD_data' and cs.control_receiver == 'CD_data':
-        ax[j].plot(times, np.array(cs.CD_data_for_plotting['Rec avg Tout [C]'])[inds], '--', lw = 0.75, color = 'red', label = 'CD')
+    ax[j].plot(times, tech_outputs['T_rec_out'], lw = 0.75, color = 'maroon', label = 'Receiver')
+    #TODO add temperature for linear, nonlinear pyomo options
     ax[j].set_ylim([275, 580])
     ax[j].set_ylabel('Receiver \n T$_{out}$ ($^{\circ}$C)') 
     ax[j].legend()  
 
     # TES T
     j+=1 
-    ax[j].plot(times, cs.results['T_tes_hot'][inds], lw = 0.75, color = 'maroon', label = 'Hot storage')
-    if cs.control_cycle == 'CD_data':
-        ax[j].plot(times, np.array(cs.CD_data_for_plotting['Hot Tank Temp [C]'])[inds], '--', lw = 0.75, color = 'red', label = 'CD (hot)')
+    ax[j].plot(times, tech_outputs['T_tes_hot'][inds], lw = 0.75, color = 'maroon', label = 'Hot storage')
+    # TODO add temperature for linear, nonlinear pyomo options
     ax[j].set_ylabel('T$_{hot}$ ($^{\circ}$C)')  
     ax[j].set_ylim([475, 580])
     ax[j].legend(loc = 'lower left')
     ax2 = ax[j].twinx()
-    ax2.plot(times, cs.results['T_tes_cold'][inds], lw = 0.75, color = 'steelblue', label = 'Cold storage')
-    if cs.control_cycle == 'CD_data':
-        ax2.plot(times, np.array(cs.CD_data_for_plotting['Cold Tank Temp [C]'])[inds], '--', lw = 0.75, color = 'blue', label = 'CD (cold)')
-    ax2.set_ylabel('T$_{cold}$ ($^{\circ}$C)')  
+    ax2.plot(times, tech_outputs['T_tes_cold'][inds], lw = 0.75, color = 'steelblue', label = 'Cold storage')
+    # TODO add temperature for linear, nonlinear pyomo options
+    ax2.set_ylabel('T$_{cold}$ ($^{\circ}$C)')
     ax2.legend(loc = 'lower right')        
     ax2.set_ylim([280, 330])
     
