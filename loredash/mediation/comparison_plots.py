@@ -162,7 +162,7 @@ def plot_solution(dispatch_soln, tech_outputs, datetime_start, datetime_end, sav
     # TES T
     j+=1 
     ax[j].plot(times, tech_outputs['T_tes_hot'], lw = 0.75, color = 'steelblue', label = 'Hot storage')
-    ax[j].plot(times, np.array(dispatch_soln['Rdisp']['disp_hot_tank_temp']), '--', lw=0.75,
+    ax[j].plot(times, np.array(dispatch_soln['Rdisp']['disp_hot_salt_tank_temp']), '--', lw=0.75,
                color='maroon',
                label='Dispatch')
     ax[j].set_ylabel('T$_{hot}$ ($^{\circ}$C)')  
@@ -170,7 +170,7 @@ def plot_solution(dispatch_soln, tech_outputs, datetime_start, datetime_end, sav
     ax[j].legend(loc = 'lower left')
     ax2 = ax[j].twinx()
     ax2.plot(times, tech_outputs['T_tes_cold'], lw = 0.75, color = 'grey', label = 'SSC')
-    ax[j].plot(times, np.array(dispatch_soln['Rdisp']['disp_cold_tank_temp']), '--', lw=0.75,
+    ax2.plot(times, np.array(dispatch_soln['Rdisp']['disp_cold_salt_tank_temp']), '--', lw=0.75,
                color='darkgoldenrod',
                label='Dispatch')
     ax2.set_ylabel('T$_{cold}$ ($^{\circ}$C)')
