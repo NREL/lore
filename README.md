@@ -51,7 +51,11 @@ The code in this project is organized as follows:
 | ./libcycle | Source code for the cycle availability and failure model |
 | ./liboptical | Source code for the optical degradation and soiling model |
 | ./liboptimize | Source code and libraries for the nonlinear design optimization problem |
+| ./librtdispatch | Source code for the real-time dispatch optimization model |
 | ./libsolar | Source code for the solar field failure model |
+| ./loredash | Source code for the LORE mediator |
+
+Additional instructions on installing and running LORE, as well as viewing the dashboard, are available in the README within the ./loredash folder.
 
 
 ## External libraries
@@ -61,3 +65,7 @@ LORE utilizes the following open-source libraries:
 | Project | Version | Usage |
 |---------|---------|-------|
 | [RapidJSON](https://github.com/Tencent/rapidjson)  	| v1.1.0 	| JSON read-write library for project files |
+
+## SSL Requests
+
+LORE utilizes SSL requests to obtain weather data that serve as inputs to the dispatch optimzation model.  These requests can cause an SSL error when LORE is run thorugh a virtual network connection, and firewall settings may need to be adjusted to allow an exception for requests to the [THREDDS server](https://ds.nccs.nasa.gov/).
