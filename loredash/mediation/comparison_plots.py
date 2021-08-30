@@ -103,8 +103,8 @@ def plot_solution(dispatch_soln, tech_outputs, datetime_start, datetime_end, sav
     # ax[j].set_ylim([0, 1.05*cs.design.P_ref])
     # Receiver thermal power (and target operating states from dispatch)
     j += 1
-    ax[j].plot(times, tech_outputs['Q_thermal'], lw = 0.75, color = 'steelblue', label = 'ssc')
-    ax[j].plot(times, tech_outputs['q_startup'], lw = 0.75, color = 'lightblue', label = 'ssc (startup)')
+    ax[j].plot(times, tech_outputs['Q_thermal'], lw = 0.75, color = 'steelblue', label = 'SSC')
+    ax[j].plot(times, tech_outputs['q_startup'], lw = 0.75, color = 'lightblue', label = 'SSC (startup)')
     ax[j].plot(times, np.array(dispatch_soln['Rdisp']['disp_receiver_power'])/1000, '--', lw = 0.75, color = 'maroon', label = 'Dispatch')
     ax[j].set_ylabel(get_label('Q_thermal'))
     ax[j].set_ylim(0, 1.05E-3*max(dispatch_soln['Rdisp']['disp_receiver_power']))  #TODO: make this the upper bound instead of max value from solution
@@ -118,7 +118,7 @@ def plot_solution(dispatch_soln, tech_outputs, datetime_start, datetime_end, sav
     ax2.legend(loc = 'lower right')
     # Cycle thermal input (and target operating states from dispatch)
     j += 1
-    ax[j].plot(times, tech_outputs['q_pb'], lw = 0.75, color = 'steelblue', label = 'ssc')
+    ax[j].plot(times, tech_outputs['q_pb'], lw = 0.75, color = 'steelblue', label = 'SSC')
     ax[j].plot(times, np.array(np.array(dispatch_soln['Rdisp']['disp_thermal_input_to_cycle']))/1000, '--', lw = 0.75, color = 'maroon', label = 'Dispatch')
     ax[j].set_ylabel('Cycle thermal\ninput (MWt)')
     ax[j].set_ylim([0, 1+1.05E-3*max(dispatch_soln['Rdisp']['disp_thermal_input_to_cycle'])])
@@ -133,8 +133,8 @@ def plot_solution(dispatch_soln, tech_outputs, datetime_start, datetime_end, sav
 
     # Cycle electrical output
     j += 1
-    ax[j].plot(times, tech_outputs['P_cycle'], lw = 0.75, color = 'steelblue', label = 'ssc (gross)')
-    ax[j].plot(times, tech_outputs['P_out_net'], lw = 0.75, color = 'k', label = 'ssc (net)')
+    ax[j].plot(times, tech_outputs['P_cycle'], lw = 0.75, color = 'steelblue', label = 'SSC (gross)')
+    ax[j].plot(times, tech_outputs['P_out_net'], lw = 0.75, color = 'k', label = 'SSC (net)')
     ax[j].plot(times, np.array(dispatch_soln['Rdisp']['disp_electrical_output_from_cycle'])/1000, '--', lw = 0.75, color = 'maroon', label = 'Dispatch (gross)')
     ax[j].plot(times, np.array(dispatch_soln['Rdisp']['disp_net_electrical_output'])/1000, '--', lw = 0.75, color = 'darkgoldenrod', label = 'Dispatch (net)')
     ax[j].set_ylabel('Cycle gross\noutput (MWe)')  
@@ -143,7 +143,7 @@ def plot_solution(dispatch_soln, tech_outputs, datetime_start, datetime_end, sav
     
     # TES
     j += 1
-    ax[j].plot(times, tech_outputs['e_ch_tes'], lw = 0.75, color = 'steelblue', label = 'ssc')
+    ax[j].plot(times, tech_outputs['e_ch_tes'], lw = 0.75, color = 'steelblue', label = 'SSC')
     ax[j].plot(times, np.array(dispatch_soln['Rdisp']['disp_tes_soc'])/1000, '--', lw = 0.75, color = 'maroon', label = 'Dispatch')
     ax[j].set_ylabel('TES (MWht)')  
     
@@ -151,7 +151,7 @@ def plot_solution(dispatch_soln, tech_outputs, datetime_start, datetime_end, sav
     ax[j].legend(loc = 'lower left')
     # Receiver outlet T
     j += 1
-    ax[j].plot(times, tech_outputs['T_rec_out'], lw = 0.75, color = 'maroon', label = 'Receiver')
+    ax[j].plot(times, tech_outputs['T_rec_out'], lw = 0.75, color = 'steelblue', label = 'SSC')
     ax[j].plot(times, np.array(dispatch_soln['Rdisp']['disp_receiver_outlet_temp']), '--', lw=0.75, color='maroon',
                label='Dispatch')
 
@@ -161,7 +161,7 @@ def plot_solution(dispatch_soln, tech_outputs, datetime_start, datetime_end, sav
 
     # TES T
     j+=1 
-    ax[j].plot(times, tech_outputs['T_tes_hot'], lw = 0.75, color = 'maroon', label = 'Hot storage')
+    ax[j].plot(times, tech_outputs['T_tes_hot'], lw = 0.75, color = 'steelblue', label = 'Hot storage')
     ax[j].plot(times, np.array(dispatch_soln['Rdisp']['disp_hot_tank_temp']), '--', lw=0.75,
                color='maroon',
                label='Dispatch')
@@ -169,7 +169,7 @@ def plot_solution(dispatch_soln, tech_outputs, datetime_start, datetime_end, sav
     ax[j].set_ylim([475, 580])
     ax[j].legend(loc = 'lower left')
     ax2 = ax[j].twinx()
-    ax2.plot(times, tech_outputs['T_tes_cold'], lw = 0.75, color = 'steelblue', label = 'Cold storage')
+    ax2.plot(times, tech_outputs['T_tes_cold'], lw = 0.75, color = 'grey', label = 'SSC')
     ax[j].plot(times, np.array(dispatch_soln['Rdisp']['disp_cold_tank_temp']), '--', lw=0.75,
                color='darkgoldenrod',
                label='Dispatch')
