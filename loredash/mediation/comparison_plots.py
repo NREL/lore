@@ -152,7 +152,9 @@ def plot_solution(dispatch_soln, tech_outputs, datetime_start, datetime_end, sav
     # Receiver outlet T
     j += 1
     ax[j].plot(times, tech_outputs['T_rec_out'], lw = 0.75, color = 'maroon', label = 'Receiver')
-    #TODO add temperature for linear, nonlinear pyomo options
+    ax[j].plot(times, np.array(dispatch_soln['Rdisp']['disp_receiver_outlet_temp']), '--', lw=0.75, color='maroon',
+               label='Dispatch')
+
     ax[j].set_ylim([275, 580])
     ax[j].set_ylabel('Receiver \n T$_{out}$ ($^{\circ}$C)') 
     ax[j].legend()  
@@ -160,13 +162,17 @@ def plot_solution(dispatch_soln, tech_outputs, datetime_start, datetime_end, sav
     # TES T
     j+=1 
     ax[j].plot(times, tech_outputs['T_tes_hot'], lw = 0.75, color = 'maroon', label = 'Hot storage')
-    # TODO add temperature for linear, nonlinear pyomo options
+    ax[j].plot(times, np.array(dispatch_soln['Rdisp']['disp_hot_tank_temp']), '--', lw=0.75,
+               color='maroon',
+               label='Dispatch')
     ax[j].set_ylabel('T$_{hot}$ ($^{\circ}$C)')  
     ax[j].set_ylim([475, 580])
     ax[j].legend(loc = 'lower left')
     ax2 = ax[j].twinx()
     ax2.plot(times, tech_outputs['T_tes_cold'], lw = 0.75, color = 'steelblue', label = 'Cold storage')
-    # TODO add temperature for linear, nonlinear pyomo options
+    ax[j].plot(times, np.array(dispatch_soln['Rdisp']['disp_cold_tank_temp']), '--', lw=0.75,
+               color='darkgoldenrod',
+               label='Dispatch')
     ax2.set_ylabel('T$_{cold}$ ($^{\circ}$C)')
     ax2.legend(loc = 'lower right')        
     ax2.set_ylim([280, 330])
