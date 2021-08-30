@@ -275,11 +275,9 @@ class Mediator:
             weather_dataframe=weather_simulate)
         print("Generated Energy [kWh]= ", tech_outputs["annual_energy"])
 
-        try:   #only perform plotting if plots_file is specified
+        if 'plots_file' in self.params.keys():
             self.ssc_dispatch_compare_plots(self.params["plots_file"], datetime_start, datetime_end, dispatch_outputs,
                                             tech_outputs)
-        except KeyError:
-            pass
 
         # c. Validate output data
         # TODO: fix timezones in these db tables
