@@ -906,7 +906,7 @@ class DispatchWrap:
         self.default_disp_stored_vars = [
             'cycle_on', 'cycle_standby', 'cycle_startup', 'receiver_on', 'receiver_startup', 'receiver_standby', 
             'receiver_power', 'thermal_input_to_cycle', 'electrical_output_from_cycle', 'net_electrical_output',
-            'tes_soc', 'yrsd', 'ursd']
+            'tes_soc', 'yrsd', 'ursd', 'receiver_outlet_temp', 'hot_salt_tank_temp', 'cold_salt_tank_temp']
 
         self.user_defined_cycle_input_file = '../../librtdispatch/udpc_noTamb_dependency.csv'  # Only required if cycle_type is user_defined
 
