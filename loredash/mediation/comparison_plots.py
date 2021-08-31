@@ -53,7 +53,7 @@ def get_label(name):
 
 
 #-----------------------------------------------------------------------------
-def plot_solution(dispatch_soln, tech_outputs, datetime_start, datetime_end, savename = None, dni_vec=None):
+def plot_solution(filename, datetime_start, datetime_end, dispatch_soln, tech_outputs, dni_vec):
     nday = int(0.5+(datetime_end-datetime_start).days)
     npts = len(tech_outputs['rec_clearsky_dni'])
     times = np.arange(npts) * 1./tech_outputs["time_steps_per_hour"]
@@ -184,8 +184,8 @@ def plot_solution(dispatch_soln, tech_outputs, datetime_start, datetime_end, sav
         ax[j].set_xlim(0, nday*24)
         ax[j].set_xticks(ticks)  
     
-    if savename is not None:
-        plt.savefig(savename, dpi = 300)
+    if filename is not None:
+        plt.savefig(filename, dpi = 300)
     else:
         plt.show()
  

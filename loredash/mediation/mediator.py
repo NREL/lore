@@ -630,7 +630,7 @@ class Mediator:
 
     def ssc_dispatch_compare_plots(self, filename, datetime_start, datetime_end, dispatch_solution, tech_outputs, dni_vec):
         from mediation import comparison_plots
-        return comparison_plots.plot_solution(dispatch_solution, tech_outputs, datetime_start, datetime_end, filename,
+        return comparison_plots.plot_solution(filename, datetime_start, datetime_end, dispatch_solution, tech_outputs,
                                               dni_vec)
 
 
