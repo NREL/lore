@@ -1055,6 +1055,9 @@ class DispatchWrap:
         if dispatch_soln:    # Dispatch model was successful
             Rdisp_all = dispatch_soln.get_solution_at_ssc_steps(self.dispatch_params, sscstep/3600., horizon)
             Rdisp = {'disp_'+key:value for key,value in Rdisp_all.items() if key in retvars}
+            Rdisp['disp_Qu'] = self.dispatch_params.Qu
+            Rdisp['disp_Eu'] = self.dispatch_params.Eu
+            Rdisp['disp_Wdotu'] = self.dispatch_params.Wdotu
 
             # Update calculated schedule for next day (if relevant). Assume schedule must be committed within 1hr of designated time (arbitrary...)
             if self.params['use_day_ahead_schedule'] and self.params['day_ahead_schedule_from'] == 'calculated':
