@@ -276,8 +276,8 @@ class Mediator:
         print("Generated Energy [kWh]= ", tech_outputs["annual_energy"])
 
         if 'plots_file' in self.params.keys():
-            self.ssc_dispatch_compare_plots(self.params["plots_file"], datetime_start, datetime_end, dispatch_outputs,
-                                            tech_outputs)
+            self.ssc_dispatch_compare_plots(self.params['plots_file'], datetime_start, datetime_end, dispatch_outputs,
+                                            tech_outputs, weather_simulate['DNI'].values)
 
         # c. Validate output data
         # TODO: fix timezones in these db tables
@@ -628,9 +628,10 @@ class Mediator:
                 data.loc[:, v] = list(solar_forecast[k])
         return data
 
-    def ssc_dispatch_compare_plots(self, filename, datetime_start, datetime_end, dispatch_solution, tech_outputs):
+    def ssc_dispatch_compare_plots(self, filename, datetime_start, datetime_end, dispatch_solution, tech_outputs, dni_vec):
         from mediation import comparison_plots
-        return comparison_plots.plot_solution(dispatch_solution, tech_outputs, datetime_start, datetime_end, filename)
+        return comparison_plots.plot_solution(dispatch_solution, tech_outputs, datetime_start, datetime_end, filename,
+                                              dni_vec)
 
 
 def mediate_continuously(update_interval=5):

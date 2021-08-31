@@ -53,7 +53,7 @@ def get_label(name):
 
 
 #-----------------------------------------------------------------------------
-def plot_solution(dispatch_soln, tech_outputs, datetime_start, datetime_end, savename = None):
+def plot_solution(dispatch_soln, tech_outputs, datetime_start, datetime_end, savename = None, dni_vec=None):
     nday = int(0.5+(datetime_end-datetime_start).days)
     npts = len(tech_outputs['rec_clearsky_dni'])
     times = np.arange(npts) * 1./tech_outputs["time_steps_per_hour"]
@@ -63,7 +63,7 @@ def plot_solution(dispatch_soln, tech_outputs, datetime_start, datetime_end, sav
     # TODO: fix dni (ssc output not giving us anything useful)
     # DNI
     j = 0
-    ax[j].plot(times, np.array(tech_outputs['rec_clearsky_dni'])*np.array(tech_outputs["rec_clearsky_fraction"]), lw = 0.75, color = 'steelblue', label = 'Actual')
+    ax[j].plot(times, dni_vec, lw = 0.75, color = 'steelblue', label = 'Actual')
     ax[j].plot(times, tech_outputs['rec_clearsky_dni'], lw = 0.75, color = 'maroon', label = 'Clear-sky')
     #ax[j].plot(times, cs.current_forecast_weather_data['dn'][p:p+n], '-', lw = 0.75, color = 'darkgoldenrod', label = 'Forecast')
     styles = ['-', '--']
