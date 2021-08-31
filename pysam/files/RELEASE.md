@@ -1,6 +1,9 @@
 # Release Notes
 
 =======
+## Version 1.3.1, August 30, 2021 ~ SAM 2020.2.29 r2, SSC Version 240
+* Fixed conflicts when installed alongside NREL-PySAM
+
 ## Version 1.3.0, August 29, 2021 ~ SAM 2020.2.29 r2, SSC Version 240
 * Added physical trough dispatch and state functionality
 

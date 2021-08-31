@@ -142,28 +142,30 @@ conda activate pysam_daotk
 11. Delete the `.../sam_dev/pysam/build` directory if it exists
 12. Delete the contents of `.../sam_dev/pysam/dist/`
 13. Copy config.h to `.../sam_dev/ssc/nlopt` if the file does not exist
-14. Run the following commands in the `.../sam_dev` directory (e.g., in a .bat file) to delete the contents of `.../sam_dev/build` and run CMake in that directory to create the DAO-Tk code solution ([step 7.4](https://github.com/NREL/SAM/wiki/Windows-Build-Instructions#7-run-cmake-to-generate-sam-vs-2019-project-files)).
+14. Copy CMakeLists.txt from `.../lore/pysam/sam_files/` to `.../sam_dev/sam/api/`, replacing the file there.
+15. Run the following commands in the `.../sam_dev` directory (e.g., in a .bat file) to delete the contents of `.../sam_dev/build` and run CMake in that directory to create the DAO-Tk code solution ([step 7.4](https://github.com/NREL/SAM/wiki/Windows-Build-Instructions#7-run-cmake-to-generate-sam-vs-2019-project-files)).
 	```
 	rmdir /Q/S build
 	mkdir build
 	cd build
 	cmake -G "Visual Studio 16 2019" -DCMAKE_CONFIGURATION_TYPES="Release" -DCMAKE_SYSTEM_VERSION=10.0 -DSAMAPI_EXPORT=1 -DSAM_SKIP_AUTOGEN=0 ..
 	```
-15. Open `/build/system_advisor_model.sln` in Visual Studio and perform a batch-build of the Release configuration, but first unload the following projects:
+16. Open `/build/system_advisor_model.sln` in Visual Studio and perform a batch-build of the Release configuration, but first unload the following projects:
 	* TCSConsole
 	* SDKtool
 		
-	Doing an entire build including exporting the API can take 45 minutes, so please be patient. Once the build is finished, you should have the SAM and ssc libraries (`ssc.dll, ssc.lib` and `SAM_api.dll, SAM_api.lib`) in the folder `.../sam_dev/pysam/files/`
-16. In `.../lore/pysam/files/`
+	Doing an entire build including exporting the API can take 45 minutes, so please be patient. Once the build is finished, you should have the SAM and ssc libraries (`ssc.dll, ssc.lib` and `SAM_api.dll, SAM_api.lib`) in the folder `.../sam_dev/pysam/files/` . However, there may be build errors that need to be fixed.
+17. In `.../lore/pysam/files/`
 	1. Edit the `/files/version.py` and `/stubs/files/version.py`
 		* Increment the version (major.minor.patch)
 		* Version must not equal any previous versions or PyPI will not let it on the repo
 	2. Edit RELEASE.md, adding the most recent changes
-17. Copy the entire contents of `.../lore/pysam/files` to `.../sam_dev/pysam/`, overriding all the respective files
+18. Copy the entire contents of `.../lore/pysam/files` to `.../sam_dev/pysam/`, overriding all the respective files
+19. Open `.../sam_dev/pysam/modules/WaveFileReader.c` and fix string continuation error on line starting with "Load wave resource data from file...".
 
 *Windows*
 
-18. Run `...sam_dev/pysam/build_win.bat` to build pysam, install the nrel-pysam-dao-tk package for the different Python versions locally and to create the corresponding wheel (.whl) files. There may be a couple test errors. If you recently built pysam, you can comment out the following lines (REM) in build_win.bat to save time:
+20. Run `...sam_dev/pysam/build_win.bat` to build pysam, install the nrel-pysam-dao-tk package for the different Python versions locally and to create the corresponding wheel (.whl) files. There may be a couple test errors. If you recently built pysam, you can comment out the following lines (REM) in build_win.bat to save time:
 	```
 	mkdir %SSCDIR%\..\build_pysam
 	cd %SSCDIR%\..\build_pysam
@@ -174,13 +176,13 @@ conda activate pysam_daotk
 
 *Linux*
 
-19. Start Docker Desktop for Linux containers if it is not running
-20. In a command prompt, cd to .../sam_dev/
-21. To build automatically:
+21. Start Docker Desktop for Linux containers if it is not running
+22. In a command prompt, cd to .../sam_dev/
+23. To build automatically:
 	```
 	docker run --rm -v %cd%:/io quay.io/pypa/manylinux1_x86_64 /io/pysam/build_manylinux.sh
 	```
-22. To run manually (debug):
+24. To run manually (debug):
 	1. Build manylinux image by running:
 		```
 		docker run --rm -dit -v %cd%:/io quay.io/pypa/manylinux1_x86_64 /sbin/init
@@ -190,25 +192,25 @@ conda activate pysam_daotk
 		docker exec -it <id> bash -l
 		```
 	3. Copy commands from build_manylinux.sh to the bash window (right-clicking pastes) to step-through the script. NOTE: copy the trailing end-of-line character, or you will have to press Enter once the last command is reached.
-23. The four resulting Linux wheels corresponding to the different Python versions are put in `/sam-dev/pysam/dist/` alongside the already existing Windows wheels and stub file.
-24. Ctrl-D to exit shell prompt
+25. The four resulting Linux wheels corresponding to the different Python versions are put in `/sam-dev/pysam/dist/` alongside the already existing Windows wheels and stub file.
+26. Ctrl-D to exit shell prompt
 
 *Windows and Linux*
 
-25. Open an Anaconda prompt and cd to %PYSAMDIR%\dist 
-26. Rename the new Linux wheels so PyPI accepts their upload:
+27. Open an Anaconda prompt and cd to %PYSAMDIR%\dist 
+28. Rename the new Linux wheels so PyPI accepts their upload:
 	```
 	rename *-linux_x86_64* *-manylinux1_x86_64*
 	```
-27. Upload the Python wheels to PyPI, first ensuring you are not connected to a proxy (e.g., NREL Pulse Secure)
+29. Upload the Python wheels to PyPI, first ensuring you are not connected to a proxy (e.g., NREL Pulse Secure)
 	```
 	pip install twine
 	twine upload %PYSAMDIR%\dist\*.whl
 	```
-28. Clear your local changes to the official PySAM package by running the following in Git:
+30. Clear your local changes to the official PySAM **and** SAM packages by running the following in Git for both repos:
 	```
 	git checkout -- .
 	git clean -fd
 	```
-29. Commit the changes to the RELEASE.md and the two version.py files and push to the lore repo
-30. **Note**: If there are issues with PySAM, check out previous correlated versions of [PySAM](https://github.com/NREL/pysam/tags) and [SAM](https://github.com/NREL/SAM/tags) from their respective repos for this custom PySAM build. Reference the repo tags to verify version correlation.
+31. Commit the changes to the RELEASE.md and the two version.py files and push to the lore repo
+32. **Note**: If there are issues with PySAM, check out previous correlated versions of [PySAM](https://github.com/NREL/pysam/tags) and [SAM](https://github.com/NREL/SAM/tags) from their respective repos for this custom PySAM build. Reference the repo tags to verify version correlation.
