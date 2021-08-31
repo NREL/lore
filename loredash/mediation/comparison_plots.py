@@ -107,7 +107,7 @@ def plot_solution(dispatch_soln, tech_outputs, datetime_start, datetime_end, sav
     ax[j].plot(times, tech_outputs['q_startup'], lw = 0.75, color = 'lightblue', label = 'SSC (startup)')
     ax[j].plot(times, np.array(dispatch_soln['Rdisp']['disp_receiver_power'])/1000, '--', lw = 0.75, color = 'maroon', label = 'Dispatch')
     ax[j].set_ylabel(get_label('Q_thermal'))
-    ax[j].set_ylim(0, 1.05E-3*max(dispatch_soln['Rdisp']['disp_receiver_power']))  #TODO: make this the upper bound instead of max value from solution
+    ax[j].set_ylim(0, 1.05E-3*max(dispatch_soln['Rdisp']['disp_receiver_power']))
     ax[j].legend(loc = 'lower left')
     ax2 = ax[j].twinx()
     ax2.fill_between(times, dispatch_soln['Rdisp']['disp_receiver_standby'], lw=0.75, color='maroon',
@@ -121,7 +121,7 @@ def plot_solution(dispatch_soln, tech_outputs, datetime_start, datetime_end, sav
     ax[j].plot(times, tech_outputs['q_pb'], lw = 0.75, color = 'steelblue', label = 'SSC')
     ax[j].plot(times, np.array(np.array(dispatch_soln['Rdisp']['disp_thermal_input_to_cycle']))/1000, '--', lw = 0.75, color = 'maroon', label = 'Dispatch')
     ax[j].set_ylabel('Cycle thermal\ninput (MWt)')
-    ax[j].set_ylim([0, 1.05E-3*max(dispatch_soln['Rdisp']['disp_Qu'])])
+    ax[j].set_ylim([0, 1.05E-3*dispatch_soln['Rdisp']['disp_Qu']])
     ax[j].legend(loc = 'lower left')
     ax2 = ax[j].twinx()
     ax2.fill_between(times, [1 if dispatch_soln['Rdisp']['disp_thermal_input_to_cycle'][idx] > 1e-6 else 0 for idx in range(npts)], lw = 0.75, color = 'grey', alpha = 0.3, label = 'On')
@@ -138,7 +138,7 @@ def plot_solution(dispatch_soln, tech_outputs, datetime_start, datetime_end, sav
     ax[j].plot(times, np.array(dispatch_soln['Rdisp']['disp_electrical_output_from_cycle'])/1000, '--', lw = 0.75, color = 'maroon', label = 'Dispatch (gross)')
     ax[j].plot(times, np.array(dispatch_soln['Rdisp']['disp_net_electrical_output'])/1000, '--', lw = 0.75, color = 'darkgoldenrod', label = 'Dispatch (net)')
     ax[j].set_ylabel('Cycle gross\noutput (MWe)')  
-    ax[j].set_ylim([0, 1.05E-3*max(dispatch_soln['Rdisp']['disp_Wdotu'])])
+    ax[j].set_ylim([0, 1.05E-3*dispatch_soln['Rdisp']['disp_Wdotu']])
     ax[j].legend()  
     
     # TES
