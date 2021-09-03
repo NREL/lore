@@ -1,6 +1,12 @@
 # Release Notes
 
 =======
+## Version 1.3.3, September 2, 2021 ~ SAM 2020.2.29 r2, SSC Version 240
+* Fixed build issue
+
+## Version 1.3.2, September 1, 2021 ~ SAM 2020.2.29 r2, SSC Version 240
+* Fixed build issue
+
 ## Version 1.3.1, August 30, 2021 ~ SAM 2020.2.29 r2, SSC Version 240
 * Fixed conflicts when installed alongside NREL-PySAM
 

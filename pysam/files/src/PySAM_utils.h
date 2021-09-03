@@ -102,7 +102,7 @@ static char* DAO_TK_SAM_lib_dir = NULL;	// dir ends with '/'
 static char* DAO_TK_SAM_lib_path = NULL;
 #if defined(__WINDOWS__) || defined(__CYGWIN__)
 static const char SAM_sep = '\\';
-static char* SAM_lib = "SAM_api.dll";
+static char* SAM_lib = "SAM_apiNEW.dll";
 #else
 static const char SAM_sep = '/';
 static char* SAM_lib = "libSAM_apiNEW.so";
@@ -146,6 +146,7 @@ static int PySAM_check_lib_loaded(){
     if (DAO_TK_SAM_lib_handle == NULL){
         SAM_error error = new_error();
         DAO_TK_SAM_lib_handle = SAM_load_library(DAO_TK_SAM_lib_path, &error);
+		// printf(%s, DAO_TK_SAM_lib_path);
         if (PySAM_has_error(error)) return 0;
     }
     return 1;

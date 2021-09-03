@@ -43,7 +43,7 @@ if sys.platform == 'darwin':
     from distutils import sysconfig
     vars = sysconfig.get_config_vars()
     vars['LDSHARED'] = vars['LDSHARED'].replace('-bundle', '-dynamiclib')
-    libfiles += ['libSAM_api.so']
+    libfiles += ['libSAM_apiNEW.so']
     if DEBUG:
         libfiles += ['libsscd.so']
     else:
@@ -61,7 +61,7 @@ if sys.platform == 'linux':
     extra_compile_args.append('-Wno-attributes')
 
 if sys.platform == 'win32':
-    libfiles += ['SAM_api.dll', 'SAM_api.lib']
+    libfiles += ['SAM_apiNEW.dll', 'SAM_apiNEW.lib']
     if DEBUG:
         libfiles += ['sscd.dll', 'sscd.lib']
     else:
