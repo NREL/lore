@@ -14,6 +14,7 @@ from pathlib import Path
 # import django     # Needed here before "import models" if there's ever error "Apps aren't loaded yet"
 # django.setup()
 from mediation import tech_wrap, data_validator, dispatch_wrap, models, forecasts
+from mediation import comparison_plots
 import mediation.plant as plant_
 from mediation.plant import Revenue
 # import multiprocessing
@@ -274,11 +275,15 @@ class Mediator:
             plant_state,
             weather_dataframe=weather_simulate)
         print("Generated Energy [kWh]= ", tech_outputs["annual_energy"])
-
         if 'plots_file' in self.params.keys():
-            self.ssc_dispatch_compare_plots(self.params['plots_file'], datetime_start, datetime_end, dispatch_outputs,
-                                            tech_outputs, weather_simulate['DNI'].values)
-
+            comparison_plots.plot_solution(
+                self.params['plots_file'],
+                datetime_start,
+                datetime_end,
+                dispatch_outputs,
+                tech_outputs,
+                weather_simulate['DNI'].values,
+            )
         # c. Validate output data
         # TODO: fix timezones in these db tables
         tech_outputs = {k:(list(v) if isinstance(v, tuple) else v) for (k,v) in tech_outputs.items()}   # converts tuples to lists so they can be edited
@@ -627,12 +632,6 @@ class Mediator:
             for (k, v) in key_map.items():
                 data.loc[:, v] = list(solar_forecast[k])
         return data
-
-    def ssc_dispatch_compare_plots(self, filename, datetime_start, datetime_end, dispatch_solution, tech_outputs, dni_vec):
-        from mediation import comparison_plots
-        return comparison_plots.plot_solution(filename, datetime_start, datetime_end, dispatch_solution, tech_outputs,
-                                              dni_vec)
-
 
 def mediate_continuously(update_interval=5):
     mediator = Mediator()

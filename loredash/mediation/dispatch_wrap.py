@@ -1083,7 +1083,7 @@ class DispatchWrap:
             self.yrsd0 = dispatch_soln.get_value_at_time(self.dispatch_params, update_interval, 'yrsd')      # set to False when it doesn't exist
 
 
-        else:  # Infeasible solution was returned, revert back to running ssc without dispatch targetsLegendary Oaks Golf Course
+        else:  # Infeasible solution was returned, revert back to running ssc without dispatch targets
             Rdisp = None
             ssc_dispatch_targets = None
 

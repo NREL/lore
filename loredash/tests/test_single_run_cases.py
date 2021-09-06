@@ -3,6 +3,7 @@
 import pytest
 import pathlib
 import datetime
+import os
 import pytz
 import pandas as pd
 
@@ -34,9 +35,9 @@ def test_single_run_case():
 
 @pytest.mark.django_db
 def test_comparison_plot():
-    import os
+    filename = PARENT_DIR + "/tests/dispatch_plots.png"
     try:
-        os.remove("./dispatch_plots.png")
+        os.remove(filename)
     except FileNotFoundError:
         pass
     m = mediator.Mediator(
@@ -51,6 +52,5 @@ def test_comparison_plot():
         datetime_end=datetime.datetime(2021, 6, 3, 0, 0, 0, tzinfo=pytz.UTC),
     )
     # Test the existence of the plots file
-    assert(os.path.exists("./dispatch_plots.png"))
-    os.remove("./dispatch_plots.png")
+    assert(os.path.exists(filename))
     return
