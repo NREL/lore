@@ -14,6 +14,7 @@ from pathlib import Path
 # import django     # Needed here before "import models" if there's ever error "Apps aren't loaded yet"
 # django.setup()
 from mediation import tech_wrap, data_validator, dispatch_wrap, models, forecasts
+from mediation import comparison_plots
 import mediation.plant as plant_
 from mediation.plant import Revenue
 # import multiprocessing
@@ -274,7 +275,15 @@ class Mediator:
             plant_state,
             weather_dataframe=weather_simulate)
         print("Generated Energy [kWh]= ", tech_outputs["annual_energy"])
-
+        if 'plots_file' in self.params.keys():
+            comparison_plots.plot_solution(
+                self.params['plots_file'],
+                datetime_start,
+                datetime_end,
+                dispatch_outputs,
+                tech_outputs,
+                weather_simulate['DNI'].values,
+            )
         # c. Validate output data
         # TODO: fix timezones in these db tables
         tech_outputs = {k:(list(v) if isinstance(v, tuple) else v) for (k,v) in tech_outputs.items()}   # converts tuples to lists so they can be edited

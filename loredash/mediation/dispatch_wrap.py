@@ -603,8 +603,14 @@ class DispatchSoln:
         self.receiver_power = []                     # Thermal power delivered by the receiver (kWt)                    
         self.thermal_input_to_cycle = []             # Cycle thermal power utilization (kWt)
         self.electrical_output_from_cycle = []       # Power cycle electricity generation (kWe)
-        self.net_electrical_output = []   # Energy sold to grid (kWe)
+        self.net_electrical_output = []              # Energy sold to grid (kWe)
         self.tes_soc = []
+
+        # Outputs that very by nonlinear vs. linear model
+        self.receiver_outlet_temp = []               # Receiver outlet temp (C)
+        self.cycle_outlet_temp = []                  # Power cycle outlet temp (C)
+        self.hot_salt_tank_temp = []                 # Hot salt tank temp (C)
+        self.cold_salt_tank_temp = []                # Cold salt tank temp (C)
 
         #Continuous
         self.drsu = []              # Receiver start-up time inventory (hr)
@@ -678,6 +684,26 @@ class DispatchSoln:
         self.electrical_output_from_cycle = np.array([pe.value(results.wdot[t]) for t in results.T])
         self.net_electrical_output = np.array([pe.value(results.wdot_s[t]) for t in results.T])
         self.tes_soc = np.array([pe.value(results.s[t]) for t in results.T])
+        self.receiver_outlet_temp = np.zeros_like(self.receiver_power)
+        self.cycle_outlet_temp = np.zeros_like(self.receiver_power)
+        self.hot_salt_tank_temp = np.zeros_like(self.receiver_power)
+        self.cold_salt_tank_temp = np.zeros_like(self.receiver_power)
+        for t in results.T:
+            if t in results.T_nl:
+                self.receiver_outlet_temp[t-results.t_start] = pe.value(results.T_rout[t])
+                self.cycle_outlet_temp[t-results.t_start] = pe.value(results.T_cout[t])
+                self.hot_salt_tank_temp[t-results.t_start] = pe.value(results.T_hs[t])
+                self.cold_salt_tank_temp[t-results.t_start] = pe.value(results.T_cs[t])
+            else:
+                self.cold_salt_tank_temp[t - results.t_start] = pe.value(results.T_cs_des)
+                if results.t_transition == 0:
+                    self.receiver_outlet_temp[t - results.t_start] = pe.value(results.T_hs_des)
+                    self.cycle_outlet_temp[t - results.t_start] = pe.value(results.T_hs_des)
+                    self.hot_salt_tank_temp[t - results.t_start] = pe.value(results.T_hs_des)
+                else:
+                    self.receiver_outlet_temp[t - results.t_start] = pe.value(results.T_hs[results.t_transition])
+                    self.cycle_outlet_temp[t - results.t_start] = pe.value(results.T_hs[results.t_transition])
+                    self.hot_salt_tank_temp[t - results.t_start] = pe.value(results.T_hs[results.t_transition])
         self.num_nl_periods = results.t_transition - results.t_start + 1    # track num_nl_periods
         self.t_start = results.t_start
         #Additional outputs from optimization model (note some repeat from above)
@@ -880,7 +906,7 @@ class DispatchWrap:
         self.default_disp_stored_vars = [
             'cycle_on', 'cycle_standby', 'cycle_startup', 'receiver_on', 'receiver_startup', 'receiver_standby', 
             'receiver_power', 'thermal_input_to_cycle', 'electrical_output_from_cycle', 'net_electrical_output',
-            'tes_soc', 'yrsd', 'ursd']
+            'tes_soc', 'yrsd', 'ursd', 'receiver_outlet_temp', 'hot_salt_tank_temp', 'cold_salt_tank_temp']
 
         self.user_defined_cycle_input_file = '../../librtdispatch/udpc_noTamb_dependency.csv'  # Only required if cycle_type is user_defined
 
@@ -1029,6 +1055,9 @@ class DispatchWrap:
         if dispatch_soln:    # Dispatch model was successful
             Rdisp_all = dispatch_soln.get_solution_at_ssc_steps(self.dispatch_params, sscstep/3600., horizon)
             Rdisp = {'disp_'+key:value for key,value in Rdisp_all.items() if key in retvars}
+            Rdisp['disp_Qu'] = self.dispatch_params.Qu
+            Rdisp['disp_Eu'] = self.dispatch_params.Eu
+            Rdisp['disp_Wdotu'] = self.dispatch_params.Wdotu
 
             # Update calculated schedule for next day (if relevant). Assume schedule must be committed within 1hr of designated time (arbitrary...)
             if self.params['use_day_ahead_schedule'] and self.params['day_ahead_schedule_from'] == 'calculated':
