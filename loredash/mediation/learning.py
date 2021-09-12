@@ -210,7 +210,7 @@ class LearningModel:
         outputs,
     ):
         self.weather_file = weather_file
-        self.default_plant_design_path = plant_design_path
+        self.plant_design_path = plant_design_path
         self.mediator_params_path = mediator_params_path
         self.dispatch_params_path = dispatch_params_path
         self.datetime_start = datetime_start
@@ -226,16 +226,13 @@ class LearningModel:
         """
         # Due to the way `mediator` is written, we need to read and write a new
         # config file with the changed values.
-        with open(self.default_plant_design_path) as io:
-            plant_design = rapidjson.load(io, parse_mode=1)
-            for (key, value) in params.items():
-                plant_design[key] = value
-        fd, path = tempfile.mkstemp()
-        with os.fdopen(fd, 'w') as io:
-            rapidjson.dump(plant_design, io)
+        tmp_plant_design_path = \
+            self._replace_params(self.plant_design_path, params)
+        tmp_mediator_params_path = \
+            self._replace_params(self.mediator_params_path, params)
         m = mediator.Mediator(
-            params_path=self.mediator_params_path,
-            plant_design_path=path,
+            params_path=tmp_mediator_params_path,
+            plant_design_path=tmp_plant_design_path,
             weather_file=self.weather_file,
             dispatch_params_path=self.dispatch_params_path,
             update_interval=datetime.timedelta(seconds=5),
@@ -245,8 +242,20 @@ class LearningModel:
             datetime_end=self.datetime_end,
             run_without_adding_to_database=True,
         )
-        os.remove(path)
+        os.remove(tmp_plant_design_path)
+        os.remove(tmp_mediator_params_path)
         return {k: ret[k] for k in self.outputs}
+
+    def _replace_params(self, filename, params):
+        with open(filename) as io:
+            data = rapidjson.load(io, parse_mode=1)
+            for (key, value) in params.items():
+                if key in data:
+                    data[key] = value
+        fd, path = tempfile.mkstemp()
+        with os.fdopen(fd, 'w') as io:
+            rapidjson.dump(data, io)
+        return path
 
     def _root_mean_squared(self, x):
         return math.sqrt(sum(xk**2 for xk in x) / len(x))
@@ -327,7 +336,6 @@ class LearningModel:
         if input_noise > 0:
             input_weather_file = self.weather_file
             self._modify_weather_file(input_noise)
-        print(self.weather_file)
         output = self.evaluate(**params)
         # Scale the output by the noise
         if output_noise > 0:
@@ -344,29 +352,42 @@ class LearningModel:
         self, 
         input_noise,
         output_noise,
-        replications,
+        replication,
     ):
         """
         Run an experiment for the case-study.
         See `/mediation/management/commands/learning_case_study.py` for more
         details.
         """
-        for i in range(replications):
-            ground_truth = self.noisy_evaluate(
-                input_noise=input_noise,
-                output_noise=output_noise,
+        log_filename = \
+            "%s_%s_%s.jsonl" % (input_noise, output_noise, replication)
+        if os.path.isfile(log_filename):
+            return
+        ground_truth = self.noisy_evaluate(
+            input_noise=input_noise,
+            output_noise=output_noise,
+        )
+        with open("%s_truth.json" % log_filename, "w") as io:
+            rapidjson.dump(
+                {k: list(v) for (k, v) in ground_truth.items()},
+                io,
             )
-            black_box_function = self.construct_objective(ground_truth)
-            log_filename = "%s_%s_%s.jsonl" % (input_noise, output_noise, i)
-            alg = LearningAlgorithm(
-                black_box_function,
-                {
-                    'helio_optical_error_mrad': (1.0, 2.0),
-                    'avg_price_disp_storage_incentive': (0.0, 100.0),
-                },
-                global_search_iteration_limit=100,
-                local_search_iteration_limit=0,
-                log_filename=log_filename,
+        black_box_function = self.construct_objective(ground_truth)
+        alg = LearningAlgorithm(
+            black_box_function,
+            {
+                'helio_optical_error_mrad': (1.0, 4.0),
+                'avg_price_disp_storage_incentive': (0.0, 200.0),
+            },
+            global_search_iteration_limit=50,
+            local_search_iteration_limit=0,
+            log_filename=log_filename,
+        )
+        f, x = alg.solve()
+        output = self.evaluate(**x)
+        with open("%s_best_guess.json" % log_filename, "w") as io:
+            rapidjson.dump(
+                {k: list(v) for (k, v) in output.items()},
+                io,
             )
-            alg.solve()
         return
