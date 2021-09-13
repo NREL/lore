@@ -1514,6 +1514,41 @@ class RealTimeDispatchModel(object):
                 print("Cycle off at period ", t, " - Time = ", self.model.Delta_e[t])
             if self.model.ycgb[t].value > 1e-3:
                 print("Cycle on at period ", t, " - Time = ", self.model.Delta_e[t])
+                
+    def populate_variable_values(self, m):
+        """
+        Populate model variable values using a previously solved model as input.  Used in multi-phased solution
+        approach.
+
+        Parameters
+        =============
+        m : pyomo.ConcreteModel | model containing variable values
+
+        Returns
+        =============
+        None (populates values within self.model)
+        """
+        for v1 in m.component_objects(Var, active=True):
+            for v2 in self.model.component_objects(Var, active=True):  #TODO find a better way than a double loop
+                if v1.name == v2.name:
+                    if len() == 1:   #if scalar, populate directly
+                        v2 = pe.value(v1)
+                    else:
+                        for i in v2:  #only populate relevant values in new model; nonlinear values handled separately
+                            v2[i] = pe.value(v1[i])
+                break
+        return
+
+    def fix_binaries(self):
+        """
+        fixes all binary variables.
+        """
+        for v in self.model.component_objects(Var, active=True):
+            if v.domain == pe.Binary:
+                v.fix()
+        return
+
+
     
 # if __name__ == "__main__": 
 #     import dispatch_params
