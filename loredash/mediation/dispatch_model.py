@@ -983,18 +983,16 @@ class RealTimeDispatchModel(object):
 
         def cycle_temp_prod_lower_rule(model, t):
             return (
-                    model.T_hs[t] - model.T_cout[t] >= model.delta_T_design * (model.alpha_b +
-                        model.alpha_T * model.T_hs[t] / model.T_cin_design +
-                        model.alpha_m * model.mdot_c[t] / model.mdot_c_design)
+                    model.T_hs[t] - model.T_cout[t] >= (model.alpha_b + model.alpha_T * model.T_hs[t] +
+                        model.alpha_m * model.mdot_c[t])
                     - model.delta_T_max * (1 - model.y[t])
             )
 
         def cycle_temp_prod_upper_rule(model, t):
             return (
-                    model.T_hs[t] - model.T_cout[t] <= model.delta_T_design * (
-                        model.alpha_b + model.alpha_T * model.T_hs[t] / model.T_cin_design
-                        + model.alpha_m*model.mdot_c[t] / model.mdot_c_design
-                    ) + model.delta_T_max * (1 - model.y[t])
+                    model.T_hs[t] - model.T_cout[t] <= (model.alpha_b + model.alpha_T * model.T_hs[t] +
+                        model.alpha_m * model.mdot_c[t])
+                    + model.delta_T_max * (1 - model.y[t])
             )
 
         self.model.pc_input_nonzero_con = pe.Constraint(self.model.T_l, rule=pc_input_nonzero_rule)
