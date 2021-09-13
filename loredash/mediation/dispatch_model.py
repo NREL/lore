@@ -163,11 +163,12 @@ class RealTimeDispatchModel(object):
                                        initialize=params.T_hs_des, units=units.degK)  # Design point temperature of heat transfer fluid in hot storage [C]
 
         ### Power Cycle Parameters ###
-        self.model.alpha_b = pe.Param(mutable=True, within=pe.Reals, initialize=params.alpha_b)
-        self.model.alpha_T = pe.Param(mutable=True, within=pe.Reals, initialize=params.alpha_T)
+        self.model.alpha_b = pe.Param(mutable=True, within=pe.Reals, initialize=params.alpha_b)  #Regression coefficients for heat transfer fluid temperature drop across SGS model
+        self.model.alpha_T = pe.Param(mutable=True, within=pe.Reals, initialize=params.alpha_T)  #Regression coefficients for heat transfer fluid temperature drop across SGS model
         self.model.alpha_m = pe.Param(mutable=True, within=pe.Reals, initialize=params.alpha_m)  #Regression coefficients for heat transfer fluid temperature drop across SGS model
-        self.model.beta_b = pe.Param(mutable=True, within=pe.Reals, initialize=params.beta_b)
-        self.model.beta_m = pe.Param(mutable=True, within=pe.Reals, initialize=params.beta_m)
+        self.model.beta_b = pe.Param(mutable=True, within=pe.Reals, initialize=params.beta_b)    #Regression coefficients for the power cycle efficiency model
+        self.model.beta_T = pe.Param(mutable=True, within=pe.Reals, initialize=params.beta_T)    #Regression coefficients for the power cycle efficiency model
+        self.model.beta_m = pe.Param(mutable=True, within=pe.Reals, initialize=params.beta_m)    #Regression coefficients for the power cycle efficiency model
         self.model.beta_mT = pe.Param(mutable=True, within=pe.Reals, initialize=params.beta_mT)  #Regression coefficients for the power cycle efficiency model
         self.model.delta_T_design = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.delta_T_design, units=units.degK/units.hr)  #Design point temperature change of the heat transfer fluid across the SGS model
         self.model.delta_T_max = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.delta_T_max, units=units.degK/units.hr)   #Max temperature change of the heat transfer fluid across the SGS model
