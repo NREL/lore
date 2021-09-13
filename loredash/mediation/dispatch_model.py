@@ -163,15 +163,15 @@ class RealTimeDispatchModel(object):
                                        initialize=params.T_hs_des, units=units.degK)  # Design point temperature of heat transfer fluid in hot storage [C]
 
         ### Power Cycle Parameters ###
-        self.model.alpha_b = pe.Param(mutable=True, within=pe.Reals, initialize=params.alpha_b)  #Regression coefficients for heat transfer fluid temperature drop across SGS model
-        self.model.alpha_T = pe.Param(mutable=True, within=pe.Reals, initialize=params.alpha_T)  #Regression coefficients for heat transfer fluid temperature drop across SGS model
-        self.model.alpha_m = pe.Param(mutable=True, within=pe.Reals, initialize=params.alpha_m)  #Regression coefficients for heat transfer fluid temperature drop across SGS model
-        self.model.beta_b = pe.Param(mutable=True, within=pe.Reals, initialize=params.beta_b)    #Regression coefficients for the power cycle efficiency model
-        self.model.beta_T = pe.Param(mutable=True, within=pe.Reals, initialize=params.beta_T)    #Regression coefficients for the power cycle efficiency model
-        self.model.beta_m = pe.Param(mutable=True, within=pe.Reals, initialize=params.beta_m)    #Regression coefficients for the power cycle efficiency model
-        self.model.beta_mT = pe.Param(mutable=True, within=pe.Reals, initialize=params.beta_mT)  #Regression coefficients for the power cycle efficiency model
-        self.model.delta_T_design = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.delta_T_design, units=units.degK/units.hr)  #Design point temperature change of the heat transfer fluid across the SGS model
-        self.model.delta_T_max = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.delta_T_max, units=units.degK/units.hr)   #Max temperature change of the heat transfer fluid across the SGS model
+        self.model.alpha_b = pe.Param(mutable=True, within=pe.Reals, initialize=params.alpha_b*params.delta_T_design, units=units.degK)  #Regression coefficients for heat transfer fluid temperature drop across SGS model
+        self.model.alpha_T = pe.Param(mutable=True, within=pe.Reals, initialize=params.alpha_T*params.delta_T_design/params.T_cin_design)  #Regression coefficients for heat transfer fluid temperature drop across SGS model
+        self.model.alpha_m = pe.Param(mutable=True, within=pe.Reals, initialize=params.alpha_m*params.delta_T_design/params.mdot_c_design, units=units.degK*units.s/units.kg)  #Regression coefficients for heat transfer fluid temperature drop across SGS model
+        self.model.beta_b = pe.Param(mutable=True, within=pe.Reals, initialize=params.beta_b*params.Wdot_design, units=units.kW)    #Regression coefficients for the power cycle efficiency model
+        self.model.beta_T = pe.Param(mutable=True, within=pe.Reals, initialize=params.beta_T*params.Wdot_design/params.T_cin_design, units=units.kW/units.degK)    #Regression coefficients for the power cycle efficiency model
+        self.model.beta_m = pe.Param(mutable=True, within=pe.Reals, initialize=params.beta_m*params.Wdot_design/params.mdot_c_design, units=units.kW*units.s/units.kg)    #Regression coefficients for the power cycle efficiency model
+        self.model.beta_mT = pe.Param(mutable=True, within=pe.Reals, initialize=params.beta_mT*params.Wdot_design/(params.mdot_c_design*params.T_cin_design), units=units.kW*units.s/(units.kg*units.degK))  #Regression coefficients for the power cycle efficiency model
+        self.model.delta_T_design = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.delta_T_design, units=units.degK)  #Design point temperature change of the heat transfer fluid across the SGS model
+        self.model.delta_T_max = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.delta_T_max, units=units.degK)   #Max temperature change of the heat transfer fluid across the SGS model
         self.model.Ec = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.Ec, units=units.kWh)           #Required energy expended to cold start cycle [kWh\sst]
         self.model.Ew = pe.Param(mutable=True, within=pe.NonNegativeReals,
                                  initialize=params.Ew, units=units.kWh)  # Required energy expended to warm start cycle (from standby) [kWh\sst]
