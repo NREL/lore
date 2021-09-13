@@ -1160,6 +1160,15 @@ def run_dispatch_model(dispatch_model_inputs, include):
     if rt_results.solver.termination_condition == TerminationCondition.infeasible:
         return False
 
+    if True: #test two-phased approach as default for now.  TODO: add new param in dispatch_model_inputs asking about 2-phase
+        dispatch_model_inputs.transition = 4
+        rt2 = dispatch_model.RealTimeDispatchModel(dispatch_model_inputs, include)
+        rt2.populate_variable_values(rt)
+        rt2.fix_binaries()
+        rt2.solveModel(solver='ipopt')
+        if rt_results.solver.termination_condition == TerminationCondition.infeasible:
+            return False
+        return DispatchSoln(rt2.model)
     return DispatchSoln(rt.model)
 
 

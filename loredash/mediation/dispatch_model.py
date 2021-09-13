@@ -1503,7 +1503,7 @@ class RealTimeDispatchModel(object):
             opt = pe.SolverFactory('cplex')
             opt.options["mipgap"] = mipgap
             opt.options["timelimit"] = timelimit
-        else:
+        elif solver != 'ipopt':
             raise (ValueError("solver %s not supported" % solver))
         results = opt.solve(self.model, tee=tee, keepfiles=keepfiles)
         return results
