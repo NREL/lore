@@ -1044,18 +1044,16 @@ class RealTimeDispatchModel(object):
         ### non-linear power regression
         def cycle_power_nonlinear_upper_rule(model, t):
             return model.wdot[t] <= (model.etaamb[t]/model.eta_des) * (
-                    (model.beta_b + model.beta_T*model.T_hs[t] / model.T_cin_design  +
-                    model.beta_m*model.mdot_c[t] / model.mdot_c_design + model.beta_mT*model.mdot_c[t]*model.T_hs[t] /
-                    (model.mdot_c_design * model.T_cin_design)
-                    ) * model.Wdot_design +
+                    (model.beta_b + model.beta_T*model.T_hs[t]  +
+                    model.beta_m*model.mdot_c[t] + model.beta_mT*model.mdot_c[t]*model.T_hs[t]
+                    ) +
                     model.Wdot_design * (1 - model.y[t]))
 
         def cycle_power_nonlinear_lower_rule(model, t):
             return model.wdot[t] >= (model.etaamb[t]/model.eta_des) * (
-                    (model.beta_b + model.beta_T*model.T_hs[t] / model.T_cin_design  +
-                    model.beta_m*model.mdot_c[t] / model.mdot_c_design + model.beta_mT*model.mdot_c[t]*model.T_hs[t] /
-                    (model.mdot_c_design * model.T_cin_design)
-                     ) * model.Wdot_design -
+                    (model.beta_b + model.beta_T*model.T_hs[t]  +
+                    model.beta_m*model.mdot_c[t] + model.beta_mT*model.mdot_c[t]*model.T_hs[t]
+                     ) -
                     model.Wdot_design * (1 - model.y[t])
                 )
 
