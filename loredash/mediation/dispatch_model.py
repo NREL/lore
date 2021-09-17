@@ -319,7 +319,7 @@ class RealTimeDispatchModel(object):
         self.model.T_hs = pe.Var(self.model.T_nl, domain=pe.NonNegativeReals, units=units.degK, bounds = (self.model.T_hs_min,self.model.T_hs_max))  #Temperature of heat transfer fluid in hot storage in period $t$  & $^{\circ} C$
         self.model.T_rout = pe.Var(self.model.T_nl, domain=pe.NonNegativeReals, units=units.degK)  #Temperature of heat transfer fluid at the receiver outlet in period $t$  & $^{\circ} C$
         self.model.ucsu = pe.Var(self.model.T, domain=pe.NonNegativeReals, units=units.kWh)   #Cycle start-up energy inventory at period $t$ [kWh
-        self.model.ucsd = pe.Var(self.model.T, domain=pe.NonNegativeReals, units=units.kWh)                         #Cycle shutdown energy inventory at period $t$ [kWh\sst]
+        #self.model.ucsd = pe.Var(self.model.T, domain=pe.NonNegativeReals, units=units.kWh)                         #Cycle shutdown energy inventory at period $t$ [kWh\sst]
         self.model.ursu = pe.Var(self.model.T, domain=pe.NonNegativeReals, units=units.kWh)                         #Receiver start-up energy inventory at period $t$ [kWh\sst]
         self.model.ursd = pe.Var(self.model.T,
                                  domain=pe.NonNegativeReals, units=units.kWh)  # Receiver start-up energy inventory at period $t$ [kWh\sst]
@@ -332,8 +332,8 @@ class RealTimeDispatchModel(object):
         self.model.wdot_p = pe.Var(self.model.T, domain=pe.NonNegativeReals, units=units.kW)	                     #Energy purchased from the grid in time t
         self.model.x = pe.Var(self.model.T_l, domain=pe.NonNegativeReals, units=units.kW)                            #Cycle thermal power utilization at period $t$ [kW\sst]
         self.model.xr = pe.Var(self.model.T, domain=pe.NonNegativeReals, units=units.kW)	                         #Thermal power delivered by the receiver at period $t$ [kW\sst]
-        if not self.include["simple_receiver"]:
-            self.model.xrsu = pe.Var(self.model.T, domain=pe.NonNegativeReals, units=units.kW)                         #Receiver start-up power consumption at period $t$ [kW\sst]
+        # if not self.include["simple_receiver"]:    #from Legacy linear-only model
+        #     self.model.xrsu = pe.Var(self.model.T, domain=pe.NonNegativeReals, units=units.kW)                         #Receiver start-up power consumption at period $t$ [kW\sst]
 
         if self.include["signal"]:
             self.model.g_plus = pe.Var(self.model.H,
