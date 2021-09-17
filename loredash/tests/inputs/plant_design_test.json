@@ -64,7 +64,7 @@
     "min_soc_to_start_cycle":       0.3,   
     "T_hs_min":                     400.0, 
     "T_hs_max":                     574.0, 
-    "T_cs_min":                     290.0, 
+    "T_cs_min":                     270.0, 
     "T_cs_max":                     400.0, 
     "pc_config":                    0,     
     "ud_f_W_dot_cool_des":          0.0,   
