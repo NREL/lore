@@ -380,7 +380,7 @@ class RealTimeDispatchModel(object):
         self.model.ycsup = pe.Var(self.model.T, domain=pe.Binary)     #1 if cycle cold start-up penalty is incurred at period $t$ (from off); 0 otherwise
         self.model.ycgb = pe.Var(self.model.T, domain=pe.NonNegativeReals, bounds=(0,1))      #1 if cycle begins electric power generation at period $t$; 0 otherwise
         self.model.ycge = pe.Var(self.model.T, domain=pe.NonNegativeReals, bounds=(0,1))      #1 if cycle stops electric power generation at period $t$; 0 otherwise
-        self.model.ycoff = pe.Var(self.model.T, domain=pe.Binary)  #1 if cycle is not operating in period $t$; 0 otherwise
+        # self.model.ycoff = pe.Var(self.model.T, domain=pe.Binary)  #1 if cycle is not operating in period $t$; 0 otherwise
 
         #--------------- Persistence Variables ----------------------
         if self.include["persistence"]:
