@@ -1502,6 +1502,8 @@ class RealTimeDispatchModel(object):
             opt.options["timelimit"] = timelimit
         elif solver != 'ipopt':
             raise (ValueError("solver %s not supported" % solver))
+        else:
+            opt = pe.SolverFactory('ipopt')
         results = opt.solve(self.model, tee=tee, keepfiles=keepfiles)
         return results
     
