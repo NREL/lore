@@ -1527,24 +1527,29 @@ class RealTimeDispatchModel(object):
         =============
         None (populates values within self.model)
         """
-        for v1 in m.component_objects(Var, active=True):
-            for v2 in self.model.component_objects(Var, active=True):  #TODO find a better way than a double loop
-                if v1.name == v2.name:
-                    if len() == 1:   #if scalar, populate directly
-                        v2 = pe.value(v1)
-                    else:
-                        for i in v2:  #only populate relevant values in new model; nonlinear values handled separately
-                            v2[i] = pe.value(v1[i])
-                break
+        #send outputs to model instance
+        d={}
+        for v1 in m.model.component_objects(pe.Var, active=True):
+            try:
+                d[v1.name] = {idx : pe.value(v1[idx]) for idx in v1}
+            except ValueError:
+                print("warning: no values for variable ", v1.name)
+                pass
+        for v2 in self.model.component_objects(pe.Var, active=True):  #TODO find a better way than a double loop
+            if v2.name in d.keys() and len(list(d[v2.name].keys())) > 0:
+                for i in v2:  #only populate relevant values in new model; nonlinear values handled separately
+                    v2[i].set_value(d[v2.name][i])
+                continue
         return
 
     def fix_binaries(self):
         """
         fixes all binary variables.
         """
-        for v in self.model.component_objects(Var, active=True):
-            if v.domain == pe.Binary:
-                v.fix()
+        for v in self.model.component_objects(pe.Var, active=True):
+            for i in v:   #note that a scalar parameter's indices in pyomo are [None] so this does apply
+                if v[i].domain == pe.Binary:
+                    v[i].fix()
         return
 
 
