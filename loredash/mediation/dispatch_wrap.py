@@ -678,7 +678,10 @@ class DispatchSoln:
         self.thermal_input_to_cycle = np.zeros_like(self.receiver_power)
         for t in results.T:
             if t in results.T_nl:
-                self.thermal_input_to_cycle[t-results.t_start] = pe.value(results.x_calc[t])
+                self.thermal_input_to_cycle[t] = pe.value(
+                    results.Cp * results.mdot_c[t] * (
+                            results.T_hs[t] - results.T_cout[t])
+                )   #  (units.kJ/(degK*kg)) * (kg/s) * (degK) = kJ/s = kW --> no multiple
             else:
                 self.thermal_input_to_cycle[t-results.t_start] = pe.value(results.x[t])
         self.electrical_output_from_cycle = np.array([pe.value(results.wdot[t]) for t in results.T])
