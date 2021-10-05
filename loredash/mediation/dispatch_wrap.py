@@ -686,18 +686,23 @@ class DispatchSoln:
                 self.thermal_input_to_cycle[t-results.t_start] = pe.value(results.x[t])
         self.electrical_output_from_cycle = np.array([pe.value(results.wdot[t]) for t in results.T])
         self.net_electrical_output = np.array([pe.value(results.wdot_s[t]) for t in results.T])
-        self.tes_soc = np.array([pe.value(results.s[t]) for t in results.T])
+        self.tes_soc = np.zeros_like(self.receiver_power)
         self.receiver_outlet_temp = np.zeros_like(self.receiver_power)
         self.cycle_outlet_temp = np.zeros_like(self.receiver_power)
         self.hot_salt_tank_temp = np.zeros_like(self.receiver_power)
         self.cold_salt_tank_temp = np.zeros_like(self.receiver_power)
         for t in results.T:
             if t in results.T_nl:
+                self.tes_soc[t-results.t_start] = pe.value(
+                    results.Cp * (results.mass_hs[t] - results.mass_hs_min) * (
+                    results.T_hs[t] - results.T_cs_des)
+                )
                 self.receiver_outlet_temp[t-results.t_start] = pe.value(results.T_rout[t])
                 self.cycle_outlet_temp[t-results.t_start] = pe.value(results.T_cout[t])
                 self.hot_salt_tank_temp[t-results.t_start] = pe.value(results.T_hs[t])
                 self.cold_salt_tank_temp[t-results.t_start] = pe.value(results.T_cs[t])
             else:
+                self.tes_soc[t-results.t_start] = pe.value(results.s[t])
                 self.cold_salt_tank_temp[t - results.t_start] = pe.value(results.T_cs_des)
                 if results.t_transition == 0:
                     self.receiver_outlet_temp[t - results.t_start] = pe.value(results.T_hs_des)
