@@ -1057,7 +1057,7 @@ class DispatchWrap:
         include = {"pv": False, "battery": False, "persistence": False, "force_cycle": False, "op_assumptions": False,
                     "signal":include_day_ahead_in_dispatch, "simple_receiver": False}
             
-        dispatch_soln = run_dispatch_model(dispatch_model_inputs, include)
+        dispatch_soln = run_dispatch_model(dispatch_model_inputs, include, self.params["use_multiphase_solve"])
 
         #--- Populate results
         if dispatch_soln:    # Dispatch model was successful
@@ -1161,14 +1161,28 @@ class DispatchWrap:
 
 
 
-def run_dispatch_model(dispatch_model_inputs, include):
+def run_dispatch_model(dispatch_model_inputs, include, multiphase_solve):
+    """
+    creates and runs a dispatch optimization model, then returns a DispatchSoln object containing key outputs.
+
+    Parameters
+    =============
+    dispatch_model_inputs :
+    include : Dict{string,bool} | Contains information on what dispatch model features are included (generally only
+        altered for debugging)
+    multiphase_solve : bool | true if solving linear model, then nonlinear model; solves linear model only o.w.
+
+    Returns
+    =============
+    DispatchSoln object containing key outputs of dispatch model.
+    """
     rt = dispatch_model.RealTimeDispatchModel(dispatch_model_inputs, include)
     rt_results = rt.solveModel()
     
     if rt_results.solver.termination_condition == TerminationCondition.infeasible:
         return False
 
-    if True: #test two-phased approach as default for now.  TODO: add new param in dispatch_model_inputs asking about 2-phase
+    if multiphase_solve: #test two-phased approach as default for now.  TODO: add new param in dispatch_model_inputs asking about 2-phase
         dispatch_model_inputs.transition = 4
         rt2 = dispatch_model.RealTimeDispatchModel(dispatch_model_inputs, include)
         rt2.populate_variable_values(rt)
