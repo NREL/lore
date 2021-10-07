@@ -107,6 +107,10 @@ class OpenWeatherMap:
          - clouds         [% cloudy]
         """
         if self.APPID is None:
+            data = {}
+        else:
+            data = self._json_request()
+        if 'hourly' not in data:
             df =  pandas.DataFrame({
                 'timestamp': [],
                 'temperature': [],
@@ -118,7 +122,6 @@ class OpenWeatherMap:
             })
             df.set_index('timestamp', inplace=True)
             return df
-        data = self._json_request()
         df = pandas.DataFrame([self._get_hour(d) for d in data['hourly']])
         df['timestamp'] = pandas.to_datetime(df['timestamp'])
         df.set_index('timestamp', inplace=True)
@@ -202,6 +205,11 @@ class SolarForecast:
                 first_index = i - 1
                 break
         data = data[max(0, first_index):]
+        owm = self.openweathermap.get()
+        if len(owm) > 0:
+            data = data.join(owm, rsuffix = '_OWM')
+            # Fill in any missing pressure readings with the default.
+            data['pressure'].fillna(self.ambient_pressure(), inplace=True)
         return data
 
     def get_clear_sky_and_forecasts(self, data):
@@ -248,13 +256,7 @@ class SolarForecast:
         )
         for k in forecast_columns:
             new_data[str(k)] = new_data[str(k)] * new_data['clear_sky']
-        owm = self.openweathermap.get()
-        if len(owm) > 0:
-            new_data = new_data.join(owm, rsuffix = '_OWM')
-            # Fill in any missing pressure readings with the default.
-            new_data['pressure'].fillna(self.ambient_pressure(), inplace=True)
-        else:
-            # If no OWM, just use the altitude estimate at all times.
+        if 'pressure' not in new_data:
             new_data['pressure'] = self.ambient_pressure()
         return new_data
 
