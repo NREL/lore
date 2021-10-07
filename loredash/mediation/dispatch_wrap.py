@@ -1155,7 +1155,6 @@ class DispatchWrap:
             
         #--- Create copy of params, and convert all lists and numpy arrays into dicts, where each value has a key equal to the index + 1 (required format for pyomo dispatch model)
         dispatch_model_inputs = self.dispatch_params.copy_and_format_indexed_inputs()     
-        dispatch_model_inputs.transition = 0   #Transition index between nonlinear/linear models. TODO: Once nonlinear model is available, need to update this to correspond to nonlinear_time 
 
         return dispatch_model_inputs
 
@@ -1176,14 +1175,20 @@ def run_dispatch_model(dispatch_model_inputs, include, multiphase_solve):
     =============
     DispatchSoln object containing key outputs of dispatch model.
     """
+    #store transition period for later use, if solving nonlinear model
+    transition = int(dispatch_model_inputs.transition)
+    dispatch_model_inputs.transition = 0
+
+    #Phase 1: solve linear (MILP) model
     rt = dispatch_model.RealTimeDispatchModel(dispatch_model_inputs, include)
     rt_results = rt.solveModel()
     
     if rt_results.solver.termination_condition == TerminationCondition.infeasible:
         return False
 
-    if multiphase_solve: #test two-phased approach as default for now.  TODO: add new param in dispatch_model_inputs asking about 2-phase
-        dispatch_model_inputs.transition = 4
+    if multiphase_solve:
+        #Phase 2: set original transition period, initialize MINLP model, fix binaries, and resolve as NLP
+        dispatch_model_inputs.transition = transition
         rt2 = dispatch_model.RealTimeDispatchModel(dispatch_model_inputs, include)
         rt2.populate_variable_values(rt)
         rt2.fix_binaries()
