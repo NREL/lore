@@ -1194,7 +1194,8 @@ def run_dispatch_model(dispatch_model_inputs, include, multiphase_solve):
         rt2.fix_binaries()
         rt2.solveModel(solver='ipopt')
         if rt_results.solver.termination_condition == TerminationCondition.infeasible:
-            return False
+            print("WARNING: nonlinear model is infeasible; returning linear model results.")
+            return DispatchSoln(rt.model)
         return DispatchSoln(rt2.model)
     return DispatchSoln(rt.model)
 
