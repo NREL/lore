@@ -115,3 +115,25 @@ def test_evaluate():
     )
     assert(loss > 0)
     return
+
+def test_global_solve_voronoi():
+    number_of_function_calls = 0
+    def black_box_function(**params):
+        nonlocal number_of_function_calls
+        number_of_function_calls += 1
+        return sum(v**2 for v in params.values())
+    alg = learning.LearningAlgorithm(
+        black_box_function,
+        parameter_bounds={'x': (1, 2), 'y': (-2, 1)},
+        global_search_iteration_limit=30,
+        local_search_iteration_limit=0,
+        global_algorithm = learning.VoronoiSearch(),
+    )
+    # TODO(guyichen09): remove this error once fixed.
+    with pytest.raises(AssertionError) as e:
+        f, x = alg.solve()
+        assert(abs(f - 1) < 1e-1)
+        assert(abs(x['x'] - 1) < 1e-1)
+        assert(abs(x['y'] - 0) < 1e-1)
+        assert(number_of_function_calls == 31)
+    return

@@ -9,6 +9,76 @@ import pybobyqa
 import rapidjson
 import tempfile
 
+from scipy import spatial
+from scipy import stats
+
+class BayesianSearch:
+    """
+    A helper class to wrap Bayesian search.
+
+    Arguments
+    ---------
+
+     * `params`: a dictionary of keyword arguments passed to
+        BayesianOptimization.maximize. See
+        https://github.com/fmfn/BayesianOptimization/blob/master/examples/exploitation_vs_exploration.ipynb
+        for details.
+    """
+    def __init__(
+        self,
+        params={
+            # The number of initial points. These don't count as part of the
+            # iteration limit.
+            'init_points': 0,
+            # The acquisition function is "expected improvement"
+            'acq': 'ei',
+            # Controls the exploration/exploitation with the expected
+            # improvement objective function. Bigger xi => more exploration.
+            'xi': 1e-2,
+        },
+    ):
+        self.params = params
+        return
+
+    def search(self, f, parameter_bounds, iteration_limit):
+        """
+        Run global search. Returns `(f_star, x_star)` corresponding to the best
+        solution found.
+        """
+        # Hack-time: global search gets passed an `x`, but then forwards that to
+        # the local search. So we need to maintain a mapping from input `x` to
+        # output `x`. But Python doesn't like dictionaries as keys (because
+        # they aren't hashable?), so we just use a list of input-output tuples.
+        # It's slow, but not the bottleneck so we don't care.
+        global_to_local_map = []
+        def bayes_f(**x):
+            f_star, x_star = f(x0=x)
+            global_to_local_map.append((x.copy(), x_star))
+            return -f_star
+        optimizer = bayes_opt.BayesianOptimization(
+            f=bayes_f,
+            pbounds=parameter_bounds,
+            # `random_state` is a seed for the random number generator. I guess
+            # it's okay being `1`?
+            random_state=1,
+        )
+        optimizer.maximize(n_iter=iteration_limit, **self.params)
+        for (global_param, local_param) in global_to_local_map:
+            if global_param == optimizer.max['params']:
+                return -optimizer.max['target'], local_param
+        raise Exception("Something went wrong. Couldn't find the local solution")
+
+class VoronoiSearch:
+    def __init__(self):
+        return
+
+    def search(self, f, parameter_bounds, iteration_limit):
+        # TODO(guyichen09): add Voronoi search here.
+        # For now this just returns the mid-point of the parameters
+        x0={k: (v[0] + v[1]) / 2 for (k, v) in parameter_bounds.items()}
+        f_star, x_star = f(x0=x0)
+        return f_star, x_star
+
 class LearningAlgorithm:
     """
     A class to manage the learning algorithm. 
@@ -30,14 +100,11 @@ class LearningAlgorithm:
        major iterations to run.
      * `local_search_iteration_limit`: the number of pybobyqa minor iterations
        to run within each major Bayesian iteration.
-     * `global_params`: a dictionary of keyword arguments passed to
-       BayesianOptimization.maximize. See
-       https://github.com/fmfn/BayesianOptimization/blob/master/examples/exploitation_vs_exploration.ipynb
-       for details.
      * `local_params`: a dictionary of keyword arguments passed to the
        `user_params` argument of pybobyqa.solve. See
        https://numericalalgorithmsgroup.github.io/pybobyqa/build/html/advanced.html
        for details.
+     * `global_algorithm`: the global search class to use.
 
     Example
     -------
@@ -60,28 +127,19 @@ class LearningAlgorithm:
         parameter_bounds, 
         global_search_iteration_limit,
         local_search_iteration_limit,
-        global_params={
-            # The number of initial points. These don't count as part of the
-            # iteration limit.
-            'init_points': 0,
-            # The acquisition function is "expected improvement"
-            'acq': 'ei',
-            # Controls the exploration/exploitation with the expected
-            # improvement objective function. Bigger xi => more exploration.
-            'xi': 1e-2,
-        },
         local_params={},
         log_filename = None,
+        global_algorithm = BayesianSearch(),
     ):
         self.f = f
         self.parameter_bounds = parameter_bounds
         # Create an ordering for the parameters!
         self.parameters = [k for k in parameter_bounds.keys()]
         self.global_search_iteration_limit = global_search_iteration_limit
-        self.global_params = global_params
         self.local_search_iteration_limit = local_search_iteration_limit
         self.local_params = local_params
         self.log_filename = log_filename
+        self.global_algorithm = global_algorithm
         if log_filename is not None:
             with open(log_filename, 'w') as io:
                 pass  # Create a blank file.
@@ -142,37 +200,6 @@ class LearningAlgorithm:
         )
         return solution.f, self._vector_to_dict(solution.x)
 
-    def _global_search(self):
-        """
-        Run global search. Returns `(f_star, x_star)` corresponding to the best
-        solution found.
-        """
-        # Hack-time: global search gets passed an `x`, but then forwards that to
-        # the local search. So we need to maintain a mapping from input `x` to
-        # output `x`. But Python doesn't like dictionaries as keys (because
-        # they aren't hashable?), so we just use a list of input-output tuples.
-        # It's slow, but not the bottleneck so we don't care.
-        global_to_local_map = []
-        def bayes_f(**x):
-            f_star, x_star = self._local_search(x0=x)
-            global_to_local_map.append((x.copy(), x_star))
-            return -f_star
-        optimizer = bayes_opt.BayesianOptimization(
-            f=bayes_f,
-            pbounds=self.parameter_bounds,
-            # `random_state` is a seed for the random number generator. I guess
-            # it's okay being `1`?
-            random_state=1,
-        )
-        optimizer.maximize(
-            n_iter=self.global_search_iteration_limit,
-            **self.global_params,
-        )
-        for (global_param, local_param) in global_to_local_map:
-            if global_param == optimizer.max['params']:
-                return -optimizer.max['target'], local_param
-        raise Exception("Something went wrong. Couldn't find the local solution")
-
     def solve(self):
         "Run the optimization!"
         if self.global_search_iteration_limit == 0:
@@ -182,7 +209,11 @@ class LearningAlgorithm:
             return self._local_search(x0={
                 k: (v[0] + v[1]) / 2 for (k, v) in self.parameter_bounds.items()
             })
-        return self._global_search()
+        return self.global_algorithm.search(
+            self._local_search,
+            self.parameter_bounds,
+            self.global_search_iteration_limit,
+        )
 
 class LearningModel:
     """
