@@ -55,7 +55,7 @@ PyUtilib==6.0.0
 PyYAML==5.4
 regex==2020.11.13
 requests==2.25.1
-scipy==1.4.1
+scipy>=1.7.0
 siphon==0.8.0
 six==1.15.0
 soupsieve==2.1
