@@ -4,7 +4,6 @@ import math
 from mediation import mediator
 import numpy
 import os
-import operator
 import pybobyqa
 import pytz
 import rapidjson
@@ -69,6 +68,9 @@ class BayesianSearch:
         raise Exception("Something went wrong. Couldn't find the local solution")
 
 class VoronoiSearch:
+    """
+    A helper class to wrap Voronoi search.
+    """
     def __init__(self):
         return
 
@@ -76,45 +78,56 @@ class VoronoiSearch:
         print(iteration_limit)
         global_min = float("inf")
         global_min_params = None
-        lowerbound = [v[0] for (k, v) in parameter_bounds.items()]
-        upperbound = [v[1] for (k, v) in parameter_bounds.items()]
-        dim = len(parameter_bounds)
-        # sample initial points according to LHS
-        sampler = stats.qmc.LatinHypercube(d=dim)
-        x_tries = sampler.random(n=dim+2)
-        x_tries = stats.qmc.scale(x_tries, lowerbound, upperbound)
-
-        vor = spatial.Voronoi(x_tries, incremental=True, qhull_options="C-0")
-
+        lower_bounds = [v[0] for (k, v) in parameter_bounds.items()]
+        upper_bounds = [v[1] for (k, v) in parameter_bounds.items()]
+        dimension = len(parameter_bounds)
+        # Sample dimension+2 points for the initial points, and project them
+        # back onto the bounds.
+        sampler = stats.qmc.LatinHypercube(d=dimension)
+        x_tries = stats.qmc.scale(
+            sampler.random(n=dimension+2),
+            lower_bounds,
+            upper_bounds,
+        )
+        # Create our voronoi sampler.
+        voronoi = spatial.Voronoi(
+            x_tries,
+            incremental=True,
+            qhull_options="C-0",
+        )
         for i in range(iteration_limit):
-            vertices = vor.vertices
-            vertices_cliped = numpy.clip(vertices, lowerbound, upperbound)
             # calculate the neighboring distances of each vertex
-            ver_min_d = {}
-            for ver in vertices_cliped:
-                ver = tuple(ver)
+            vertex_minimum_distance = {}
+            for vertex in numpy.clip(voronoi.vertices, lower_bounds, upper_bounds):
+                vertex = tuple(vertex)
                 for xs in x_tries:
-                    if ver not in ver_min_d:
-                        ver_min_d[ver] = numpy.linalg.norm(ver - xs)
+                    if vertex not in vertex_minimum_distance:
+                        vertex_minimum_distance[vertex] = \
+                            numpy.linalg.norm(vertex - xs)
                     else:
-                        dist = numpy.linalg.norm(ver - xs)
-                        if dist < ver_min_d[ver]:
-                            ver_min_d[ver] = dist
-            # get the next restart point with largest neighboring distances
-            x_s = max(ver_min_d.items(), key=operator.itemgetter(1))[0]
+                        dist = numpy.linalg.norm(vertex - xs)
+                        if dist < vertex_minimum_distance[vertex]:
+                            vertex_minimum_distance[vertex] = dist
+            # Get the next restart point with largest neighboring distances
+            worst_point = max(
+                vertex_minimum_distance.items(),
+                key=lambda x: x[1],
+            )[0]
             # add randomness to the point to avoid error when doing voronoi diagram
-            x_s = numpy.array(x_s) + numpy.random.normal(0, 0.001, dim)
-            x_dict = {k: xi for (k, xi) in zip(parameter_bounds, x_s)}
+            worst_point = numpy.array(worst_point) + \
+                          numpy.random.normal(0, 0.001, dimension)
             # start local search with the next restart point
-            local_min, local_params = f(x0=x_dict)
-            soln = local_min + numpy.random.normal(0, 0.001, dim)
+            local_min, local_params = f(
+                x0={k: xi for (k, xi) in zip(parameter_bounds, worst_point)},
+            )
             # update the global min and its param
             if local_min < global_min:
                 global_min = local_min
                 global_min_params = local_params
             # update the voronoi diagram with the restart and local min
-            vor.add_points(x_s.reshape(1, -1))
-            vor.add_points(soln.reshape(1, -1))
+            voronoi.add_points(worst_point.reshape(1, -1))
+            soln = local_min + numpy.random.normal(0, 0.001, dimension)
+            voronoi.add_points(soln.reshape(1, -1))
         return global_min, global_min_params
 
 class LearningAlgorithm:

@@ -129,11 +129,8 @@ def test_global_solve_voronoi():
         local_search_iteration_limit=0,
         global_algorithm = learning.VoronoiSearch(),
     )
-    # TODO(guyichen09): remove this error once fixed.
-    with pytest.raises(AssertionError) as e:
-        f, x = alg.solve()
-        assert(abs(f - 1) < 1e-1)
-        assert(abs(x['x'] - 1) < 1e-1)
-        assert(abs(x['y'] - 0) < 1e-1)
-        assert(number_of_function_calls == 31)
+    f, x = alg.solve()
+    assert(abs(f - 1) < 1e-1)
+    assert(abs(x['x'] - 1) < 1e-1)
+    assert(abs(x['y'] - 0) < 1e-1)
     return
