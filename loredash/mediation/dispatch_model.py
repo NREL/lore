@@ -163,14 +163,15 @@ class RealTimeDispatchModel(object):
                                        initialize=params.T_hs_des, units=units.degK)  # Design point temperature of heat transfer fluid in hot storage [C]
 
         ### Power Cycle Parameters ###
-        self.model.alpha_b = pe.Param(mutable=True, within=pe.Reals, initialize=params.alpha_b)
-        self.model.alpha_T = pe.Param(mutable=True, within=pe.Reals, initialize=params.alpha_T)
-        self.model.alpha_m = pe.Param(mutable=True, within=pe.Reals, initialize=params.alpha_m)  #Regression coefficients for heat transfer fluid temperature drop across SGS model
-        self.model.beta_b = pe.Param(mutable=True, within=pe.Reals, initialize=params.beta_b)
-        self.model.beta_m = pe.Param(mutable=True, within=pe.Reals, initialize=params.beta_m)
-        self.model.beta_mT = pe.Param(mutable=True, within=pe.Reals, initialize=params.beta_mT)  #Regression coefficients for the power cycle efficiency model
-        self.model.delta_T_design = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.delta_T_design, units=units.degK/units.hr)  #Design point temperature change of the heat transfer fluid across the SGS model
-        self.model.delta_T_max = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.delta_T_max, units=units.degK/units.hr)   #Max temperature change of the heat transfer fluid across the SGS model
+        self.model.alpha_b = pe.Param(mutable=True, within=pe.Reals, initialize=params.alpha_b*params.delta_T_design, units=units.degK)  #Regression coefficients for heat transfer fluid temperature drop across SGS model
+        self.model.alpha_T = pe.Param(mutable=True, within=pe.Reals, initialize=params.alpha_T*params.delta_T_design/params.T_cin_design)  #Regression coefficients for heat transfer fluid temperature drop across SGS model
+        self.model.alpha_m = pe.Param(mutable=True, within=pe.Reals, initialize=params.alpha_m*params.delta_T_design/params.mdot_c_design, units=units.degK*units.s/units.kg)  #Regression coefficients for heat transfer fluid temperature drop across SGS model
+        self.model.beta_b = pe.Param(mutable=True, within=pe.Reals, initialize=params.beta_b*params.Wdot_design, units=units.kW)    #Regression coefficients for the power cycle efficiency model
+        self.model.beta_T = pe.Param(mutable=True, within=pe.Reals, initialize=params.beta_T*params.Wdot_design/params.T_cin_design, units=units.kW/units.degK)    #Regression coefficients for the power cycle efficiency model
+        self.model.beta_m = pe.Param(mutable=True, within=pe.Reals, initialize=params.beta_m*params.Wdot_design/params.mdot_c_design, units=units.kW*units.s/units.kg)    #Regression coefficients for the power cycle efficiency model
+        self.model.beta_mT = pe.Param(mutable=True, within=pe.Reals, initialize=params.beta_mT*params.Wdot_design/(params.mdot_c_design*params.T_cin_design), units=units.kW*units.s/(units.kg*units.degK))  #Regression coefficients for the power cycle efficiency model
+        self.model.delta_T_design = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.delta_T_design, units=units.degK)  #Design point temperature change of the heat transfer fluid across the SGS model
+        self.model.delta_T_max = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.delta_T_max, units=units.degK)   #Max temperature change of the heat transfer fluid across the SGS model
         self.model.Ec = pe.Param(mutable=True, within=pe.NonNegativeReals, initialize=params.Ec, units=units.kWh)           #Required energy expended to cold start cycle [kWh\sst]
         self.model.Ew = pe.Param(mutable=True, within=pe.NonNegativeReals,
                                  initialize=params.Ew, units=units.kWh)  # Required energy expended to warm start cycle (from standby) [kWh\sst]
@@ -318,7 +319,7 @@ class RealTimeDispatchModel(object):
         self.model.T_hs = pe.Var(self.model.T_nl, domain=pe.NonNegativeReals, units=units.degK, bounds = (self.model.T_hs_min,self.model.T_hs_max))  #Temperature of heat transfer fluid in hot storage in period $t$  & $^{\circ} C$
         self.model.T_rout = pe.Var(self.model.T_nl, domain=pe.NonNegativeReals, units=units.degK)  #Temperature of heat transfer fluid at the receiver outlet in period $t$  & $^{\circ} C$
         self.model.ucsu = pe.Var(self.model.T, domain=pe.NonNegativeReals, units=units.kWh)   #Cycle start-up energy inventory at period $t$ [kWh
-        self.model.ucsd = pe.Var(self.model.T, domain=pe.NonNegativeReals, units=units.kWh)                         #Cycle shutdown energy inventory at period $t$ [kWh\sst]
+        #self.model.ucsd = pe.Var(self.model.T, domain=pe.NonNegativeReals, units=units.kWh)                         #Cycle shutdown energy inventory at period $t$ [kWh\sst]
         self.model.ursu = pe.Var(self.model.T, domain=pe.NonNegativeReals, units=units.kWh)                         #Receiver start-up energy inventory at period $t$ [kWh\sst]
         self.model.ursd = pe.Var(self.model.T,
                                  domain=pe.NonNegativeReals, units=units.kWh)  # Receiver start-up energy inventory at period $t$ [kWh\sst]
@@ -331,8 +332,8 @@ class RealTimeDispatchModel(object):
         self.model.wdot_p = pe.Var(self.model.T, domain=pe.NonNegativeReals, units=units.kW)	                     #Energy purchased from the grid in time t
         self.model.x = pe.Var(self.model.T_l, domain=pe.NonNegativeReals, units=units.kW)                            #Cycle thermal power utilization at period $t$ [kW\sst]
         self.model.xr = pe.Var(self.model.T, domain=pe.NonNegativeReals, units=units.kW)	                         #Thermal power delivered by the receiver at period $t$ [kW\sst]
-        if not self.include["simple_receiver"]:
-            self.model.xrsu = pe.Var(self.model.T, domain=pe.NonNegativeReals, units=units.kW)                         #Receiver start-up power consumption at period $t$ [kW\sst]
+        # if not self.include["simple_receiver"]:    #from Legacy linear-only model
+        #     self.model.xrsu = pe.Var(self.model.T, domain=pe.NonNegativeReals, units=units.kW)                         #Receiver start-up power consumption at period $t$ [kW\sst]
 
         if self.include["signal"]:
             self.model.g_plus = pe.Var(self.model.H,
@@ -379,7 +380,7 @@ class RealTimeDispatchModel(object):
         self.model.ycsup = pe.Var(self.model.T, domain=pe.Binary)     #1 if cycle cold start-up penalty is incurred at period $t$ (from off); 0 otherwise
         self.model.ycgb = pe.Var(self.model.T, domain=pe.NonNegativeReals, bounds=(0,1))      #1 if cycle begins electric power generation at period $t$; 0 otherwise
         self.model.ycge = pe.Var(self.model.T, domain=pe.NonNegativeReals, bounds=(0,1))      #1 if cycle stops electric power generation at period $t$; 0 otherwise
-        self.model.ycoff = pe.Var(self.model.T, domain=pe.Binary)  #1 if cycle is not operating in period $t$; 0 otherwise
+        # self.model.ycoff = pe.Var(self.model.T, domain=pe.Binary)  #1 if cycle is not operating in period $t$; 0 otherwise
 
         #--------------- Persistence Variables ----------------------
         if self.include["persistence"]:
@@ -982,18 +983,16 @@ class RealTimeDispatchModel(object):
 
         def cycle_temp_prod_lower_rule(model, t):
             return (
-                    model.T_hs[t] - model.T_cout[t] >= model.delta_T_design * (model.alpha_b +
-                        model.alpha_T * model.T_hs[t] / model.T_cin_design +
-                        model.alpha_m * model.mdot_c[t] / model.mdot_c_design)
+                    model.T_hs[t] - model.T_cout[t] >= (model.alpha_b + model.alpha_T * model.T_hs[t] +
+                        model.alpha_m * model.mdot_c[t])
                     - model.delta_T_max * (1 - model.y[t])
             )
 
         def cycle_temp_prod_upper_rule(model, t):
             return (
-                    model.T_hs[t] - model.T_cout[t] <= model.delta_T_design * (
-                        model.alpha_b + model.alpha_T * model.T_hs[t] / model.T_cin_design
-                        + model.alpha_m*model.mdot_c[t] / model.mdot_c_design
-                    ) + model.delta_T_max * (1 - model.y[t])
+                    model.T_hs[t] - model.T_cout[t] <= (model.alpha_b + model.alpha_T * model.T_hs[t] +
+                        model.alpha_m * model.mdot_c[t])
+                    + model.delta_T_max * (1 - model.y[t])
             )
 
         self.model.pc_input_nonzero_con = pe.Constraint(self.model.T_l, rule=pc_input_nonzero_rule)
@@ -1045,18 +1044,16 @@ class RealTimeDispatchModel(object):
         ### non-linear power regression
         def cycle_power_nonlinear_upper_rule(model, t):
             return model.wdot[t] <= (model.etaamb[t]/model.eta_des) * (
-                    (model.beta_b + model.beta_T*model.T_hs[t] / model.T_cin_design  +
-                    model.beta_m*model.mdot_c[t] / model.mdot_c_design + model.beta_mT*model.mdot_c[t]*model.T_hs[t] /
-                    (model.mdot_c_design * model.T_cin_design)
-                    ) * model.Wdot_design +
+                    (model.beta_b + model.beta_T*model.T_hs[t]  +
+                    model.beta_m*model.mdot_c[t] + model.beta_mT*model.mdot_c[t]*model.T_hs[t]
+                    ) +
                     model.Wdot_design * (1 - model.y[t]))
 
         def cycle_power_nonlinear_lower_rule(model, t):
             return model.wdot[t] >= (model.etaamb[t]/model.eta_des) * (
-                    (model.beta_b + model.beta_T*model.T_hs[t] / model.T_cin_design  +
-                    model.beta_m*model.mdot_c[t] / model.mdot_c_design + model.beta_mT*model.mdot_c[t]*model.T_hs[t] /
-                    (model.mdot_c_design * model.T_cin_design)
-                     ) * model.Wdot_design -
+                    (model.beta_b + model.beta_T*model.T_hs[t]  +
+                    model.beta_m*model.mdot_c[t] + model.beta_mT*model.mdot_c[t]*model.T_hs[t]
+                     ) -
                     model.Wdot_design * (1 - model.y[t])
                 )
 
@@ -1503,8 +1500,10 @@ class RealTimeDispatchModel(object):
             opt = pe.SolverFactory('cplex')
             opt.options["mipgap"] = mipgap
             opt.options["timelimit"] = timelimit
-        else:
+        elif solver != 'ipopt':
             raise (ValueError("solver %s not supported" % solver))
+        else:
+            opt = pe.SolverFactory('ipopt')
         results = opt.solve(self.model, tee=tee, keepfiles=keepfiles)
         return results
     
@@ -1514,6 +1513,46 @@ class RealTimeDispatchModel(object):
                 print("Cycle off at period ", t, " - Time = ", self.model.Delta_e[t])
             if self.model.ycgb[t].value > 1e-3:
                 print("Cycle on at period ", t, " - Time = ", self.model.Delta_e[t])
+                
+    def populate_variable_values(self, m):
+        """
+        Populate model variable values using a previously solved model as input.  Used in multi-phased solution
+        approach.
+
+        Parameters
+        =============
+        m : pyomo.ConcreteModel | model containing variable values
+
+        Returns
+        =============
+        None (populates values within self.model)
+        """
+        #send outputs to model instance
+        d={}
+        for v1 in m.model.component_objects(pe.Var, active=True):
+            try:
+                d[v1.name] = {idx : pe.value(v1[idx]) for idx in v1}
+            except ValueError:
+                print("warning: no values for variable ", v1.name)
+                pass
+        for v2 in self.model.component_objects(pe.Var, active=True):  #TODO find a better way than a double loop
+            if v2.name in d.keys() and len(list(d[v2.name].keys())) > 0:
+                for i in v2:  #only populate relevant values in new model; nonlinear values handled separately
+                    v2[i].set_value(d[v2.name][i])
+                continue
+        return
+
+    def fix_binaries(self):
+        """
+        fixes all binary variables.
+        """
+        for v in self.model.component_objects(pe.Var, active=True):
+            for i in v:   #note that a scalar parameter's indices in pyomo are [None] so this does apply
+                if v[i].domain == pe.Binary:
+                    v[i].fix()
+        return
+
+
     
 # if __name__ == "__main__": 
 #     import dispatch_params
