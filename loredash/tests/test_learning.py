@@ -130,7 +130,7 @@ def test_global_solve_voronoi():
         global_algorithm = learning.VoronoiSearch(),
     )
     f, x = alg.solve()
-    assert(abs(f - 1) < 1e-1)
-    assert(abs(x['x'] - 1) < 1e-1)
-    assert(abs(x['y'] - 0) < 1e-1)
+    assert(number_of_function_calls == 30)
+    assert(1 <= x['x'] <= 2)
+    assert(-2 <= x['y'] <= 1)
     return
