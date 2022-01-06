@@ -75,4 +75,6 @@
         "core": "cpp"
     },
     "python.pythonPath": "C:\\Users\\mboyd\\AppData\\Local\\Continuum\\miniconda3\\envs\\loredash\\python.exe",
+    "cmake.sourceDirectory": "${workspaceFolder}/liboptimize/eigen",
+    "cmake.configureOnOpen": false,
 }

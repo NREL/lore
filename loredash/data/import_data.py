@@ -53,7 +53,18 @@ os.chdir(db_dir)
 # conn = sqlite3.connect(os.path.join(db_dir, answers['database']))
 conn = sqlite3.connect(os.path.join(db_dir, 'db.sqlite3'))
 cur = conn.cursor()
+try:
+    #cur.execute('''CREATE TABLE ui_dashboarddatarto (id, timestamp, actual, optimal, scheduled, field_operation_generated, field_operation_available)''')
+    #cur.execute('''CREATE TABLE ui_forecastsmarketdata (id, timestamp, market_forecast, ci_plus, ci_minus)''')
+    #cur.execute('''CREATE TABLE mediation_weatherdata (id, timestamp, dni, dhi, ghi, dew_point, temperature, pressure, wind_direction, wind_speed)''')
+    #cur.execute('''CREATE TABLE mediation_techdata (id, timestamp, E_tes_charged, eta_tower_thermal, eta_field_optical, W_grid_no_derate, tou, W_grid_with_derate, Q_tower_incident, Q_field_incident, pricing_multiple, dni, Q_tower_absorbed, mdot_tower, mdot_cycle, defocus, clearsky, op_mode_1, op_mode_2, op_mode_3, disp_solve_state, disp_objective, disp_qsf_expected, disp_qsfprod_expected, disp_wpb_expected)''')
+    cur.execute('''CREATE TABLE mediation_SolarForecastData (forecast_made,forecast_for,clear_sky,ratio)''')
 
+except:
+    print('these tables exist!')
+conn.commit() # Save the changes made to the database
+conn.close()  # Close the databse connection
+"""
 # Change to users file directory
 os.chdir(user_filepath)
 
@@ -84,3 +95,4 @@ conn.commit() # Save the changes made to the database
 conn.close()  # Close the databse connection
 
 
+"""

@@ -1,6 +1,9 @@
+#from loredash.mediation import dispatch_case_study
 from django.conf import settings
 from django.db import IntegrityError
 import sys, os
+
+from pvlib import forecast
 sys.path.insert(1, os.path.join(sys.path[0], '..'))
 import time, copy, datetime, math, pytz
 from twisted.internet.task import LoopingCall
@@ -9,11 +12,13 @@ import pandas as pd
 from pandas.tseries.frequencies import to_offset
 import numpy as np
 import rapidjson
+import csv
 from pathlib import Path
 
 from data.mspt_2020_defaults import default_ssc_params
 # import django     # Needed here before "import models" if there's ever error "Apps aren't loaded yet"
 # django.setup()
+from mediation.dispatch_case_study import DispatchCaseStudy
 from mediation import tech_wrap, data_validator, dispatch_wrap, models, forecasts
 import mediation.plant as plant_
 from mediation.plant import Revenue
@@ -28,6 +33,49 @@ def run_lore():
         print("ERROR: {0}".format(err))
 
 def init_and_mediate():
+    parent_dir = str(Path(__file__).parents[1])+'/'
+    modify_paths = {'mediator_params':'/config/mediator_params.json','plant_design_params':'/config/plant_design.json','weatherfile':'/config/weatherfile.csv'}
+    #dispatch_case_study.db_check()
+    #Case Studies! add the jupyter datetime update to the run once and run once and add to database, name new parameters inside the loop to be passed as datetime args
+    target_file = 'config/plant_design.json'
+    target_var = "T_tank_cold_init"
+    values = [290,310,330,350]
+    year_mod = 0
+    with open(os.path.join(parent_dir,target_file),'r') as infile:
+        edit_dict  = rapidjson.load(infile)
+    #print(edit_dict)
+    for val in values:
+        update_dict = {target_var:val}
+        plant_.plant_initial_state.update(update_dict)
+        edit_dict.update(update_dict)
+        #print(edit_dict)
+        case_time_start = datetime.datetime(datetime.datetime.now().year+year_mod, datetime.datetime.now().month, datetime.datetime.now().day,datetime.datetime.now().hour,datetime.datetime.now().minute,datetime.datetime.now().second,datetime.datetime.now().microsecond)
+        with open(os.path.join(parent_dir,target_file),'w') as outfile:
+            rapidjson.dump(edit_dict,outfile)
+        test_case = DispatchCaseStudy(str(val)+'_value',modify_paths)
+        print(test_case.id + ' value case being tested')
+        test_case_m = Mediator( 
+            params = test_case.mediator_params,
+            plant_design_path = parent_dir+test_case.paths["plant_design_params"],
+            weather_file = parent_dir+test_case.paths["weatherfile"],
+            update_interval=datetime.timedelta(seconds=5)
+        )
+        print("datetime start is")
+        print(test_case_m.get_current_plant_time(year=year_mod))
+        #test_case_m.model_previous_previous_day_and_add_to_db(year=year_mod)
+        test_case_m.model_today_and_add_to_db(year=year_mod)
+        #time.sleep(65*4)
+        #test_case_m.model_previous_day_and_add_to_db(year=year_mod)
+        #test_case.save_case(target_var)
+        #result = test_case_m.run_once(
+        #    datetime_start=test_case_m.get_current_plant_time(year=year_mod), #* we should really, REALLY drill down and figure out why these always yield such different results
+        #    year=year_mod) #timedelta=datetime.timedelta(hours=1),
+        test_case.save_case(target_var)
+        test_case.clean_up()
+        test_case.validate()
+        year_mod += 1
+    #/Case Studies!
+    """
     print("Initializing models...")
     parent_dir = str(Path(__file__).parents[1])
     default_weather_file = parent_dir + "/data/daggett_ca_34.865371_-116.783023_psmv3_60_tmy.csv"
@@ -60,7 +108,7 @@ def init_and_mediate():
         # (The following adds another simultaneous mediate process, though likely not needed):
         # p = multiprocessing.Process(target=m.run_continuously, args=(1,))
         # p.start()
-
+    """
     return
 
 class Mediator:
@@ -94,11 +142,7 @@ class Mediator:
             dispatch_wrap_params=dispatch_wrap.dispatch_wrap_params.copy(),     # copy so tech_wrap cannot edit
             weather_file=None)
 
-        self.forecaster = forecasts.SolarForecast(
-            self.plant.design['latitude'],
-            self.plant.design['longitude'],
-            self.plant.design['timezone_string'],
-            self.plant.design['elevation'])
+        self.forecaster = forecasts.SolarForecast(self.plant.design['latitude'],self.plant.design['longitude'],self.plant.design['timezone_string'],self.plant.design['elevation'])
 
         self.plant.update_flux_maps(self.tech_wrap.calc_flux_eta_maps(self.plant.get_design(), self.plant.get_state()))
 
@@ -107,7 +151,7 @@ class Mediator:
         dispatch_wrap_params.update(self.params)                                                    # include mediator params in with dispatch_wrap_params
         self.dispatch_wrap = dispatch_wrap.DispatchWrap(plant=self.plant, params=dispatch_wrap.dispatch_wrap_params)
     
-    def run_once(self, datetime_start=None, datetime_end=None, timedelta=None):
+    def run_once(self, datetime_start=None, datetime_end=None, timedelta=None, year = 0): 
         """Get data from external plant and weather interfaces and run entire set
         of submodels, saving data to database.
 
@@ -159,6 +203,7 @@ class Mediator:
                 datetime_end = datetime_start + datetime.timedelta(hours=1)
 
         # Step 0: Normalize timesteps to even intervals and enforce timestep localization
+        """
         if datetime_start.tzinfo is None or datetime_end.tzinfo is None or \
             datetime_start.tzinfo != datetime_end.tzinfo:
             print("WARNING: Timesteps in run_once were not properly localized.")
@@ -167,10 +212,10 @@ class Mediator:
             datetime_end = _tz.localize(datetime_end)
         self._validate_plant_local_time(datetime_start)
         self._validate_plant_local_time(datetime_end)
-
+        """
         datetime_start, datetime_end = normalize_timesteps(
             datetime_start,
-            datetime_end,
+            datetime_end, 
             timestep = self.simulation_timestep.seconds / 60)
 
         # Step 1, Thread 1:
@@ -188,26 +233,33 @@ class Mediator:
         # a. Get weather data and forecasts
         datetime_end_dispatch = datetime_start + \
             datetime.timedelta(hours=self.dispatch_wrap.params['dispatch_horizon'])
-        weather_dispatch = self.get_weather_df(
-            datetime_start=datetime_start,
-            datetime_end=datetime_end_dispatch,
-            timestep=datetime.timedelta(minutes=min(self.dispatch_wrap.params['dispatch_steplength_array'])),
-            tmy3_path=self.weather_file,
-            use_forecast=True)
-        assert(weather_dispatch.index[0] == datetime_start + datetime.timedelta(minutes=min(self.dispatch_wrap.params['dispatch_steplength_array'])))
-        assert(weather_dispatch.index[-1] == datetime_end_dispatch)
-
-        weather_simulate = self.get_weather_df(
-            datetime_start=datetime_start,
-            datetime_end=datetime_end,
-            timestep=datetime.timedelta(hours=1/self.params['time_steps_per_hour']),
-            tmy3_path=self.weather_file,
-            use_forecast=False)             # TODO: this use_forecast should probably be True too. Can we optimize these two
+        #weather_dispatch = self.get_weather_df(datetime_start=datetime_start,datetime_end=datetime_end_dispatch,timestep=datetime.timedelta(minutes=min(self.dispatch_wrap.params['dispatch_steplength_array'])),tmy3_path=self.weather_file,use_forecast=True,year = year)
+        weather_dispatch = forecast_from_weatherfile(datetime_start=datetime_start,datetime_end=datetime_end_dispatch,tz=pytz.timezone(self.plant.design['timezone_string']))
+        location = get_weatherfile_location(self.weather_file)
+        weather_dispatch.attrs.update(location)
+        #print('Their dispatch:')
+        #print(weather_dispatch)
+        #print('Mine:')
+        #print(weather_dispatch2)
+        #print("Weather dispatch index zero is")
+        #print(weather_dispatch.index[0])
+        #print("The other thing is")
+        #print(weather_dispatch)
+        #print(datetime_start + datetime.timedelta(hours=1))
+        #assert(weather_dispatch.index[0] == datetime_start + datetime.timedelta(hours=1))
+        #assert(weather_dispatch.index[-1] == datetime_end_dispatch)
+        weather_simulate = forecast_from_weatherfile(datetime_start=datetime_start,datetime_end=datetime_end)
+        weather_simulate.attrs.update(location)
+        #weather_simulate = self.get_weather_df(datetime_start=datetime_start,datetime_end=datetime_end,timestep=datetime.timedelta(hours=1/self.params['time_steps_per_hour']),tmy3_path=self.weather_file,use_forecast=True,year = year)
+                         # TODO: this use_forecast should probably be True too. Can we optimize these two
                                             #       get_weather_df calls since getting the forecasts takes significant time?
-        assert(weather_simulate.index[0] == datetime_start + datetime.timedelta(hours=1/self.params['time_steps_per_hour']))
-        assert(weather_simulate.index[-1] == datetime_end)
+        #*assert(weather_simulate.index[0] == datetime_start + datetime.timedelta(hours=1/self.params['time_steps_per_hour']))
+        #*assert(weather_simulate.index[-1] == datetime_end)
+        #print('Their simulate:')
+        #print(weather_simulate)
+        #print('Mine:')
+        #print(weather_simulate2)
         self.add_weather_to_db(weather_simulate)
-
         # Set clearsky data
         clearsky_data = np.nan_to_num(np.array(weather_dispatch['Clear Sky DNI']), nan = 0.0)  # TODO: Better handling of nan values in clear-sky data
         clearsky_data_padded = self.tech_wrap.pad_weather_data(list_data = clearsky_data.tolist(), 
@@ -258,6 +310,10 @@ class Mediator:
         tic = time.process_time()
         validated_outputs = data_validator.validate(tech_outputs, data_validator.ssc_schema)
         toc = time.process_time()
+        ###########################write results to json
+        with open('result.json', 'w') as fp:
+            rapidjson.dump(validated_outputs, fp)
+        ###########################/write results to json
         print("Validation took {seconds:0.2f} seconds".format(seconds=toc-tic))
         timestamps = list(pd.date_range(
                           start=datetime_start,
@@ -295,13 +351,22 @@ class Mediator:
         looping_call.start(update_interval)
         reactor.run()
 
-    def get_current_plant_time(self):
+    def get_current_plant_time(self,year=0):
         "Return the current time in plant-local time."
-        return datetime.datetime.now(
-            pytz.timezone(self.plant.design['timezone_string']),
-        )
+        #datetime.datetime.now().microsecond
+        #datetime.datetime.now().second
+        case_time_start = datetime.datetime(datetime.datetime.now().year+year,
+         datetime.datetime.now().month, 
+         datetime.datetime.now().day,
+         datetime.datetime.now().hour,
+         datetime.datetime.now().minute,
+         second = 0,
+         microsecond = 0,
+         tzinfo = pytz.timezone(self.plant.design['timezone_string'])
+         )
+        return case_time_start
 
-    def model_previous_day_and_add_to_db(self):
+    def model_previous_day_and_add_to_db(self,year=0):
         """Simulate previous day and add to database
         e.g.:
         if current time is 17:43 and simulation_timestep = 5 minutes:
@@ -311,13 +376,37 @@ class Mediator:
             for 288 total new entries
         """
         # Make sure the time is localized to the timezone of the plant!
-        datetime_now = self.get_current_plant_time()
+        datetime_now = self.get_current_plant_time(year=year)
         datetime_now_rounded_down = round_minutes(datetime_now, 'down', self.simulation_timestep.seconds/60)    # the start of the time interval currently in
-        datetime_start_prev_day = datetime_now_rounded_down - datetime.timedelta(days=1)
-        datetime_end_current_day = datetime_now_rounded_down                   # end of the last timestep
+        """datetime_start_prev_day = datetime_now_rounded_down - datetime.timedelta(days=1)
+        datetime_end_current_day = datetime_now_rounded_down                   # end of the last timestep"""
+        datetime_start=datetime.datetime(2021, 6, 1, 0, 0, 0, tzinfo=pytz.timezone('US/Pacific'))
+        datetime_end=datetime.datetime(2021, 6, 2, 0, 0, 0, tzinfo=pytz.timezone('US/Pacific'))
                                                                             # (as noted for "time_stop" on line 1004 in cmod_tcsmolten_salt.cpp)
-        self.run_once(datetime_start_prev_day, datetime_end_current_day)
+        self.run_once(datetime_start, datetime_end,year=year)
         return 0
+        
+    def model_today_and_add_to_db(self,year=0):
+        """Simulate previous day and add to database
+        e.g.:
+        if current time is 17:43 and simulation_timestep = 5 minutes:
+            it will model from 17:40 yesterday (start of timestep)
+            to 17:40 today (end of timestep)
+            with timesteps in database (end of timesteps) being from 17:45 yesterday to 17:40 today
+            for 288 total new entries
+        """
+        # Make sure the time is localized to the timezone of the plant!
+        datetime_now = self.get_current_plant_time(year=year)
+        datetime_now_rounded_down = round_minutes(datetime_now, 'down', self.simulation_timestep.seconds/60)    # the start of the time interval currently in
+        datetime_start_day = datetime_now_rounded_down - datetime.timedelta(days=2)
+        datetime_end_current_day = datetime_now_rounded_down - datetime.timedelta(days=1)                  # end of the last timestep
+                                                                            # (as noted for "time_stop" on line 1004 in cmod_tcsmolten_salt.cpp)
+        datetime_start=datetime.datetime(2021, 6, 1, 0, 0, 0, tzinfo=pytz.timezone('US/Pacific'))
+        datetime_end=datetime.datetime(2021, 6, 2, 0, 0, 0, tzinfo=pytz.timezone('US/Pacific'))
+        self.run_once(datetime_start_day, datetime_end_current_day,year=year)
+        return 0
+
+
     
     def _validate_plant_local_time(self, time):
         """A helper function that validates the given `time` is localized to the
@@ -384,7 +473,7 @@ class Mediator:
             )
             for i in range(n_records)
         ]
-
+        
         try:
             models.PlantStateData.objects.bulk_create(instances, ignore_conflicts=True)
             # If ignore_conflicts=False and if any to-be-added records are already in the database, as indicated by the timestamp,
@@ -417,6 +506,16 @@ class Mediator:
                 Q_tower_absorbed =      records['Q_thermal'][i] * 1.e3,
                 mdot_tower =            records['m_dot_rec'][i],
                 mdot_cycle =            records['m_dot_pc'][i],
+                defocus =               records['defocus'][i],
+                clearsky =              records['clearsky'][i],
+                op_mode_1 =             records['op_mode_1'][i],
+                op_mode_2 =             records['op_mode_2'][i],
+                op_mode_3 =             records['op_mode_3'][i],
+                disp_solve_state =      records['disp_solve_state'][i],
+                disp_objective =        records['disp_objective'][i],
+                disp_qsf_expected =     records['disp_qsf_expected'][i],
+                disp_qsfprod_expected = records['disp_qsfprod_expected'][i],
+                disp_wpb_expected =     records['disp_wpb_expected'][i],
             )
             for i in range(n_records)
         ]
@@ -446,6 +545,7 @@ class Mediator:
         timestep,
         tmy3_path,
         use_forecast=False,
+        year = 0
     ):
         """
         Return a dataframe of weather data at `timestep` resolution (of
@@ -496,12 +596,18 @@ class Mediator:
         data.fillna(method = 'ffill', inplace = True)
         # Now strip the data back to what the user asked for:
         data = data[(data.index >= datetime_start) & (data.index <= datetime_end)]
+        #datetime_start -= timestep
         if use_forecast:
+            x = datetime.datetime.now()
+            year_diff = datetime_start.year-x.year
+            datetime_forecast = data.index[0] - datetime.timedelta(days=365*year_diff)
+            forecast_end = data.index[-1] - datetime.timedelta(days=365*year_diff)
+            forecast_window = forecast_end - datetime_forecast
             tic = time.process_time()
-            solar_forecast = self.forecaster.getForecast(
-                datetime_start=data.index[0],
-                horizon=data.index[-1] - data.index[0],
-                resolution=timestep)
+            solar_forecast = self.forecaster.getForecast(datetime_start= datetime_forecast,horizon = forecast_window, resolution=timestep)
+            #solar_forecast =  forecast_from_weatherfile(datetime_start,datetime_end)
+            #pd.Timedelta(hours = 48),#(data.index[-1]-datetime.timedelta(365*year)) - (data.index[0]-datetime.timedelta(365*year)),
+            #*- datetime.timedelta(365*year),
             toc = time.process_time()
             print("Generating forecast took {seconds:.2f} seconds".format(seconds=toc-tic))
             key_map = {
@@ -514,7 +620,10 @@ class Mediator:
                 'clear_sky': 'Clear Sky DNI',
             }
             for (k, v) in key_map.items():
-                data.loc[:, v] = list(solar_forecast[k])
+                #print(solar_forecast)
+                #print("data:")
+                #print(data)
+                data.loc[:, v] = list(solar_forecast[k]) #*problem line
         return data
 
 def mediate_continuously(update_interval=5):
@@ -618,6 +727,85 @@ def get_weatherfile_location(tmy3_path):
         'timezone': int(df_meta['Time Zone'][0]),
         'elevation': float(df_meta['Elevation'][0])
     }
+def construct_forecast_csv(r=False):
+    parent_dir = str(Path(__file__).parents[1])+'/'
+    weatherfile_path = os.path.join(parent_dir,'config/weatherfile.csv')
+    forecastfile_path = os.path.join(parent_dir,'config/forecastfile.json')
+    if os.path.exists(forecastfile_path) and r != True:
+        return False
+    if os.path.exists(forecastfile_path) and r == True:
+        os.remove(forecastfile_path)
+    with open(weatherfile_path, newline='\n') as csvfile:
+        forecast_dict = {} #forecast_dict is the final product that is written to a new csv file
+        weatherfile_dict = {} #weatherfile_dict is directly manipulated from the weatherfile
+        wf_reader = csv.reader(csvfile, delimiter=',')
+        i = 0
+        for row in wf_reader:
+            i+=1
+            if i == 1 or i == 2:
+                continue
+            while '' in row:
+                row.remove('')
+            row_list = ','.join(row).split(',')
+            if i == 3:
+                headers = row_list
+                for header in headers:
+                    weatherfile_dict[header] = []
+                continue
+            for j in range(0,len(row_list)):
+                weatherfile_dict[headers[j]] += [row_list[j]]
+        weatherfile_dict['Clear Sky DNI'] = []
+        weatherfile_dict['Datetime'] = []
+        forecast_headers = ['DNI','DHI','GHI','Clearsky DHI', 'Clearsky DNI', 'Clearsky GHI', 'Cloud Type','Dew Point','Temperature','Pressure','Wind Direction','Wind Speed','Surface Albedo','Clear Sky DNI','Datetime']
+        for k in range(0,len(weatherfile_dict['Year'])):
+            weatherfile_dict['Datetime'] += [[int(weatherfile_dict['Year'][k]),int(weatherfile_dict['Month'][k]),int(weatherfile_dict['Day'][k]),int(weatherfile_dict['Hour'][k]),int(weatherfile_dict['Minute'][k])]]
+            #weatherfile_dict['Date'] += [weatherfile_dict['Year'][k]+'-'+weatherfile_dict['Month'][k]+'-'+weatherfile_dict['Day'][k]]
+            #weatherfile_dict['Time'] += [weatherfile_dict['Hour'][k]+':'+weatherfile_dict['Minute'][k]+':00-8:00']
+            weatherfile_dict['Clear Sky DNI'] += [weatherfile_dict['Clearsky DNI'][k]]
+        for l in range(0,len(forecast_headers)):
+            forecast_dict[forecast_headers[l]]=[]
+            for m in range(0,len(weatherfile_dict['Year'])):
+                forecast_dict[forecast_headers[l]] += [weatherfile_dict[forecast_headers[l]][m]]
+                #create new csv file, make function to pull dates and return a dataframe
+    with open(forecastfile_path,'w') as outfile:
+        rapidjson.dump(forecast_dict,outfile)
+    return True
+def forecast_from_weatherfile(datetime_start,datetime_end,tz=None):
+    #datetime_start_adj = datetime.datetime(datetime_start.year,datetime_start.month,datetime_start.day,datetime_start.hour,datetime_start.minute,tzinfo=tz)
+    #datetime_end_adj = datetime.datetime(datetime_end.year,datetime_end.month,datetime_end.day,datetime_end.hour,datetime_end.minute,tzinfo=tz)
+    parent_dir = str(Path(__file__).parents[1])+'/'
+    forecastfile_path = os.path.join(parent_dir,'config/forecastfile.json')
+    construct_forecast_csv(r=True) #* should be set to false except when running with a new weatherfile for the first time 
+    with open(forecastfile_path) as infile:
+        forecast_dict = rapidjson.load(infile)
+    forecast_headers = ['DNI','DHI','GHI','Clearsky DHI', 'Clearsky DNI', 'Clearsky GHI', 'Cloud Type','Dew Point','Temperature','Pressure','Wind Direction','Wind Speed','Surface Albedo','Clear Sky DNI','Datetime']
+    forecast_to_df = {'timestamp':[]}
+    for i in range(0,len(forecast_headers)):
+        forecast_to_df[forecast_headers[i]] = []
+    #--Asserting correct years--#
+    if datetime_start.year != forecast_dict['Datetime'][0][0] or datetime_end.year != forecast_dict['Datetime'][0][0]:
+        datetime_end = datetime.datetime(forecast_dict['Datetime'][0][0],datetime_end.month,datetime_end.day,datetime_end.hour,datetime_end.minute)
+        datetime_start = datetime.datetime(forecast_dict['Datetime'][0][0],datetime_start.month,datetime_start.day,datetime_start.hour,datetime_start.minute)
+    #/#
+    print('datetime_start: '+str(datetime_start))
+    print('datetime_end: '+str(datetime_end))
+    for dt in forecast_dict['Datetime']:
+        forecast_dt = datetime.datetime(dt[0],dt[1],dt[2],dt[3],dt[4],tzinfo=None)
+        if datetime_start < forecast_dt and datetime_end > forecast_dt: 
+            i = forecast_dict['Datetime'].index(dt)
+            forecast_dtf = datetime.datetime(dt[0],dt[1],dt[2],dt[3],dt[4],tzinfo=tz)
+            forecast_to_df['timestamp'] += [forecast_dtf]
+            for header in forecast_headers:
+                if type(forecast_dict[header][i]) == str:
+                    forecast_to_df[header] += [float(forecast_dict[header][i])]
+#    for header in forecast_headers:
+#        print(str(header)+': '+str(len(forecast_to_df[header])))
+#        forecast_to_df[header.lower()] = forecast_to_df.pop(header)
+    forecast_to_df.pop('Datetime')
+    df = pd.DataFrame.from_dict(forecast_to_df).set_index('timestamp')
+    #df.attrs['timezone'] = tz
+    return df
+
 
 # This is duplicated in case_study.py
 mediator_params = {

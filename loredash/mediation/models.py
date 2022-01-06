@@ -16,6 +16,17 @@ class TechData(models.Model):                                                   
     Q_tower_absorbed = models.FloatField(verbose_name="Tower HTF heat rate [kWt]", default=None)            #   Q_thermal [MWt]
     mdot_tower = models.FloatField(verbose_name="Tower HTF mass flow rate [kg/s]", default=None)            #   m_dot_rec [kg/s]
     mdot_cycle = models.FloatField(verbose_name="Cycle HTF mass flow rate [kg/s]", default=None)            #   m_dot_pc [kg/s]
+    defocus = models.FloatField(verbose_name="Dispatch solver state [-]")                                   #records['defocus'][i],
+    clearsky = models.FloatField(verbose_name="Predicted clear-sky beam normal irradiance [W/m^2]")         #records['clearsky'][i],
+    op_mode_1 = models.FloatField(verbose_name="1st operating mode")                                        #records['op_mode_1'][i],
+    op_mode_2 = models.FloatField(verbose_name="2nd operating mode, if applicable")                         #records['op_mode_2'][i],
+    op_mode_3 = models.FloatField(verbose_name="3rd operating mode, if applicable")                         #records['op_mode_3'][i],
+    disp_solve_state = models.FloatField(verbose_name="Dispatch solver state")                              #records['disp_solve_state'][i],
+    disp_objective = models.FloatField(verbose_name="Dispatch objective function value")                    #records['disp_objective'][i],
+    disp_qsf_expected = models.FloatField(verbose_name="Dispatch expected solar field available energy")    #records['disp_qsf_expected'][i],
+    disp_qsfprod_expected = models.FloatField(verbose_name="Dispatch expected solar field generation")      #records['disp_qsfprod_expected'][i],
+    disp_wpb_expected = models.FloatField(verbose_name="Dispatch expected power generation")                #records['disp_wpb_expected'][i]
+    #update with ssc values
 
     def __str__(self):
         """shown when entry is generically queried"""

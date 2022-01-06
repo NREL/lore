@@ -88,11 +88,12 @@ class Plant:
         self.set_state(state)
         self.state['rec_startup_time_remain_init'] = self.design['rec_su_delay']
         self.state['rec_startup_energy_remain_init'] = self.design['rec_qf_delay'] * self.design['Qrec'] * 1.e6
-        self.state['T_tank_cold_init'] = self.design['T_htf_cold_des']
-        self.state['T_tank_hot_init'] = self.design['T_htf_hot_des']
+        self.state['T_tank_cold_init'] = self.design["T_htf_cold_des"]
+        self.state['T_tank_hot_init'] = self.design["T_htf_hot_des"] 
         self.state['pc_startup_time_remain_init'] = self.design['startup_time']
         self.state['pc_startup_energy_remain_initial'] = self.design['startup_frac'] * self.get_cycle_thermal_rating() * 1000.
         self.state['sf_adjust:hourly'] = self.get_field_availability()[-1]
+        #self.state['csp_pt_tes_init_hot_htf_percent'] = self.design['csp_pt_tes_init_hot_htf_percent']*
 
     def set_state(self, state):
         for key, value in state.items():

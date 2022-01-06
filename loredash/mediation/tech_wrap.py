@@ -111,6 +111,7 @@ class TechWrap:
         ###########################################################################################
 
         tech_outputs = self.ssc.execute()
+        #print(tech_outputs.keys())
 
         # Strip trailing zeros or excess data from outputs
         times = {'time_start': tech_outputs['time_start'],
@@ -327,7 +328,8 @@ class TechWrap:
             'rec_su_delay': 0.001,                                              # Simulate with no start-up time to get total available solar energy
             'rec_qf_delay': 0.001,
             })
-
+        weather_dataframe = weather_dataframe
+        print(datetime_start, datetime_end, timestep, plant_state, weather_dataframe)
         results = self.simulate(datetime_start, datetime_end, timestep, plant_state=plant_state, weather_dataframe = weather_dataframe)
         
         # Revert back to original parameters

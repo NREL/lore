@@ -18,10 +18,11 @@ from decouple import Config, RepositoryEnv
 # SECURITY WARNING: don't run with debug turned on in production!
 # Toggle DEBUG to False to change to production settings
 DEBUG = True
+print(sys.argv)
 
 RUNNING_DEVSERVER = (len(sys.argv) > 1 and sys.argv[1] == 'runserver')
 
-if RUNNING_DEVSERVER == False:
+if False: # RUNNING_DEVSERVER == False:
     DEBUG = False
 
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)

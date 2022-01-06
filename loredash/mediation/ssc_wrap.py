@@ -75,7 +75,7 @@ class PysscWrap(SscWrap):
         return self.params[name]
 
     def execute(self):
-        results = ssc_sim_from_dict(self.ssc, self.params)
+        results = ssc_sim_from_dict(self.ssc, self.params) #*
         return results
 
     def export_params(self):

@@ -19,7 +19,7 @@ dispatch_wrap_params = {
     'nonlinear_model_time':                 4.0,                    # Amount of time to apply nonlinear dispatch model (hr) (not currently used)
     'disp_time_weighting':                  0.999,                  # Dispatch time weighting factor. 
     'use_linear_dispatch_at_night':         False,                  # Revert to the linear dispatch model when all of the time-horizon in the nonlinear model is at night.
-    'night_clearsky_cutoff':                100.,                   # Cutoff value for clear-sky DNI defining "night"
+    'night_clearsky_cutoff':                100.0,                   # Cutoff value for clear-sky DNI defining "night"
 
     # Day-ahead schedule targets
 	'use_day_ahead_schedule':		        True,                   # Use day-ahead generation targets
