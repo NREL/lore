@@ -1,0 +1,10 @@
+{
+  "name": "Dagget",
+  "location": {
+    "latitude":   34.85,
+    "longitude":  -116.78,
+    "elevation":  561.0,
+    "timezone":   -8.0,
+    "timezone_string": "US/Pacific"
+  }
+}

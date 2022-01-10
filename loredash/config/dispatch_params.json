@@ -1,0 +1,18 @@
+{
+    "dispatch_horizon":                     48.0,                    
+    "dispatch_steplength_array":            [5, 15, 60],         
+    "dispatch_steplength_end_time":         [1, 4, 48],            
+    "nonlinear_model_time":                 4.0,                    
+    "disp_time_weighting":                  0.999,                  
+    "use_linear_dispatch_at_night":         false,                 
+    "night_clearsky_cutoff":                100.0,                   
+	"use_day_ahead_schedule":		        true,                   
+	"day_ahead_schedule_from":		        "calculated",           
+	"day_ahead_schedule_time":		        10,                     
+	"day_ahead_schedule_steps_per_hour":    1,                      
+    "day_ahead_pen_plus":                   500,                  
+    "day_ahead_pen_minus":                  500,                    
+    "day_ahead_tol_plus":                   5,                      
+    "day_ahead_tol_minus":                  5,                      
+    "day_ahead_ignore_off":                 true                    
+}
