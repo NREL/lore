@@ -237,28 +237,15 @@ class Mediator:
         weather_dispatch = forecast_from_weatherfile(datetime_start=datetime_start,datetime_end=datetime_end_dispatch,tz=pytz.timezone(self.plant.design['timezone_string']))
         location = get_weatherfile_location(self.weather_file)
         weather_dispatch.attrs.update(location)
-        #print('Their dispatch:')
-        #print(weather_dispatch)
-        #print('Mine:')
-        #print(weather_dispatch2)
-        #print("Weather dispatch index zero is")
-        #print(weather_dispatch.index[0])
-        #print("The other thing is")
-        #print(weather_dispatch)
-        #print(datetime_start + datetime.timedelta(hours=1))
-        #assert(weather_dispatch.index[0] == datetime_start + datetime.timedelta(hours=1))
-        #assert(weather_dispatch.index[-1] == datetime_end_dispatch)
-        weather_simulate = forecast_from_weatherfile(datetime_start=datetime_start,datetime_end=datetime_end)
+
+        weather_simulate = forecast_from_weatherfile(datetime_start=datetime_start,datetime_end=datetime_end,tz=pytz.timezone(self.plant.design['timezone_string']))
         weather_simulate.attrs.update(location)
         #weather_simulate = self.get_weather_df(datetime_start=datetime_start,datetime_end=datetime_end,timestep=datetime.timedelta(hours=1/self.params['time_steps_per_hour']),tmy3_path=self.weather_file,use_forecast=True,year = year)
                          # TODO: this use_forecast should probably be True too. Can we optimize these two
                                             #       get_weather_df calls since getting the forecasts takes significant time?
         #*assert(weather_simulate.index[0] == datetime_start + datetime.timedelta(hours=1/self.params['time_steps_per_hour']))
         #*assert(weather_simulate.index[-1] == datetime_end)
-        #print('Their simulate:')
-        #print(weather_simulate)
-        #print('Mine:')
-        #print(weather_simulate2)
+
         self.add_weather_to_db(weather_simulate)
         # Set clearsky data
         clearsky_data = np.nan_to_num(np.array(weather_dispatch['Clear Sky DNI']), nan = 0.0)  # TODO: Better handling of nan values in clear-sky data
