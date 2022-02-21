@@ -30,6 +30,10 @@ Windows distributions require the following DLL's:
 ``` dbghelp, libcurl, libeay32, libssh2, msvcp120, msvcr120, ssleay32, vcruntime140 ```
 These can be located from system path directories or downloaded from [NREL's FTP server](https://pfs.nrel.gov/main.html?download&weblink=2803bc659530b139621bbacc1b80910f&realfilename=nrelapp-win-dynlibs.zip).
 
+## Running LORE
+
+For additional setup to run LORE and view the dashboard, see the [loredash](https://github.com/NREL/lore/tree/develop/loredash) folder within this repository.
+
 ## Repository Access
 
 Access is currently limited only to project partners. To obtain access, please send a request to [Mike](mailto://mike.wagner@nrel.gov).
